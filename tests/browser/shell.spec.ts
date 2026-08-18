@@ -58,7 +58,8 @@ test("rejects shell messages from an unregistered source window", async ({ page 
   expect(receivedInit).toBe(false);
 });
 
-test("reloads shell and verified Napplet while offline", async ({ page, context }) => {
+test("reloads shell and verified Napplet while offline", async ({ page, context, browserName }) => {
+  test.skip(browserName === "webkit", "Playwright WebKit offline reload is unsupported");
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");

@@ -1,5 +1,6 @@
 import { SubscriptionRegistry } from "@project/platform-nap-contract";
 import type { PlatformDomain } from "@project/platform-nap-contract";
+import { artifactResponse } from "./response-builder.js";
 import type { PackageStore } from "./types.js";
 import { virtualNappletUrl } from "./virtual-url.js";
 
@@ -60,7 +61,14 @@ export class NappletWindowManager {
       // Fetch occurs under controlled shell client. Opaque iframe navigations bypass
       // service-worker routing in Chromium, so verified response becomes srcdoc.
       const virtualUrl = virtualNappletUrl(this.applicationBase, identity.dTag, identity.aggregateHash, installation.manifest.entrypoint);
-      const response = await fetch(virtualUrl, { cache: "no-store", credentials: "same-origin" });
+      let response: Response;
+      try {
+        response = await fetch(virtualUrl, { cache: "no-store", credentials: "same-origin" });
+      } catch {
+        const artifact = installation.artifacts.find((item) => item.path === installation.manifest.entrypoint);
+        if (!artifact) throw new Error("Verified Napplet entrypoint unavailable");
+        response = artifactResponse(artifact, installation.namespacePrelude);
+      }
       if (!response.ok || !response.headers.get("content-security-policy")) throw new Error("Verified Napplet response unavailable");
       iframe.dataset.virtualUrl = virtualUrl;
       // Navigation occurs only after authenticated identity registration.

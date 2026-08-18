@@ -15,7 +15,7 @@ jobs:
           node-version: 22
       - run: corepack enable && corepack prepare pnpm@8.15.5 --activate
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps
       - run: pnpm check
       - run: pnpm test
       - run: pnpm test:conformance
