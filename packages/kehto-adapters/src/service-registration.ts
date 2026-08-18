@@ -7,6 +7,7 @@ import type { NostrEngine } from "@platform/nostr-engine";
 import { DEFAULT_PUBLISH_TIMEOUT_MS, createRelayListResolver, createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
+import { createIdentityProviders } from "./identity-providers.js";
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
 export interface CoreServiceRegistration { close(): void }
@@ -54,11 +55,14 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     isAvailable() { return readRelays.length > 0 || writeRelays.length > 0; }
   });
   runtime.registerService("relay", relayService);
+  const identityProviders = createIdentityProviders(engine, readRelays);
   runtime.registerService("identity", createIdentityService({
     getSigner: () => engine.accounts.manager.active ? {
       getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),
       getRelays: async () => Object.fromEntries([...new Set([...readRelays, ...writeRelays])].map((url) => [url, { read: readRelays.includes(url), write: writeRelays.includes(url) }]))
-    } : null
+    } : null,
+    getProfile: (pubkey) => identityProviders.getProfile(pubkey),
+    getFollows: (pubkey) => identityProviders.getFollows(pubkey)
   }));
   const relayLists = createRelayListResolver(engine.eventStore, engine.ingress, engine.relayPolicy, discoveryRelays, async (relays, authors) => {
     if (relays.length === 0 || authors.length === 0) return [];

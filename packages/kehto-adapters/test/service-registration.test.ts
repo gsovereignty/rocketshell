@@ -55,4 +55,31 @@ describe("core service lifecycle", () => {
     expect(configuration.snapshot().outbox).toEqual(["wss://relay.example/"]);
     await engine.close();
   });
+  it("serves current profile and follows from the shared EventStore", async () => {
+    const handlers = new Map<string, ServiceHandler>();
+    const runtime = {
+      registerService: (name: string, handler: ServiceHandler) => handlers.set(name, handler),
+      sessionRegistry: { getAllEntries: () => [] }
+    } as unknown as Runtime;
+    const engine = createNostrEngine();
+    const secret = generateSecretKey();
+    const profile = finalizeEvent({ kind: 0, created_at: 2, content: JSON.stringify({ name: "alice", display_name: "Alice" }), tags: [] }, secret);
+    const contacts = finalizeEvent({ kind: 3, created_at: 2, content: "", tags: [["p", "11".repeat(32)], ["p", "22".repeat(32)]] }, secret);
+    engine.ingress.admit(profile, "local:test"); engine.ingress.admit(contacts, "local:test");
+    const account = {
+      id: "identity", type: "test", pubkey: profile.pubkey, signer: undefined as never,
+      getPublicKey: async () => profile.pubkey, signEvent: vi.fn(), toJSON: () => ({})
+    };
+    account.signer = account as never; engine.accounts.manager.addAccount(account as never); engine.accounts.manager.setActive(account as never);
+    const registration = registerCoreServices({ runtime, publishIdentityChanged: vi.fn() }, engine, { directReadRelays: [], directWriteRelays: [] });
+    const identity = handlers.get("identity")!;
+    const profileSend = vi.fn(); const followsSend = vi.fn();
+    identity.handleMessage("window-1", { type: "identity.getProfile", id: "profile" } as never, profileSend);
+    identity.handleMessage("window-1", { type: "identity.getFollows", id: "follows" } as never, followsSend);
+    await vi.waitFor(() => expect(profileSend).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(followsSend).toHaveBeenCalledOnce());
+    expect(profileSend).toHaveBeenCalledWith({ type: "identity.getProfile.result", id: "profile", profile: { name: "alice", displayName: "Alice" } });
+    expect(followsSend).toHaveBeenCalledWith({ type: "identity.getFollows.result", id: "follows", pubkeys: ["11".repeat(32), "22".repeat(32)] });
+    registration.close(); await engine.close();
+  });
 });

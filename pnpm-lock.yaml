@@ -141,6 +141,9 @@ importers:
       '@kehto/shell':
         specifier: 0.20.0
         version: 0.20.0(@napplet/core@0.31.1)(@napplet/nap@0.31.1)(nostr-tools@2.24.0)
+      '@napplet/nap':
+        specifier: 0.31.1
+        version: 0.31.1
       '@platform/nostr-engine':
         specifier: workspace:*
         version: link:../nostr-engine
@@ -148,6 +151,9 @@ importers:
         specifier: workspace:*
         version: link:../platform-contract
       applesauce-core:
+        specifier: 6.2.0
+        version: 6.2.0(typescript@5.9.2)
+      applesauce-loaders:
         specifier: 6.2.0
         version: 6.2.0(typescript@5.9.2)
       applesauce-relay:

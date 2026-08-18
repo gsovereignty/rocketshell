@@ -9,9 +9,11 @@
     "@kehto/runtime": "0.22.0",
     "@kehto/services": "0.20.0",
     "@kehto/shell": "0.20.0",
+    "@napplet/nap": "0.31.1",
     "@platform/nostr-engine": "workspace:*",
     "@project/platform-nap-contract": "workspace:*",
     "applesauce-core": "6.2.0",
+    "applesauce-loaders": "6.2.0",
     "applesauce-relay": "6.2.1",
     "nostr-tools": "2.24.0",
     "rxjs": "7.8.2"
