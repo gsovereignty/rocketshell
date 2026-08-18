@@ -72,6 +72,19 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   registerResourceService(shell.runtime, { grants: new Map(), allowHttpLocalhost: import.meta.env.DEV });
   const windowBridge = new BrowserWindowBridge(shell);
   windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL);
+  shell.registerConsentHandler((request) => {
+    const identity = windows?.findByWindowId(request.windowId)?.identity;
+    const operation = request.type === "undeclared-service"
+      ? `undeclared-service:${request.serviceName ?? "unknown"}`
+      : request.type === "firewall-policy"
+        ? "firewall-policy"
+        : `sign-kind:${request.event?.kind ?? "unknown"}`;
+    const allowed = window.confirm(`Allow ${identity?.dTag ?? "Napplet"} to perform ${operation}?`);
+    audit.recordConsent({
+      ...(identity ? { dTag: identity.dTag, aggregateHash: identity.aggregateHash } : {}), operation, allowed
+    });
+    request.resolve(allowed);
+  });
   const intentPreferences = createIntentPreferenceStore(localStorage);
   const activeAccount = (): string => engine.accounts.publicKey || "signed-out";
   const intentResolver = registerIntentService(shell.runtime, packageStore, windows, {
