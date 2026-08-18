@@ -8,6 +8,7 @@ import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
 import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
 import { PlatformMetadataStore } from "./platform-metadata.js";
+import { requireWiredDomains } from "./domain-environment.js";
 
 function relayUrls(raw: string | undefined): string[] { return (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean); }
 
@@ -19,7 +20,7 @@ class BrowserWindowBridge implements WindowBridge {
   constructor(private readonly shell: ShellBridge) {}
   register(identity: WindowIdentity): void {
     originRegistry.register(identity.source, identity.windowId, { dTag: identity.dTag, aggregateHash: identity.aggregateHash });
-    const domains = identity.requiredDomains.filter((domain) => WIRED_DOMAINS.has(domain));
+    const domains = requireWiredDomains(identity.requiredDomains, WIRED_DOMAINS);
     originRegistry.setEnvironment(identity.source, {
       capabilities: { domains },
       services: domains.filter((domain) => WIRED_SERVICES.has(domain))
