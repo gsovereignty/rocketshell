@@ -1,4 +1,4 @@
-import type { NostrEvent } from "applesauce-core/helpers";
+import { decodeAddressPointer, type NostrEvent } from "applesauce-core/helpers";
 import { createAddressLoader } from "applesauce-loaders/loaders";
 import { Observable, defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
 import type { SignedManifest } from "@platform/napplet-gateway";
@@ -15,11 +15,13 @@ export interface NappletCoordinate {
 }
 
 export function parseNappletCoordinate(raw: string): NappletCoordinate {
-  const match = /^(\d+):([a-fA-F0-9]{64}):(.+)$/.exec(raw.trim());
-  if (!match) throw new Error("Use kind:pubkey:identifier");
-  const kind = Number(match[1]);
-  const pubkey = match[2]!.toLowerCase();
-  const identifier = match[3]!.trim();
+  const value = raw.trim();
+  const pointer = decodeAddressPointer(value.replace(/^nostr:/i, ""));
+  const match = /^(\d+):([a-fA-F0-9]{64}):(.+)$/.exec(value);
+  if (!pointer && !match) throw new Error("Use naddr or kind:pubkey:identifier");
+  const kind = pointer?.kind ?? Number(match![1]);
+  const pubkey = (pointer?.pubkey ?? match![2]!).toLowerCase();
+  const identifier = (pointer?.identifier ?? match![3]!).trim();
   if (kind !== NAMED_NAPPLET_KIND) throw new Error("Only named kind 35129 Napplets are supported");
   if (!PUBKEY_PATTERN.test(pubkey)) throw new Error("Napplet pubkey must be 64 hexadecimal characters");
   if (!identifier || identifier.length > 256) throw new Error("Napplet identifier is invalid");
