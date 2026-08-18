@@ -4,9 +4,16 @@ import { createNostrEngine } from "@platform/nostr-engine";
 import type { GroupReqMessage } from "applesauce-relay";
 import { Subject } from "rxjs";
 import { describe, expect, it, vi } from "vitest";
-import { createPlatformShellAdapter } from "../src/index.js";
+import { createPlatformShellAdapter, createRelayPoolLike } from "../src/index.js";
 
 describe("shell adapter lifecycle", () => {
+  it("policy-gates shell fallback relay URLs before transport", async () => {
+    const engine = createNostrEngine(); const subscription = vi.spyOn(engine.relayPool, "subscription");
+    const pool = createRelayPoolLike(engine.relayPool, engine.relayPolicy);
+    expect(() => pool.subscription(["ws://remote.example"], [{}])).toThrow("scheme");
+    expect(subscription).not.toHaveBeenCalled();
+    await engine.close();
+  });
   it("applies relay configuration changes through the shared policy", async () => {
     const engine = createNostrEngine();
     const adapter = createPlatformShellAdapter({
