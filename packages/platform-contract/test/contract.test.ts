@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { SubscriptionRegistry, assertPlatformProfile, isPlatformFailure, isStructuredCloneSafe } from "../src/index.js";
+import { ALL_DOMAINS, OPTIONAL_DOMAINS, PLATFORM_REQUIRED_DOMAINS, SubscriptionRegistry, assertPlatformProfile, isPlatformFailure, isStructuredCloneSafe } from "../src/index.js";
 
 describe("platform contract", () => {
   it("rejects missing required domains", () => {
     expect(() => assertPlatformProfile({ supports: (domain) => domain !== "relay" })).toThrow("relay");
+  });
+  it("separates required and optional capability domains", () => {
+    expect(PLATFORM_REQUIRED_DOMAINS).toContain("resource");
+    expect(OPTIONAL_DOMAINS.has("notify")).toBe(true);
+    expect(OPTIONAL_DOMAINS.has("resource")).toBe(false);
+    expect(ALL_DOMAINS).toContain("cvm");
   });
   it("recognizes only stable failures", () => {
     expect(isPlatformFailure({ code: "signed-out", message: "No account" })).toBe(true);

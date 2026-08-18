@@ -85,7 +85,6 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): ShellA
     capabilities: {
       resolveEnvironment(_identity, available) {
         const domains = available.domains.filter((domain) => {
-          if ((domain === "relay" || domain === "outbox") && read.length === 0 && write.length === 0) return false;
           if (domain === "intent" && !options.intentAvailable?.()) return false;
           if (domain === "link" && !options.linkAvailable?.()) return false;
           return true;

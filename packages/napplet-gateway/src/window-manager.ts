@@ -1,4 +1,5 @@
 import { SubscriptionRegistry } from "@project/platform-nap-contract";
+import type { PlatformDomain } from "@project/platform-nap-contract";
 import type { PackageStore } from "./types.js";
 import { virtualNappletUrl } from "./virtual-url.js";
 
@@ -7,6 +8,7 @@ export interface WindowIdentity {
   readonly nonce: string;
   readonly dTag: string;
   readonly aggregateHash: string;
+  readonly requiredDomains: readonly PlatformDomain[];
   readonly source: Window;
 }
 
@@ -48,7 +50,7 @@ export class NappletWindowManager {
     this.container.append(iframe);
     const source = iframe.contentWindow;
     if (!source) { iframe.remove(); throw new Error("Iframe browsing context unavailable"); }
-    const identity: WindowIdentity = { windowId, nonce, dTag: installation.dTag, aggregateHash: installation.aggregateHash, source };
+    const identity: WindowIdentity = { windowId, nonce, dTag: installation.dTag, aggregateHash: installation.aggregateHash, requiredDomains: installation.manifest.requires, source };
     try {
       await this.bridge.register(identity);
       // Fetch occurs under controlled shell client. Opaque iframe navigations bypass

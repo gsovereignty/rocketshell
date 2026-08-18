@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryPackageStore, PackageInstaller, aggregateHash, routeNappletRequest, sha256, virtualNappletUrl, type SignedManifest } from "../src/index.js";
+import { MemoryPackageStore, PackageInstaller, aggregateHash, parseManifest, routeNappletRequest, sha256, virtualNappletUrl, type SignedManifest } from "../src/index.js";
 
 const bytes = new TextEncoder().encode("<h1>Hello</h1>");
 
@@ -30,5 +30,13 @@ describe("package gateway", () => {
     const html = await response?.text(); expect(html).toContain("<h1>Hello</h1>"); expect(html).toContain("target.napplet"); expect(html).toContain("<script nonce=");
     expect(response?.headers.get("content-security-policy")).toContain("'nonce-");
     expect((await routeNappletRequest(new Request(`https://host.test${url}x`), "/project/", store))?.status).toBe(404);
+  });
+  it("accepts known optional domains and rejects unknown domains", async () => {
+    const { event } = await fixture();
+    const content = JSON.parse(event.content) as Record<string, unknown>;
+    const optional = { ...event, content: JSON.stringify({ ...content, requires: ["identity", "notify"] }) };
+    expect(parseManifest(optional, () => true).requires).toContain("notify");
+    const unknown = { ...event, content: JSON.stringify({ ...content, requires: ["identity", "not-real"] }) };
+    expect(() => parseManifest(unknown, () => true)).toThrow("Invalid required domain");
   });
 });

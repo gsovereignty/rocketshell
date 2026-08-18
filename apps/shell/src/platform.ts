@@ -3,16 +3,25 @@ import { createStorageConfigStore, registerCoreHostServices, registerIntentServi
 import { createPlatformShellAdapter, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
+import { PLATFORM_REQUIRED_DOMAINS } from "@project/platform-nap-contract";
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
 
 function relayUrls(raw: string | undefined): string[] { return (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean); }
+
+const WIRED_DOMAINS = new Set<string>(PLATFORM_REQUIRED_DOMAINS);
+const WIRED_SERVICES = new Set(["outbox", "config", "resource", "intent", "link"]);
 
 class BrowserWindowBridge implements WindowBridge {
   readonly #ready = createReadyRegistry();
   constructor(private readonly shell: ShellBridge) {}
   register(identity: WindowIdentity): void {
     originRegistry.register(identity.source, identity.windowId, { dTag: identity.dTag, aggregateHash: identity.aggregateHash });
+    const domains = identity.requiredDomains.filter((domain) => WIRED_DOMAINS.has(domain));
+    originRegistry.setEnvironment(identity.source, {
+      capabilities: { domains },
+      services: domains.filter((domain) => WIRED_SERVICES.has(domain))
+    });
     this.#ready.register(identity.windowId);
   }
   waitUntilReady(identity: WindowIdentity): Promise<void> {
@@ -44,7 +53,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     createWindow: () => null,
     intentAvailable: () => windows !== undefined,
     linkAvailable: () => true,
-    advertisedServices: ["config", "resource", "intent", "link"]
+    advertisedServices: ["outbox", "config", "resource", "intent", "link"]
   });
   const shell = createShellBridge(adapter);
   registerCoreServices(shell.runtime, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });

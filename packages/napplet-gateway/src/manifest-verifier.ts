@@ -1,8 +1,8 @@
-import { REQUIRED_DOMAINS, failure, type PlatformDomain } from "@project/platform-nap-contract";
+import { ALL_DOMAINS, failure, type PlatformDomain } from "@project/platform-nap-contract";
 import { verifyEvent } from "nostr-tools/pure";
 import type { NappletManifest, SignedManifest } from "./types.js";
 
-const allowedDomains = new Set<string>(REQUIRED_DOMAINS);
+const allowedDomains = new Set<string>(ALL_DOMAINS);
 const hashPattern = /^[a-f0-9]{64}$/;
 const safePathPattern = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
 
