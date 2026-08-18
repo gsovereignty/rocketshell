@@ -14,6 +14,8 @@
 - Always use functional programming for Applesauce-related code. Never use
   object-oriented programming, including classes, inheritance, or
   object-oriented design patterns, for anything related to Applesauce.
+- Never create more than one Applesauce `EventStore`. All Applesauce-related
+  code must share one application-wide `EventStore` instance.
 - If the Applesauce skill or MCP server is unavailable, stop Applesauce
   implementation and report the blocker instead of building from assumptions.
 
