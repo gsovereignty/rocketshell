@@ -3,7 +3,7 @@ import { NostrIDB, openDB } from "nostr-idb";
 import type { Subscription } from "rxjs";
 import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 import { createNostrEngine, type EngineOptions, type NostrEngine } from "./engine.js";
-import { createPersistentAccountManager, IndexedDbAccountSnapshotStore } from "./account-persistence.js";
+import { createPersistentAccountManager, openIndexedDbAccountSnapshotStore } from "./account-persistence.js";
 import { AccountManager } from "applesauce-accounts";
 
 export interface EventCache {
@@ -53,8 +53,8 @@ export async function createPersistentNostrEngine(options: PersistentEngineOptio
     accountManager
   };
   const engine = createNostrEngine(engineOptions);
-  let accountStore: IndexedDbAccountSnapshotStore;
-  try { accountStore = await IndexedDbAccountSnapshotStore.open(); }
+  let accountStore: Awaited<ReturnType<typeof openIndexedDbAccountSnapshotStore>>;
+  try { accountStore = await openIndexedDbAccountSnapshotStore(); }
   catch (error) { await engine.close(); database.close(); throw error; }
   let persistentAccounts: Awaited<ReturnType<typeof createPersistentAccountManager>>;
   try { persistentAccounts = await createPersistentAccountManager(accountStore, accountManager); }

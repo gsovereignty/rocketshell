@@ -34,33 +34,30 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
   });
 }
 
-export class IndexedDbAccountSnapshotStore implements AccountSnapshotStore {
-  private constructor(private readonly database: IDBDatabase) {}
+export async function openIndexedDbAccountSnapshotStore(name = PRIVATE_ACCOUNT_DATABASE_NAME): Promise<AccountSnapshotStore> {
+  const request = indexedDB.open(name, DATABASE_VERSION);
+  request.onupgradeneeded = () => {
+    if (!request.result.objectStoreNames.contains(SNAPSHOTS)) request.result.createObjectStore(SNAPSHOTS);
+  };
+  const database = await requestResult(request);
+  return {
+    async load(): Promise<AccountSnapshot | undefined> {
+      const transaction = database.transaction(SNAPSHOTS, "readonly");
+      const snapshot = await requestResult(transaction.objectStore(SNAPSHOTS).get(CURRENT) as IDBRequest<AccountSnapshot | undefined>);
+      await transactionDone(transaction);
+      if (!snapshot) return undefined;
+      if (!Array.isArray(snapshot.accounts) || (snapshot.activeAccountId !== undefined && typeof snapshot.activeAccountId !== "string")) throw new Error("Invalid persisted account snapshot");
+      return structuredClone(snapshot);
+    },
 
-  static async open(name = PRIVATE_ACCOUNT_DATABASE_NAME): Promise<IndexedDbAccountSnapshotStore> {
-    const request = indexedDB.open(name, DATABASE_VERSION);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(SNAPSHOTS)) request.result.createObjectStore(SNAPSHOTS);
-    };
-    return new IndexedDbAccountSnapshotStore(await requestResult(request));
-  }
+    async save(snapshot: AccountSnapshot): Promise<void> {
+      const transaction = database.transaction(SNAPSHOTS, "readwrite");
+      transaction.objectStore(SNAPSHOTS).put(structuredClone(snapshot), CURRENT);
+      await transactionDone(transaction);
+    },
 
-  async load(): Promise<AccountSnapshot | undefined> {
-    const transaction = this.database.transaction(SNAPSHOTS, "readonly");
-    const snapshot = await requestResult(transaction.objectStore(SNAPSHOTS).get(CURRENT) as IDBRequest<AccountSnapshot | undefined>);
-    await transactionDone(transaction);
-    if (!snapshot) return undefined;
-    if (!Array.isArray(snapshot.accounts) || (snapshot.activeAccountId !== undefined && typeof snapshot.activeAccountId !== "string")) throw new Error("Invalid persisted account snapshot");
-    return structuredClone(snapshot);
-  }
-
-  async save(snapshot: AccountSnapshot): Promise<void> {
-    const transaction = this.database.transaction(SNAPSHOTS, "readwrite");
-    transaction.objectStore(SNAPSHOTS).put(structuredClone(snapshot), CURRENT);
-    await transactionDone(transaction);
-  }
-
-  close(): void { this.database.close(); }
+    close(): void { database.close(); }
+  };
 }
 
 export interface PersistentAccountManager {
