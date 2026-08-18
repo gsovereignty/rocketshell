@@ -3,7 +3,7 @@ import { createIdentityService, createOutboxService, createRelayPoolOutboxRouter
 import type { NostrEvent as CoreNostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
 import type { NostrEngine } from "@platform/nostr-engine";
-import { RelayListResolver, RelayPublisher, openRelayStream } from "@platform/nostr-engine";
+import { createRelayListResolver, createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[] }
@@ -12,7 +12,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
   const readRelays = engine.relayPolicy.select(options.directReadRelays, "read");
   const writeRelays = engine.relayPolicy.select(options.directWriteRelays, "write");
   const discoveryRelays = engine.relayPolicy.select(options.discoveryRelays ?? [], "discovery");
-  const publisher = new RelayPublisher(engine.relayPool, engine.accounts, engine.ingress);
+  const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress);
   runtime.registerService("relay", createRelayPoolService({
     subscribe(filters, callback, relayUrls) {
       const selected = engine.relayPolicy.select(relayUrls?.length ? relayUrls : readRelays, "read");
@@ -31,7 +31,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
       getRelays: async () => Object.fromEntries([...new Set([...readRelays, ...writeRelays])].map((url) => [url, { read: readRelays.includes(url), write: writeRelays.includes(url) }]))
     } : null
   }));
-  const relayLists = new RelayListResolver(engine.eventStore, engine.ingress, engine.relayPolicy, discoveryRelays, async (relays, authors) => {
+  const relayLists = createRelayListResolver(engine.eventStore, engine.ingress, engine.relayPolicy, discoveryRelays, async (relays, authors) => {
     if (relays.length === 0 || authors.length === 0) return [];
     return new Promise((resolve) => {
       const events: CoreNostrEvent[] = [];

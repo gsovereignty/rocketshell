@@ -1,13 +1,13 @@
 import { generateSecretKey, finalizeEvent } from "nostr-tools/pure";
 import { describe, expect, it } from "vitest";
-import { RelayPolicy, createNostrEngine } from "../src/index.js";
+import { createNostrEngine, createRelayPolicy } from "../src/index.js";
 
 describe("relay policy", () => {
   it("normalizes and deduplicates secure relay URLs", () => {
-    expect(new RelayPolicy().select(["WSS://Relay.Example:443/", "wss://relay.example"], "read")).toEqual(["wss://relay.example/"]);
+    expect(createRelayPolicy().select(["WSS://Relay.Example:443/", "wss://relay.example"], "read")).toEqual(["wss://relay.example/"]);
   });
   it("rejects insecure remote, credentials, and fragments", () => {
-    const policy = new RelayPolicy({ allowInsecureLocalhost: true });
+    const policy = createRelayPolicy({ allowInsecureLocalhost: true });
     expect(() => policy.normalize("ws://relay.example", "read")).toThrow("scheme");
     expect(() => policy.normalize("wss://user@relay.example", "read")).toThrow("credentials");
     expect(() => policy.normalize("wss://relay.example/#x", "read")).toThrow("fragment");

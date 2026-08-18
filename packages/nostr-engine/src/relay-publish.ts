@@ -8,19 +8,21 @@ export interface PublishTarget {
 }
 export interface PublicationResult { readonly event: NostrEvent; readonly outcomes: readonly PublishResponse[]; readonly accepted: number }
 
-export class RelayPublisher {
-  constructor(private readonly target: PublishTarget, private readonly accounts: AccountController, private readonly ingress: EventIngress, private readonly minimumAccepted = 1) {}
+export interface RelayPublisher {
+  publishTemplate(relays: readonly string[], template: EventTemplate): Promise<PublicationResult>;
+  publishSigned(relays: readonly string[], event: NostrEvent): Promise<PublicationResult>;
+}
 
-  async publishTemplate(relays: readonly string[], template: EventTemplate): Promise<PublicationResult> {
-    const signed = await this.accounts.sign(template);
-    return this.publishSigned(relays, signed);
-  }
-
-  async publishSigned(relays: readonly string[], event: NostrEvent): Promise<PublicationResult> {
-    const outcomes = await this.target.publish([...relays], event, { retries: false });
+export function createRelayPublisher(target: PublishTarget, accounts: AccountController, ingress: EventIngress, minimumAccepted = 1): RelayPublisher {
+  const publishSigned = async (relays: readonly string[], event: NostrEvent): Promise<PublicationResult> => {
+    const outcomes = await target.publish([...relays], event, { retries: false });
     const accepted = outcomes.filter((outcome) => outcome.ok).length;
-    if (accepted < this.minimumAccepted) throw new Error("publish-rejected");
-    this.ingress.admit(event, outcomes.find((outcome) => outcome.ok)?.from ?? "local:publish");
+    if (accepted < minimumAccepted) throw new Error("publish-rejected");
+    ingress.admit(event, outcomes.find((outcome) => outcome.ok)?.from ?? "local:publish");
     return { event, outcomes, accepted };
-  }
+  };
+  return {
+    async publishTemplate(relays, template) { return publishSigned(relays, await accounts.sign(template)); },
+    publishSigned
+  };
 }

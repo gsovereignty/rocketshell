@@ -2,11 +2,10 @@ import type { EventStore } from "applesauce-core/event-store";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 
 export type VerifyNostrEvent = (event: NostrEvent) => boolean;
+export interface EventIngress { admit(event: NostrEvent, observedRelay: string): NostrEvent | null }
 
-export class EventIngress {
-  constructor(private readonly store: EventStore, private readonly verify: VerifyNostrEvent) {}
-
-  admit(event: NostrEvent, observedRelay: string): NostrEvent | null {
+export function createEventIngress(store: EventStore, verify: VerifyNostrEvent): EventIngress {
+  return { admit(event, observedRelay) {
     // Relay input must never inherit library verification/cache symbols.
     const canonical: NostrEvent = {
       id: event.id,
@@ -17,7 +16,7 @@ export class EventIngress {
       content: event.content,
       sig: event.sig
     };
-    if (!this.verify(canonical)) return null;
-    return this.store.add(canonical, observedRelay);
-  }
+    if (!verify(canonical)) return null;
+    return store.add(canonical, observedRelay);
+  } };
 }

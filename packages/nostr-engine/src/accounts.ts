@@ -3,30 +3,35 @@ import type { EventTemplate, NostrEvent } from "applesauce-core/helpers/event";
 import { failure } from "@project/platform-nap-contract";
 import type { Subscription } from "rxjs";
 
-export class AccountGenerationError extends Error {
-  readonly failure = failure("signer-unavailable", "Active account changed during operation");
+export interface AccountController {
+  readonly manager: AccountManager;
+  readonly generation: number;
+  readonly publicKey: string;
+  sign(template: EventTemplate): Promise<NostrEvent>;
+  close(): void;
 }
 
-export class AccountController {
-  #generation = 0;
-  readonly #subscription: Subscription;
-
-  constructor(readonly manager: AccountManager) {
+export function createAccountController(manager: AccountManager): AccountController {
+  let generation = 0;
+  let closed = false;
     let initial = true;
-    this.#subscription = manager.active$.subscribe(() => { if (initial) initial = false; else this.#generation += 1; });
-  }
-
-  get generation(): number { return this.#generation; }
-  get publicKey(): string { return this.manager.active?.pubkey ?? ""; }
-
-  async sign(template: EventTemplate): Promise<NostrEvent> {
-    const generation = this.#generation;
-    const account = this.manager.active;
-    if (!account) throw new Error("signed-out");
-    const signed = await account.signEvent(template);
-    if (generation !== this.#generation || account !== this.manager.active) throw new AccountGenerationError();
-    return signed;
-  }
-
-  close(): void { this.#subscription.unsubscribe(); }
+  const subscription: Subscription = manager.active$.subscribe(() => { if (initial) initial = false; else generation += 1; });
+  return {
+    manager,
+    get generation() { return generation; },
+    get publicKey() { return manager.active?.pubkey ?? ""; },
+    async sign(template) {
+      const signingGeneration = generation;
+      const account = manager.active;
+      if (!account) throw new Error("signed-out");
+      const signed = await account.signEvent(template);
+      if (signingGeneration !== generation || account !== manager.active) {
+        const error = new Error("Active account changed during operation") as Error & { failure: ReturnType<typeof failure> };
+        error.failure = failure("signer-unavailable", error.message);
+        throw error;
+      }
+      return signed;
+    },
+    close() { if (closed) return; closed = true; subscription.unsubscribe(); }
+  };
 }
