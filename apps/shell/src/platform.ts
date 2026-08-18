@@ -69,7 +69,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     onUnroutedMessage: (info) => audit.recordUnrouted(info)
   });
   const shell = createShellBridge(adapter);
-  const coreServices = registerCoreServices(shell.runtime, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
+  const coreServices = registerCoreServices(shell, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
   const hostServices = registerCoreHostServices(shell.runtime, {
     openSettings: () => undefined,
     configStore: createStorageConfigStore(localStorage),

@@ -1,4 +1,4 @@
-import { createShellBridge } from "@kehto/shell";
+import { createShellBridge, originRegistry } from "@kehto/shell";
 import type { ServiceHandler } from "@kehto/runtime";
 import { createNostrEngine } from "@platform/nostr-engine";
 import type { GroupReqMessage } from "applesauce-relay";
@@ -50,5 +50,33 @@ describe("shell adapter lifecycle", () => {
     messages.next({ type: "EOSE", from: "wss://relay.example/", id: "sub-1" });
     expect(postMessage).not.toHaveBeenCalled();
     adapter.close(); await engine.close();
+  });
+  it("delivers identity changes only to authorized live windows", async () => {
+    const engine = createNostrEngine();
+    const adapter = createPlatformShellAdapter({
+      engine, discoveryRelays: [], readRelays: [], writeRelays: [], createWindow: () => null
+    });
+    const shell = createShellBridge(adapter);
+    const allowedSource = { postMessage: vi.fn() }; const deniedSource = { postMessage: vi.fn() };
+    for (const [windowId, source, dTag] of [["allowed", allowedSource, "allowed-app"], ["denied", deniedSource, "denied-app"]] as const) {
+      originRegistry.register(source as unknown as Window, windowId, { dTag, aggregateHash: "a".repeat(64) });
+      originRegistry.setEnvironment(source as unknown as Window, { capabilities: { domains: ["identity"] }, services: [] });
+      shell.runtime.sessionRegistry.register(windowId, {
+        pubkey: "", windowId, origin: "null", type: "napplet", dTag, aggregateHash: "a".repeat(64),
+        registeredAt: Date.now(), instanceId: `${windowId}-instance`, provenance: "nip-5d"
+      });
+      shell.runtime.aclState.grant("", dTag, "a".repeat(64), "identity:read");
+      shell.handleMessage({ source, origin: "null", data: { type: "shell.ready" } } as unknown as MessageEvent);
+      source.postMessage.mockClear();
+    }
+    shell.runtime.aclState.revoke("", "denied-app", "a".repeat(64), "identity:read");
+    expect(originRegistry.getIframeWindow("allowed")).toBe(allowedSource);
+    expect(originRegistry.getEnvironment(allowedSource as unknown as Window)?.capabilities.domains).toContain("identity");
+    expect(shell.runtime.aclState.check("", "allowed-app", "a".repeat(64), "identity:read")).toBe(true);
+    shell.publishIdentityChanged("");
+    expect(allowedSource.postMessage).toHaveBeenCalledWith({ type: "identity.changed", pubkey: "" }, "*");
+    expect(deniedSource.postMessage).not.toHaveBeenCalled();
+    originRegistry.unregister("allowed"); originRegistry.unregister("denied");
+    shell.destroy(); adapter.close(); await engine.close();
   });
 });

@@ -7,21 +7,21 @@ import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 describe("core service lifecycle", () => {
   it("notifies account-sensitive services for every live window on account change", async () => {
     const handlers = new Map<string, ServiceHandler>();
-    const injectEvent = vi.fn();
+    const publishIdentityChanged = vi.fn();
     const runtime = {
       registerService: (name: string, handler: ServiceHandler) => handlers.set(name, handler),
       sessionRegistry: { getAllEntries: () => [{ windowId: "window-1" }, { windowId: "window-2" }] },
-      injectEvent
+      injectEvent: vi.fn()
     } as unknown as Runtime;
     const engine = createNostrEngine();
-    const registration = registerCoreServices(runtime, engine, { directReadRelays: [], directWriteRelays: [] });
+    const registration = registerCoreServices({ runtime, publishIdentityChanged }, engine, { directReadRelays: [], directWriteRelays: [] });
     const relayCleanup = vi.fn(); const outboxCleanup = vi.fn();
     handlers.get("relay")!.onWindowDestroyed = relayCleanup;
     handlers.get("outbox")!.onWindowDestroyed = outboxCleanup;
     engine.accounts.manager.active$.next(undefined);
     expect(relayCleanup.mock.calls).toEqual([["window-1"], ["window-2"]]);
     expect(outboxCleanup.mock.calls).toEqual([["window-1"], ["window-2"]]);
-    expect(injectEvent).toHaveBeenCalledWith("identity:changed", { pubkey: null });
+    expect(publishIdentityChanged).toHaveBeenCalledWith("");
     registration.close(); await engine.close();
   });
   it("maps each Applesauce publish outcome to its relay", async () => {

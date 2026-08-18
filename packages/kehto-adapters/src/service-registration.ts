@@ -1,4 +1,5 @@
 import type { Runtime, ServiceHandler } from "@kehto/runtime";
+import type { ShellBridge } from "@kehto/shell";
 import { createIdentityService, createOutboxService, createRelayPoolOutboxRouter, createRelayPoolService } from "@kehto/services";
 import type { NostrEvent as CoreNostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
@@ -27,7 +28,8 @@ export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly 
   };
 }
 
-export function registerCoreServices(runtime: Runtime, engine: NostrEngine, options: CoreServiceOptions): CoreServiceRegistration {
+export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publishIdentityChanged">, engine: NostrEngine, options: CoreServiceOptions): CoreServiceRegistration {
+  const { runtime } = shell;
   const readRelays = engine.relayPolicy.select(options.directReadRelays, "read");
   const writeRelays = engine.relayPolicy.select(options.directWriteRelays, "write");
   const discoveryRelays = engine.relayPolicy.select(options.discoveryRelays ?? [], "discovery");
@@ -84,7 +86,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
     for (const entry of runtime.sessionRegistry.getAllEntries()) {
       for (const service of accountSensitiveServices) service.onWindowDestroyed?.(entry.windowId);
     }
-    runtime.injectEvent("identity:changed", { pubkey: engine.accounts.publicKey || null });
+    shell.publishIdentityChanged(engine.accounts.publicKey);
   });
   return { close() {
     if (closed) return;
