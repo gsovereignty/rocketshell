@@ -1,0 +1,23 @@
+name: compatibility
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  locked-platform-nap-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable && corepack prepare pnpm@8.15.5 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm test:conformance
+      - run: pnpm test:browser
+      - run: pnpm build

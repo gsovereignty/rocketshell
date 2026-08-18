@@ -1,0 +1,17 @@
+{
+  "name": "@platform/reference-napplet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@project/platform-nap-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "7.1.3",
+    "vite-plugin-singlefile": "2.3.0"
+  }
+}

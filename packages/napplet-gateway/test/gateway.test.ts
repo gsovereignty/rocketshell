@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { validateManifestEvent } from "@napplet/conformance";
 import { MemoryPackageStore, PackageInstaller, aggregateHash, parseManifest, routeNappletRequest, sha256, virtualNappletUrl, type SignedManifest } from "../src/index.js";
 
 const bytes = new TextEncoder().encode("<h1>Hello</h1>");
@@ -6,7 +7,7 @@ const bytes = new TextEncoder().encode("<h1>Hello</h1>");
 async function fixture(): Promise<{ event: SignedManifest; inputs: Map<string, { bytes: Uint8Array }> }> {
   const hash = await sha256(bytes); const aggregate = await aggregateHash([{ path: "index.html", sha256: hash }]);
   const content = JSON.stringify({ dTag: "hello/world", aggregateHash: aggregate, entrypoint: "index.html", requires: ["identity"], artifacts: [{ path: "index.html", sha256: hash, mediaType: "text/html" }] });
-  return { event: { id: "0".repeat(64), pubkey: "1".repeat(64), created_at: 1, kind: 30078, tags: [["d", "hello/world"]], content, sig: "2".repeat(128) }, inputs: new Map([["index.html", { bytes }]]) };
+  return { event: { id: "0".repeat(64), pubkey: "1".repeat(64), created_at: 1, kind: 35129, tags: [["d", "hello/world"], ["requires", "identity"], ["path", "/index.html", hash]], content, sig: "2".repeat(128) }, inputs: new Map([["index.html", { bytes }]]) };
 }
 
 describe("package gateway", () => {
@@ -14,6 +15,10 @@ describe("package gateway", () => {
     const store = new MemoryPackageStore(); const { event, inputs } = await fixture();
     const installed = await new PackageInstaller(store, () => true).install(event, inputs, { randomId: () => "install-1", now: () => 10 });
     expect((await store.getActive("hello/world"))?.aggregateHash).toBe(installed.aggregateHash);
+  });
+  it("passes official NIP-5D manifest conformance", async () => {
+    const { event } = await fixture();
+    expect(validateManifestEvent(event)).toMatchObject({ ok: true, kind: 35129, dTag: "hello/world", requires: ["identity"] });
   });
   it("does not route failed staging", async () => {
     const store = new MemoryPackageStore(); const { event, inputs } = await fixture();
@@ -34,7 +39,7 @@ describe("package gateway", () => {
   it("accepts known optional domains and rejects unknown domains", async () => {
     const { event } = await fixture();
     const content = JSON.parse(event.content) as Record<string, unknown>;
-    const optional = { ...event, content: JSON.stringify({ ...content, requires: ["identity", "notify"] }) };
+    const optional = { ...event, tags: [...event.tags, ["requires", "notify"]], content: JSON.stringify({ ...content, requires: ["identity", "notify"] }) };
     expect(parseManifest(optional, () => true).requires).toContain("notify");
     const unknown = { ...event, content: JSON.stringify({ ...content, requires: ["identity", "not-real"] }) };
     expect(() => parseManifest(unknown, () => true)).toThrow("Invalid required domain");

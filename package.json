@@ -7,12 +7,22 @@
     "check": "pnpm -r --if-present check",
     "test": "vitest run",
     "test:browser": "playwright test",
+    "test:conformance": "pnpm --filter @platform/reference-napplet build && napplet-conformance apps/reference-napplet/dist",
     "dev": "pnpm --filter @platform/shell dev"
   },
   "devDependencies": {
-    "@types/node": "24.3.0",
+    "@napplet/conformance": "0.16.1",
+    "@napplet/conformance-cli": "0.2.18",
     "@playwright/test": "1.62.1",
+    "@types/node": "24.3.0",
     "typescript": "5.9.2",
     "vitest": "3.2.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "@napplet/conformance": "0.16.1",
+      "@napplet/core": "0.31.1",
+      "@napplet/nap": "0.31.1"
+    }
   }
 }
