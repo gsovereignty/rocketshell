@@ -1,8 +1,10 @@
 import type { RelayPoolLike } from "@kehto/shell";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
-import { Observable } from "rxjs";
+import { Observable, type Subscription } from "rxjs";
 import { createRelayPublisher, openRelayStream, validateFilters, type NostrEngine } from "@platform/nostr-engine";
+
+const COUNT_TIMEOUT_MS = 15_000;
 
 export function createRelayPoolLike(engine: NostrEngine): RelayPoolLike {
   const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress, 1, engine.telemetry);
@@ -29,13 +31,21 @@ export function createRelayPoolLike(engine: NostrEngine): RelayPoolLike {
       });
     },
     async count(relayUrls, filters) {
+      const selected = engine.relayPolicy.select(relayUrls, "read");
+      const validated = validateFilters(filters as Filter[]);
+      if (selected.length === 0) return 0;
       return new Promise<number>((resolve, reject) => {
         let total = 0;
-        const subscription = engine.relayPool.count(engine.relayPolicy.select(relayUrls, "read"), validateFilters(filters as Filter[])).subscribe({
+        let subscription: Subscription | undefined;
+        const timer = setTimeout(() => {
+          subscription?.unsubscribe();
+          reject(new Error("query-timeout"));
+        }, COUNT_TIMEOUT_MS);
+        subscription = engine.relayPool.count(selected, validated).subscribe({
           next(counts) { total = Object.values(counts).reduce((sum, result) => sum + result.count, 0); },
-          complete() { resolve(total); }, error: reject
+          complete() { clearTimeout(timer); resolve(total); },
+          error(error) { clearTimeout(timer); reject(error); }
         });
-        void subscription;
       });
     }
   };

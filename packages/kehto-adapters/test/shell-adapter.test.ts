@@ -2,12 +2,13 @@ import { createShellBridge, originRegistry } from "@kehto/shell";
 import type { ServiceHandler } from "@kehto/runtime";
 import { createNostrEngine } from "@platform/nostr-engine";
 import type { GroupReqMessage } from "applesauce-relay";
-import { Subject } from "rxjs";
-import { describe, expect, it, vi } from "vitest";
+import { Observable, Subject } from "rxjs";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPlatformShellAdapter, createRelayPoolLike } from "../src/index.js";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("shell adapter lifecycle", () => {
+  afterEach(() => vi.useRealTimers());
   it("exposes active signer encryption without exposing the account", async () => {
     const engine = createNostrEngine();
     const account = {
@@ -31,6 +32,20 @@ describe("shell adapter lifecycle", () => {
     const event = finalizeEvent({ kind: 1, created_at: 1, content: "valid", tags: [] }, generateSecretKey());
     await expect(pool.publish(["wss://relay.example"], { ...event, content: "tampered" })).rejects.toThrow("invalid-event");
     expect(publish).not.toHaveBeenCalled();
+    await engine.close();
+  });
+  it("bounds shell fallback count requests and tears down transport", async () => {
+    vi.useFakeTimers();
+    const engine = createNostrEngine();
+    const cleanup = vi.fn();
+    const count = vi.spyOn(engine.relayPool, "count").mockReturnValue(new Observable(() => cleanup));
+    const pool = createRelayPoolLike(engine);
+    const pending = pool.count!(["wss://relay.example"], [{ kinds: [1] }]);
+    const rejection = expect(pending).rejects.toThrow("query-timeout");
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejection;
+    expect(count).toHaveBeenCalledOnce();
+    expect(cleanup).toHaveBeenCalledOnce();
     await engine.close();
   });
   it("applies relay configuration changes through the shared policy", async () => {
