@@ -23,4 +23,23 @@ describe("shared engine", () => {
     expect(engine.ingress.admit({ ...event, content: "tampered" }, "wss://relay.example")).toBeNull();
     await engine.close(); await engine.close();
   });
+  it("keeps the newest replaceable winner", async () => {
+    const engine = createNostrEngine(); const key = generateSecretKey();
+    const newest = finalizeEvent({ kind: 0, created_at: 20, content: "new", tags: [] }, key);
+    const older = finalizeEvent({ kind: 0, created_at: 10, content: "old", tags: [] }, key);
+    engine.ingress.admit(newest, "wss://one"); engine.ingress.admit(older, "wss://two");
+    expect(engine.eventStore.getReplaceable(0, newest.pubkey)?.id).toBe(newest.id);
+    await engine.close();
+  });
+  it("removes deleted events and refuses already-expired events", async () => {
+    const engine = createNostrEngine(); const key = generateSecretKey();
+    const note = finalizeEvent({ kind: 1, created_at: 1, content: "delete", tags: [] }, key);
+    const deletion = finalizeEvent({ kind: 5, created_at: 2, content: "", tags: [["e", note.id]] }, key);
+    engine.ingress.admit(note, "wss://one"); engine.ingress.admit(deletion, "wss://one");
+    expect(engine.eventStore.getEvent(note.id)).toBeUndefined();
+    const expired = finalizeEvent({ kind: 1, created_at: 1, content: "expired", tags: [["expiration", "2"]] }, key);
+    engine.ingress.admit(expired, "wss://one");
+    expect(engine.eventStore.getEvent(expired.id)).toBeUndefined();
+    await engine.close();
+  });
 });
