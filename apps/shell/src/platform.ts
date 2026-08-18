@@ -3,7 +3,7 @@ import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigS
 import { createPlatformShellAdapter, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
-import { PLATFORM_REQUIRED_DOMAINS } from "@project/platform-nap-contract";
+import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/platform-nap-contract";
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
 import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
@@ -46,6 +46,7 @@ export interface BrowserPlatform {
   readonly windows: NappletWindowManager;
   destroyWindow(windowId: string): void;
   authenticatedWindowIds(): readonly string[];
+  telemetrySnapshot(): readonly PlatformMetricRecord[];
   close(): Promise<void>;
 }
 
@@ -141,6 +142,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     windows,
     destroyWindow: (windowId) => windows?.destroy(windowId),
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
+    telemetrySnapshot: () => engine.telemetry.snapshot(),
     async close() {
       if (closed) return; closed = true;
       updates.close(); windows?.close(); window.removeEventListener("message", onMessage); navigator.serviceWorker.removeEventListener("message", onWorkerMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();

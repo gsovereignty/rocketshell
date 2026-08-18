@@ -6,6 +6,7 @@ declare global {
       windows: { listWindowIds(): readonly string[] };
       destroyWindow(windowId: string): void;
       authenticatedWindowIds(): readonly string[];
+      telemetrySnapshot(): readonly { name: string; value: number }[];
     };
   }
 }
@@ -33,6 +34,7 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   const dataset = await frame.locator("html").evaluate((element) => ({ ...element.dataset }));
   expect(dataset).toMatchObject({ origin: "null", nostr: "undefined", storageBlocked: "true", hostDomBlocked: "true", fetchBlocked: "true", websocketBlocked: "true", pubkey: "", intentReceived: "true", platformProfile: "true", optionalAbsent: "true" });
   expect(await page.locator("iframe").getAttribute("data-virtual-url")).toMatch(/^\/shell\/__napplet__\/platform-fixture\/[a-f0-9]{64}\/index\.html$/);
+  expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
 });
 
 test("rejects shell messages from an unregistered source window", async ({ page }) => {
