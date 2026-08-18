@@ -2,7 +2,7 @@ export type PlatformMetricName =
   | "relay.connection" | "relay.authentication" | "relay.reconnect"
   | "query.completed" | "query.first-event" | "query.eose"
   | "event.received" | "event.admitted" | "event.rejected" | "event.duplicate"
-  | "event.deleted" | "event.expired" | "publication.outcome" | "publication.failed"
+  | "event.deleted" | "event.expired" | "event.replaceable-conflict" | "publication.outcome" | "publication.failed"
   | "relay-list.hit" | "relay-list.miss" | "relay-list.stale" | "relay-list.negative"
   | "window.active" | "subscription.active" | "subscription.cleanup" | "callback.suppressed"
   | "acl.outcome" | "consent.outcome" | "resource.bytes" | "resource.timeout"

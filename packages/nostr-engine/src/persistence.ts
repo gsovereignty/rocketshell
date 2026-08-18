@@ -27,7 +27,7 @@ export async function attachEventCache(engine: NostrEngine, cache: EventCache, h
   let closed = false;
   return {
     relayPool: engine.relayPool, eventStore: engine.eventStore, accounts: engine.accounts,
-    ingress: engine.ingress, relayPolicy: engine.relayPolicy,
+    ingress: engine.ingress, relayPolicy: engine.relayPolicy, telemetry: engine.telemetry,
     async close() {
       if (closed) return; closed = true;
       for (const subscription of subscriptions) subscription.unsubscribe();
@@ -41,7 +41,8 @@ export interface PersistentEngineOptions extends EngineOptions { readonly maximu
 export async function createPersistentNostrEngine(options: PersistentEngineOptions = {}): Promise<NostrEngine> {
   const engineOptions: EngineOptions = {
     ...(options.verifyEvent ? { verifyEvent: options.verifyEvent } : {}),
-    ...(options.relayPolicy ? { relayPolicy: options.relayPolicy } : {})
+    ...(options.relayPolicy ? { relayPolicy: options.relayPolicy } : {}),
+    ...(options.telemetry ? { telemetry: options.telemetry } : {})
   };
   const engine = createNostrEngine(engineOptions);
   const cache = new NostrIDB<NostrEvent>(undefined, { maxEvents: options.maximumCachedEvents ?? 100_000 });

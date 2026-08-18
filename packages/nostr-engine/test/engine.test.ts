@@ -21,6 +21,9 @@ describe("shared engine", () => {
     const event = finalizeEvent({ kind: 1, created_at: 1, content: "hello", tags: [] }, generateSecretKey());
     expect(engine.ingress.admit(event, "wss://relay.example")?.id).toBe(event.id);
     expect(engine.ingress.admit({ ...event, content: "tampered" }, "wss://relay.example")).toBeNull();
+    expect(engine.telemetry.snapshot().map((record) => record.name)).toEqual([
+      "event.received", "event.admitted", "event.received", "event.rejected"
+    ]);
     await engine.close(); await engine.close();
   });
   it("keeps the newest replaceable winner", async () => {
