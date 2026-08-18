@@ -34,11 +34,19 @@ class BrowserWindowBridge implements WindowBridge {
     this.#ready.resolve(windowId);
   }
   unregister(windowId: string): void {
-    this.#ready.remove(windowId); this.shell.runtime.destroyWindow(windowId); originRegistry.unregister(windowId);
+    this.#ready.remove(windowId);
+    this.shell.runtime.destroyWindow(windowId);
+    this.shell.runtime.sessionRegistry.unregister(windowId);
+    originRegistry.unregister(windowId);
   }
 }
 
-export interface BrowserPlatform { readonly windows: NappletWindowManager; close(): Promise<void> }
+export interface BrowserPlatform {
+  readonly windows: NappletWindowManager;
+  destroyWindow(windowId: string): void;
+  authenticatedWindowIds(): readonly string[];
+  close(): Promise<void>;
+}
 
 export async function createBrowserPlatform(container: HTMLElement): Promise<BrowserPlatform> {
   const controlledAtStartup = navigator.serviceWorker.controller !== null;
@@ -118,6 +126,8 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   let closed = false;
   return {
     windows,
+    destroyWindow: (windowId) => windows?.destroy(windowId),
+    authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
     async close() {
       if (closed) return; closed = true;
       windows?.close(); window.removeEventListener("message", onMessage); shell.destroy(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();

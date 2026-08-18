@@ -1,5 +1,15 @@
 import { expect, test } from "@playwright/test";
 
+declare global {
+  interface Window {
+    __platformTest?: {
+      windows: { listWindowIds(): readonly string[] };
+      destroyWindow(windowId: string): void;
+      authenticatedWindowIds(): readonly string[];
+    };
+  }
+}
+
 test("starts under repository subpath and gains service-worker control", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
@@ -58,4 +68,19 @@ test("reloads shell and verified Napplet while offline", async ({ page, context 
   await page.reload();
   await expect(page.locator("#status")).toHaveText("Platform ready");
   await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
+});
+
+test("destroying a Napplet removes its authenticated session", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
+  const before = await page.evaluate(() => ({
+    managed: window.__platformTest?.windows.listWindowIds() ?? [],
+    authenticated: window.__platformTest?.authenticatedWindowIds() ?? []
+  }));
+  expect(before.managed).toHaveLength(1);
+  expect(before.authenticated).toEqual(before.managed);
+  await page.evaluate((windowId) => window.__platformTest?.destroyWindow(windowId), before.managed[0]!);
+  await expect(page.locator("iframe")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__platformTest?.windows.listWindowIds())).toEqual([]);
+  expect(await page.evaluate(() => window.__platformTest?.authenticatedWindowIds())).toEqual([]);
 });

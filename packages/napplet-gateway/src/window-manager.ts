@@ -39,6 +39,10 @@ export class NappletWindowManager {
     return this.#windows.get(windowId);
   }
 
+  listWindowIds(): readonly string[] {
+    return Object.freeze([...this.#windows.keys()]);
+  }
+
   async create(dTag: string): Promise<ManagedNappletWindow> {
     if (this.#closed) throw new Error("Window manager closed");
     const installation = await this.store.getActive(dTag);
