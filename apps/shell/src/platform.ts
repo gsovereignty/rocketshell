@@ -1,5 +1,5 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
-import { createStorageConfigStore, registerCoreHostServices, registerIntentService, registerResourceService } from "@platform/host-services";
+import { createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerResourceService } from "@platform/host-services";
 import { createPlatformShellAdapter, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
@@ -69,12 +69,28 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   registerResourceService(shell.runtime, { grants: new Map(), allowHttpLocalhost: import.meta.env.DEV });
   const windowBridge = new BrowserWindowBridge(shell);
   windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL);
-  registerIntentService(shell.runtime, packageStore, windows, {
-    getDefaultHandler: (archetype) => localStorage.getItem(`platform:intent-default:${archetype}`) ?? undefined
+  const intentPreferences = createIntentPreferenceStore(localStorage);
+  const activeAccount = (): string => engine.accounts.publicKey || "signed-out";
+  const intentResolver = registerIntentService(shell.runtime, packageStore, windows, {
+    getDefaultHandler: (archetype) => intentPreferences.get(activeAccount(), archetype),
+    chooseHandler: (archetype, candidates, sender) => {
+      const choices = candidates.map((candidate, index) => `${index + 1}. ${candidate.title ?? candidate.dTag}`).join("\n");
+      const answer = window.prompt(`${sender} wants to open ${archetype}. Choose handler:\n${choices}`);
+      if (answer === null) return undefined;
+      const selected = candidates[Number.parseInt(answer, 10) - 1];
+      if (!selected) return undefined;
+      intentPreferences.set(activeAccount(), archetype, selected.dTag);
+      return selected.dTag;
+    },
+    authorizeExplicitHandler: (sender, handler) => window.confirm(`${sender} wants to open ${handler}. Allow?`)
   });
   const onMessage = (event: MessageEvent): void => { windowBridge.accept(event); shell.handleMessage(event); };
   window.addEventListener("message", onMessage);
   const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true" ? await installFixture(packageStore) : undefined;
+  if (fixtureDTag) {
+    const fixture = await packageStore.getActive(fixtureDTag);
+    for (const archetype of fixture?.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
+  }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
   const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, { scope: import.meta.env.BASE_URL, type: "module" });
   await navigator.serviceWorker.ready;
