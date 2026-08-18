@@ -82,6 +82,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
     for (const entry of runtime.sessionRegistry.getAllEntries()) {
       for (const service of accountSensitiveServices) service.onWindowDestroyed?.(entry.windowId);
     }
+    runtime.injectEvent("identity:changed", { pubkey: engine.accounts.publicKey || null });
   });
   return { close() {
     if (closed) return;
