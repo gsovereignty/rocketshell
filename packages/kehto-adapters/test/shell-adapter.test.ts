@@ -61,6 +61,23 @@ describe("shell adapter lifecycle", () => {
     expect(() => adapter.relayConfig.addRelay("unknown", "wss://relay.example/")).toThrow("Unsupported relay tier");
     adapter.close(); await engine.close();
   });
+  it("parses and bounds Kehto worker-relay protocol requests", async () => {
+    const engine = createNostrEngine();
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "cached", tags: [] }, generateSecretKey());
+    engine.ingress.admit(event, "local:test");
+    const adapter = createPlatformShellAdapter({
+      engine, discoveryRelays: [], readRelays: [], writeRelays: [], createWindow: () => null
+    });
+    const worker = adapter.workerRelay.getWorkerRelay()!;
+    const queried = await worker.query(["REQ", "sub-1", { kinds: [1] }]);
+    expect(queried).toHaveLength(1); expect(queried[0]).toMatchObject({ id: event.id, content: "cached" });
+    expect(Object.getOwnPropertySymbols(queried[0]!)).toEqual([]);
+    await expect(worker.count!(["COUNT", "count-1", { kinds: [1] }])).resolves.toBe(1);
+    await expect(worker.query([{ kinds: [1] }])).rejects.toThrow("invalid-request");
+    await expect(worker.query(["REQ", "sub-2", {}])).resolves.toHaveLength(1);
+    await expect(worker.query(["REQ", "sub-3", {}, {}, {}, {}, {}, {}, {}, {}, {}])).rejects.toThrow("invalid-filter");
+    adapter.close(); await engine.close();
+  });
   it("closes account-sensitive work when active account changes", async () => {
     const engine = createNostrEngine(); const cleanup = vi.fn();
     const adapter = createPlatformShellAdapter({

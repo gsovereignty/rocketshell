@@ -8,6 +8,7 @@ import { createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayPoolLike } from "./relay-pool-like.js";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
+import { extractFiltersFromWorkerRequest } from "./worker-relay.js";
 
 export interface ShellAdapterOptions {
   readonly engine: NostrEngine;
@@ -107,8 +108,8 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     hotkeys: { executeHotkeyFromForward: (event) => options.executeHotkey?.(event) },
     workerRelay: { getWorkerRelay: () => ({
       async event(event) { const admitted = engine.ingress.admit(event as NostrEvent, "local:worker"); if (!admitted) throw new Error("invalid-event"); return admitted; },
-      async query(filters) { return engine.eventStore.getByFilters(filters as Filter[]); },
-      async count(filters) { return engine.eventStore.getByFilters(filters as Filter[]).length; }
+      async query(request) { return engine.eventStore.getByFilters(extractFiltersFromWorkerRequest(request)).map(plainEvent); },
+      async count(request) { return engine.eventStore.getByFilters(extractFiltersFromWorkerRequest(request)).length; }
     }) },
     crypto: { verifyEvent: async (event) => verifyEvent(plainEvent(event as NostrEvent)) },
     ...(options.intentAvailable ? { intent: { isAvailable: options.intentAvailable } } : {}),
