@@ -7,6 +7,19 @@ import { describe, expect, it, vi } from "vitest";
 import { createPlatformShellAdapter } from "../src/index.js";
 
 describe("shell adapter lifecycle", () => {
+  it("applies relay configuration changes through the shared policy", async () => {
+    const engine = createNostrEngine();
+    const adapter = createPlatformShellAdapter({
+      engine, discoveryRelays: [], readRelays: [], writeRelays: [], createWindow: () => null
+    });
+    adapter.relayConfig.addRelay("super", "WSS://Relay.Example");
+    expect(adapter.relayConfig.getRelayConfig().super).toEqual(["wss://relay.example/"]);
+    expect(adapter.relayPool.selectRelayTier([])).toEqual(["wss://relay.example/"]);
+    adapter.relayConfig.removeRelay("super", "wss://relay.example/");
+    expect(adapter.relayConfig.getRelayConfig().super).toEqual([]);
+    expect(() => adapter.relayConfig.addRelay("unknown", "wss://relay.example/")).toThrow("Unsupported relay tier");
+    adapter.close(); await engine.close();
+  });
   it("closes account-sensitive work when active account changes", async () => {
     const engine = createNostrEngine(); const cleanup = vi.fn();
     const adapter = createPlatformShellAdapter({

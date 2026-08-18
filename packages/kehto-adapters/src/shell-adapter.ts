@@ -48,8 +48,17 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     if (initialAccount) initialAccount = false;
     else closeAccountWork();
   });
-  const discovery = engine.relayPolicy.select(options.discoveryRelays, "discovery");
-  const read = engine.relayPolicy.select(options.readRelays, "read"); const write = engine.relayPolicy.select(options.writeRelays, "write");
+  const relayConfiguration = {
+    discovery: new Set(engine.relayPolicy.select(options.discoveryRelays, "discovery")),
+    super: new Set(engine.relayPolicy.select(options.readRelays, "read")),
+    outbox: new Set(engine.relayPolicy.select(options.writeRelays, "write"))
+  };
+  const relayTier = (tier: string): { readonly values: Set<string>; readonly context: "discovery" | "read" | "write" } => {
+    if (tier === "discovery") return { values: relayConfiguration.discovery, context: "discovery" };
+    if (tier === "super") return { values: relayConfiguration.super, context: "read" };
+    if (tier === "outbox") return { values: relayConfiguration.outbox, context: "write" };
+    throw new Error(`Unsupported relay tier: ${tier}`);
+  };
   return {
     services: Object.fromEntries((options.advertisedServices ?? []).map((name) => [name, advertisedService(name)])),
     relayPool: {
@@ -73,11 +82,22 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
         if (!outcomes.some((outcome) => outcome.ok)) engine.telemetry.record("publication.failed", 1, { relayCount: 1 });
         return outcomes.some((outcome) => outcome.ok);
       },
-      selectRelayTier: () => [...read]
+      selectRelayTier: () => [...relayConfiguration.super]
     },
     relayConfig: {
-      addRelay() {}, removeRelay() {},
-      getRelayConfig: () => ({ discovery: [...discovery], super: [...read], outbox: [...write] }),
+      addRelay(tier, url) {
+        const selected = relayTier(tier);
+        selected.values.add(engine.relayPolicy.normalize(url, selected.context));
+      },
+      removeRelay(tier, url) {
+        const selected = relayTier(tier);
+        selected.values.delete(engine.relayPolicy.normalize(url, selected.context));
+      },
+      getRelayConfig: () => ({
+        discovery: [...relayConfiguration.discovery],
+        super: [...relayConfiguration.super],
+        outbox: [...relayConfiguration.outbox]
+      }),
       getNip66Suggestions: () => []
     },
     windowManager: { createWindow: options.createWindow },
