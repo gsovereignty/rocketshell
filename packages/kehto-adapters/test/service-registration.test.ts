@@ -35,7 +35,7 @@ describe("core service lifecycle", () => {
     await expect(pool.publish(event, ["wss://one.example/", "wss://two.example/"])).resolves.toEqual({
       "wss://one.example/": true, "wss://two.example/": false
     });
-    expect(publish).toHaveBeenCalledWith(["wss://one.example/", "wss://two.example/"], event, { retries: false });
+    expect(publish).toHaveBeenCalledWith(["wss://one.example/", "wss://two.example/"], event, { retries: false, timeout: 4_000 });
     await engine.close();
   });
 });

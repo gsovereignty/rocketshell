@@ -14,6 +14,7 @@ describe("publication", () => {
     const first = await publisher.publishTemplate(["wss://relay.example"], { kind: 1, created_at: 1, content: "publish", tags: [] });
     const retry = await publisher.publishSigned(["wss://relay.example"], first.event);
     expect(sign).toHaveBeenCalledOnce(); expect(retry.event.id).toBe(first.event.id); expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenLastCalledWith(["wss://relay.example"], event, { retries: false, timeout: 4_000 });
     store.dispose();
   });
   it("rejects total relay failure", async () => {
@@ -23,6 +24,15 @@ describe("publication", () => {
     const publisher = createRelayPublisher({ publish: async () => [{ ok: false, from: "wss://relay.example", message: "no" }] }, { sign: async () => event } as never, ingress, 1, telemetry);
     await expect(publisher.publishTemplate(["wss://relay.example"], { kind: 1, created_at: 1, content: "publish", tags: [] })).rejects.toThrow("publish-rejected");
     expect(telemetry.snapshot().map((record) => record.name)).toEqual(["publication.outcome", "publication.failed"]);
+    store.dispose();
+  });
+  it("reports a relay publication timeout as failure", async () => {
+    const store = new EventStore({ verifyEvent }); const ingress = createEventIngress(store, verifyEvent);
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
+    const publish = vi.fn(async () => [{ ok: false, from: "wss://relay.example", message: "Timeout has occurred" }]);
+    const publisher = createRelayPublisher({ publish }, { sign: async () => event } as never, ingress);
+    await expect(publisher.publishTemplate(["wss://relay.example"], { kind: 1, created_at: 1, content: "publish", tags: [] })).rejects.toThrow("publish-rejected");
+    expect(publish).toHaveBeenCalledWith(["wss://relay.example"], event, { retries: false, timeout: 4_000 });
     store.dispose();
   });
   it("rejects an invalid signed event before transport", async () => {

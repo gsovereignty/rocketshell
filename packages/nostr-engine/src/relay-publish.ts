@@ -8,6 +8,7 @@ export interface PublishTarget {
   publish(relays: string[], event: NostrEvent, options?: { timeout?: number | boolean; retries?: number | boolean }): Promise<PublishResponse[]>;
 }
 export interface PublicationResult { readonly event: NostrEvent; readonly outcomes: readonly PublishResponse[]; readonly accepted: number }
+export const DEFAULT_PUBLISH_TIMEOUT_MS = 4_000;
 
 export interface RelayPublisher {
   publishTemplate(relays: readonly string[], template: EventTemplate): Promise<PublicationResult>;
@@ -17,7 +18,7 @@ export interface RelayPublisher {
 export function createRelayPublisher(target: PublishTarget, accounts: AccountController, ingress: EventIngress, minimumAccepted = 1, telemetry: PlatformTelemetry = NOOP_TELEMETRY): RelayPublisher {
   const publishSigned = async (relays: readonly string[], event: NostrEvent): Promise<PublicationResult> => {
     if (!ingress.verify(event)) throw new Error("invalid-event");
-    const outcomes = await target.publish([...relays], event, { retries: false });
+    const outcomes = await target.publish([...relays], event, { retries: false, timeout: DEFAULT_PUBLISH_TIMEOUT_MS });
     for (const outcome of outcomes) telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
     const accepted = outcomes.filter((outcome) => outcome.ok).length;
     if (accepted < minimumAccepted) { telemetry.record("publication.failed", 1, { relayCount: relays.length }); throw new Error("publish-rejected"); }

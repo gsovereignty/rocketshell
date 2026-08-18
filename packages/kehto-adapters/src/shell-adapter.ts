@@ -4,7 +4,7 @@ import type { AclCheckEvent } from "@kehto/runtime";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
 import type { NostrEngine } from "@platform/nostr-engine";
-import { openRelayStream } from "@platform/nostr-engine";
+import { DEFAULT_PUBLISH_TIMEOUT_MS, openRelayStream } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayPoolLike } from "./relay-pool-like.js";
 
@@ -77,7 +77,7 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
       closeScopedRelay(windowId) { scoped.get(windowId)?.close(); scoped.delete(windowId); },
       async publishToScopedRelay(windowId, event) {
         const entry = scoped.get(windowId); if (!entry) return false;
-        const outcomes = await engine.relayPool.publish([entry.relay], event as NostrEvent, { retries: false });
+        const outcomes = await engine.relayPool.publish([entry.relay], event as NostrEvent, { retries: false, timeout: DEFAULT_PUBLISH_TIMEOUT_MS });
         for (const outcome of outcomes) engine.telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
         if (!outcomes.some((outcome) => outcome.ok)) engine.telemetry.record("publication.failed", 1, { relayCount: 1 });
         return outcomes.some((outcome) => outcome.ok);
