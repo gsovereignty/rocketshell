@@ -2,9 +2,9 @@ import { PackageInstaller, aggregateHash, sha256, type ArtifactInput, type Packa
 import { finalizeEvent } from "nostr-tools/pure";
 
 const encoder = new TextEncoder();
-const SCRIPT = `
+const script = (resourceUrl: string): string => `
 const status = document.querySelector("#fixture-status");
-const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, pubkey: null, intentReceived: false, platformProfile: false, optionalAbsent: false };
+const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, platformProfile: false, optionalAbsent: false };
 try { localStorage.setItem("x", "x"); } catch { results.storageBlocked = true; }
 try { void window.parent.document.body; } catch { results.hostDomBlocked = true; }
 try { await fetch("https://example.com/"); } catch { results.fetchBlocked = true; }
@@ -14,6 +14,19 @@ const required = ["identity", "outbox", "relay", "storage", "resource", "config"
 results.platformProfile = required.every((domain) => window.napplet.shell.supports(domain) && typeof window.napplet[domain] === "object");
 results.optionalAbsent = !window.napplet.shell.supports("notify") && window.napplet.notify === undefined;
 results.pubkey = await window.napplet.identity.getPublicKey();
+try {
+  const resourceUrl = ${JSON.stringify(resourceUrl)};
+  const blob = await window.napplet.resource.bytes(resourceUrl);
+  results.resourceFetched = (await blob.text()).trim() === "verified fixture resource";
+  const handle = window.napplet.resource.bytesAsObjectURL(resourceUrl);
+  for (let attempt = 0; attempt < 100 && !handle.url; attempt++) await new Promise((resolve) => setTimeout(resolve, 10));
+  results.resourceObjectUrl = handle.url.startsWith("blob:");
+  let revokeCalls = 0;
+  const revoke = handle.revoke;
+  handle.revoke = () => { revokeCalls += 1; revoke(); };
+  handle.revoke();
+  results.resourceRevoked = revokeCalls === 1;
+} catch (error) { results.resourceError = error instanceof Error ? error.message : String(error); }
 const intentReceived = new Promise((resolve) => {
   const handle = window.napplet.inc.on("napplet:fixture/open", (event) => { results.intentReceived = event.payload?.ok === true; handle.close(); resolve(); });
 });
@@ -22,11 +35,11 @@ await intentReceived;
 Object.assign(document.documentElement.dataset, Object.fromEntries(Object.entries(results).map(([key, value]) => [key, String(value)])));
 status.textContent = "ready";
 `;
-const HTML = `<!doctype html><html><head><meta charset="UTF-8"><title>Fixture Napplet</title></head><body><output id="fixture-status">starting</output><script type="module">${SCRIPT}</script></body></html>`;
 
-export async function installFixture(store: PackageStore): Promise<string> {
+export async function installFixture(store: PackageStore, resourceUrl: string): Promise<string> {
   if (await store.getActive("platform-fixture")) return "platform-fixture";
-  const entries = [{ path: "index.html", bytes: encoder.encode(HTML), mediaType: "text/html" }];
+  const html = `<!doctype html><html><head><meta charset="UTF-8"><title>Fixture Napplet</title></head><body><output id="fixture-status">starting</output><script type="module">${script(resourceUrl)}</script></body></html>`;
+  const entries = [{ path: "index.html", bytes: encoder.encode(html), mediaType: "text/html" }];
   const declarations = await Promise.all(entries.map(async ({ path, bytes, mediaType }) => ({ path, sha256: await sha256(bytes), mediaType })));
   const aggregate = await aggregateHash(declarations);
   const requires = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link"];

@@ -11,7 +11,7 @@ export interface ResourcePolicy {
   readonly telemetry?: PlatformTelemetry;
 }
 
-const identityKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
+export const resourceGrantKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
 const isLocalhost = (hostname: string): boolean => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 
 function validateUrl(raw: string, allowHttpLocalhost: boolean): URL {
@@ -76,7 +76,7 @@ export function registerResourceService(runtime: Runtime, policy: ResourcePolicy
   runtime.registerService("resource", createResourceService({
     fetch: createPolicyFetch(policy),
     isOriginGranted: (origin, grants) => grants.includes(origin),
-    getConnectGrants: (dTag, hash) => policy.grants.get(identityKey(dTag, hash)) ?? [],
+    getConnectGrants: (dTag, hash) => policy.grants.get(resourceGrantKey(dTag, hash)) ?? [],
     resolveIdentity: (windowId) => {
       const entry = runtime.sessionRegistry.getEntryByWindowId(windowId);
       return entry ? { dTag: entry.dTag, aggregateHash: entry.aggregateHash } : null;

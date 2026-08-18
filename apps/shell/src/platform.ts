@@ -1,5 +1,5 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
-import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService } from "@platform/host-services";
+import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, resourceGrantKey } from "@platform/host-services";
 import { createPlatformShellAdapter, createRelayConfiguration, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
@@ -54,6 +54,7 @@ export interface BrowserPlatform {
 
 export async function createBrowserPlatform(container: HTMLElement): Promise<BrowserPlatform> {
   const controlledAtStartup = navigator.serviceWorker.controller !== null;
+  const allowLocalPlaintext = import.meta.env.DEV || location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "[::1]";
   const discoveryRelays = relayUrls(import.meta.env.VITE_DISCOVERY_RELAYS);
   const readRelays = relayUrls(import.meta.env.VITE_READ_RELAYS);
   const writeRelays = relayUrls(import.meta.env.VITE_WRITE_RELAYS);
@@ -94,9 +95,10 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
       return `${engine.accounts.publicKey || "signed-out"}:${identity.dTag}:${identity.aggregateHash}`;
     }
   });
-  registerResourceService(shell.runtime, { grants: new Map(), allowHttpLocalhost: import.meta.env.DEV, telemetry: engine.telemetry });
+  const resourceGrants = new Map<string, readonly string[]>();
+  registerResourceService(shell.runtime, { grants: resourceGrants, allowHttpLocalhost: allowLocalPlaintext, telemetry: engine.telemetry });
   registerLinkService(shell.runtime, {
-    allowHttpLocalhost: import.meta.env.DEV,
+    allowHttpLocalhost: allowLocalPlaintext,
     confirm: (_windowId, url) => window.confirm(`Open ${url.href} in a new tab?`),
     openExternal: (url) => window.open(url.href, "_blank", "noopener,noreferrer") !== null
   });
@@ -140,9 +142,11 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     }
   };
   window.addEventListener("message", onMessage);
-  const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true" ? await installFixture(packageStore) : undefined;
+  const fixtureResourceUrl = new URL(`${import.meta.env.BASE_URL}fixture-resource.txt`, location.href).href;
+  const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true" ? await installFixture(packageStore, fixtureResourceUrl) : undefined;
   if (fixtureDTag) {
     const fixture = await packageStore.getActive(fixtureDTag);
+    if (fixture) resourceGrants.set(resourceGrantKey(fixture.dTag, fixture.aggregateHash), [new URL(fixtureResourceUrl).origin]);
     for (const archetype of fixture?.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
