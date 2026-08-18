@@ -20,7 +20,7 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
     resolveDTag: () => "runtime-attested-sender", listWindowIds: () => ["sender-1"],
     hasCapability: () => true, sendToEligibleNapplet: () => true
   } as ServiceRuntimeContext);
-  return { handler: handler!, windows, source };
+  return { handler: handler!, windows, source, target };
 }
 
 describe("intent host boundary", () => {
@@ -90,9 +90,41 @@ describe("intent host boundary", () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: false }) }));
   });
 
+  it("dispatches an authorized explicit handler", async () => {
+    const authorizeExplicitHandler = vi.fn(async () => true);
+    const { handler, windows } = setup({ authorizeExplicitHandler });
+    const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "explicit-allowed", request: { archetype: "viewer", handler: "viewer-app" }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(authorizeExplicitHandler).toHaveBeenCalledWith("runtime-attested-sender", "viewer-app");
+    expect(windows.create).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "viewer-app" }) }));
+  });
+
+  it("buffers concurrent cold payloads and delivers each exactly once", async () => {
+    const { handler, windows, source, target } = setup();
+    let becomeReady: (() => void) | undefined;
+    target.ready = new Promise<void>((resolve) => { becomeReady = resolve; });
+    (windows.findByDTag as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    const firstSend = vi.fn(); const secondSend = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "cold-1", request: { archetype: "viewer", payload: { id: 1 } }
+    } as never, firstSend);
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "cold-2", request: { archetype: "viewer", payload: { id: 2 } }
+    } as never, secondSend);
+    await vi.waitFor(() => expect(windows.create).toHaveBeenCalledTimes(2));
+    expect(source.postMessage).not.toHaveBeenCalled();
+    becomeReady?.();
+    await vi.waitFor(() => expect(source.postMessage).toHaveBeenCalledTimes(2));
+    expect(source.postMessage.mock.calls.map(([message]) => message.payload)).toEqual(expect.arrayContaining([{ id: 1 }, { id: 2 }]));
+    expect(firstSend).toHaveBeenCalledOnce(); expect(secondSend).toHaveBeenCalledOnce();
+  });
+
   it("returns failure when target disappears before delivery", async () => {
-    const { handler, windows, source } = setup();
-    const target = (windows.findByDTag as ReturnType<typeof vi.fn>)();
+    const { handler, windows, source, target } = setup();
     target.ready = Promise.reject(new Error("window destroyed"));
     const send = vi.fn();
     handler.handleMessage("sender-1", {

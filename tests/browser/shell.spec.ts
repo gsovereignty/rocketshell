@@ -10,6 +10,7 @@ declare global {
       authenticatedWindowIds(): readonly string[];
       telemetrySnapshot(): readonly { name: string; value: number }[];
       connectExtension(): Promise<string>;
+      signOut(): void;
     };
   }
 }
@@ -59,6 +60,32 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
 });
 
+test("settles intent result before caller navigation unmounts it", async ({ page }) => {
+  await page.goto("./");
+  const frame = page.frameLocator('iframe[title="platform-fixture"]');
+  await expect(frame.locator("#fixture-status")).toHaveText("ready");
+  const result = page.evaluate(() => new Promise<unknown>((resolve) => {
+    const listener = (event: MessageEvent): void => {
+      if (event.data?.type !== "platform-test.intent-before-navigation") return;
+      window.removeEventListener("message", listener);
+      resolve(event.data.result);
+    };
+    window.addEventListener("message", listener);
+  }));
+  await frame.locator("html").evaluate(() => {
+    void window.napplet.intent.invoke({
+      archetype: "fixture", action: "open", convention: "napplet:fixture/open", payload: { navigation: true }
+    }).then((intentResult) => {
+      parent.postMessage({ type: "platform-test.intent-before-navigation", result: intentResult }, "*");
+      location.replace("about:blank");
+    });
+  });
+  await expect(result).resolves.toMatchObject({
+    ok: true, handled: true, archetype: "fixture", action: "open", handler: "platform-fixture"
+  });
+  await expect.poll(() => page.frames().some((candidate) => candidate !== page.mainFrame() && candidate.url() === "about:blank")).toBe(true);
+});
+
 test("mediates Blossom upload without exposing signer or server selection", async ({ page }) => {
   const secret = new Uint8Array(32); secret[31] = 7;
   const pubkey = getPublicKey(secret);
@@ -106,6 +133,50 @@ test("mediates Blossom upload without exposing signer or server selection", asyn
   await page.evaluate(() => window.__platformTest?.signOut());
   await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("html")).toHaveAttribute("data-identity-latest", "");
   expect(Number(await page.frameLocator('iframe[title="platform-fixture"]').locator("html").getAttribute("data-identity-changes"))).toBeGreaterThanOrEqual(2);
+});
+
+test("invalidates in-flight signing and pushes an account switch", async ({ page }) => {
+  const firstSecret = new Uint8Array(32); firstSecret[31] = 8;
+  const secondSecret = new Uint8Array(32); secondSecret[31] = 9;
+  let activeSecret = firstSecret;
+  let releaseSigning: (() => void) | undefined;
+  let signingStarted: (() => void) | undefined;
+  const signingGate = new Promise<void>((resolve) => { releaseSigning = resolve; });
+  const started = new Promise<void>((resolve) => { signingStarted = resolve; });
+  await page.exposeFunction("__platformTestPublicKey", () => getPublicKey(activeSecret));
+  await page.exposeFunction("__platformTestDelayedSign", async (template: Parameters<typeof finalizeEvent>[0]) => {
+    const operationSecret = activeSecret;
+    signingStarted?.();
+    await signingGate;
+    return finalizeEvent(template, operationSecret);
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "nostr", { value: {
+      getPublicKey: () => (window as unknown as { __platformTestPublicKey(): Promise<string> }).__platformTestPublicKey(),
+      signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) => (window as unknown as { __platformTestDelayedSign(value: typeof template): Promise<unknown> }).__platformTestDelayedSign(template)
+    }, configurable: true });
+  });
+  let uploadRequests = 0;
+  await page.route("**/mock-blossom/upload", async (route) => { uploadRequests += 1; await route.abort(); });
+  await page.goto("./");
+  const frame = page.frameLocator('iframe[title="platform-fixture"]');
+  await expect(frame.locator("#fixture-status")).toHaveText("ready");
+  await page.evaluate(() => window.__platformTest?.connectExtension());
+  await expect(frame.locator("html")).toHaveAttribute("data-identity-latest", getPublicKey(firstSecret));
+  await frame.locator("html").evaluate((element) => {
+    void window.napplet.upload.upload({ data: new Blob(["pending"]), rail: "blossom" }).then((result) => {
+      element.dataset.pendingUpload = result.ok ? "unexpected-success" : "invalidated";
+    });
+  });
+  await started;
+  await page.evaluate(() => window.__platformTest?.signOut());
+  releaseSigning?.();
+  await expect(frame.locator("html")).toHaveAttribute("data-pending-upload", "invalidated");
+  expect(uploadRequests).toBe(0);
+  activeSecret = secondSecret;
+  await page.evaluate(() => window.__platformTest?.connectExtension());
+  await expect(frame.locator("html")).toHaveAttribute("data-identity-latest", getPublicKey(secondSecret));
+  expect(Number(await frame.locator("html").getAttribute("data-identity-changes"))).toBeGreaterThanOrEqual(3);
 });
 
 test("rejects shell messages from an unregistered source window", async ({ page }) => {
