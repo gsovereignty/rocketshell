@@ -1,5 +1,6 @@
 import { ResourceServiceError, createResourceService, type ResourceInfo } from "@kehto/services";
 import type { Runtime } from "@kehto/runtime";
+import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-contract";
 
 export interface ResourcePolicy {
   readonly grants: ReadonlyMap<string, readonly string[]>;
@@ -7,6 +8,7 @@ export interface ResourcePolicy {
   readonly timeoutMs?: number;
   readonly allowedMimeTypes?: readonly string[];
   readonly allowHttpLocalhost?: boolean;
+  readonly telemetry?: PlatformTelemetry;
 }
 
 const identityKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
@@ -31,11 +33,12 @@ function sniffMime(bytes: Uint8Array): string {
 export function createPolicyFetch(policy: ResourcePolicy): (url: string, init: { method?: string; headers?: Record<string, string>; signal: AbortSignal }) => Promise<Response> {
   const maximumBytes = policy.maximumBytes ?? 8 * 1024 * 1024; const timeoutMs = policy.timeoutMs ?? 10_000;
   const allowedMimeTypes = new Set(policy.allowedMimeTypes ?? ["image/png", "image/jpeg", "image/gif", "image/webp", "application/octet-stream"]);
+  const telemetry = policy.telemetry ?? NOOP_TELEMETRY;
   return async (raw, init) => {
-    let current = validateUrl(raw, policy.allowHttpLocalhost ?? false);
     const controller = new AbortController(); const abort = () => controller.abort(); init.signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(abort, timeoutMs);
     try {
+      let current = validateUrl(raw, policy.allowHttpLocalhost ?? false);
       for (let redirects = 0; redirects <= 5; redirects += 1) {
         const headers = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([name]) => !["authorization", "cookie", "proxy-authorization"].includes(name.toLowerCase())));
         const response = await fetch(current, { method: init.method ?? "GET", headers, signal: controller.signal, redirect: "manual", credentials: "omit", referrerPolicy: "no-referrer" });
@@ -53,12 +56,13 @@ export function createPolicyFetch(policy: ResourcePolicy): (url: string, init: {
         }
         const bytes = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
         const mime = sniffMime(bytes); if (!allowedMimeTypes.has(mime)) throw new ResourceServiceError("decode-failed", "Resource media type denied");
+        telemetry.record("resource.bytes", total, { mime });
         return new Response(bytes, { status: 200, headers: { "Content-Type": mime, "Content-Length": String(total) } });
       }
       throw new ResourceServiceError("blocked-by-policy", "Resource redirect limit exceeded");
     } catch (error) {
-      if (error instanceof ResourceServiceError) throw error;
-      if (controller.signal.aborted) throw new ResourceServiceError("timeout", "Resource request timed out");
+      if (error instanceof ResourceServiceError) { telemetry.record("resource.denied", 1, { reason: error.code }); throw error; }
+      if (controller.signal.aborted) { telemetry.record("resource.timeout", 1); throw new ResourceServiceError("timeout", "Resource request timed out"); }
       throw new ResourceServiceError("network-error", "Resource request failed");
     } finally { clearTimeout(timeout); init.signal.removeEventListener("abort", abort); }
   };

@@ -126,6 +126,9 @@ importers:
       '@platform/napplet-gateway':
         specifier: workspace:*
         version: link:../napplet-gateway
+      '@project/platform-nap-contract':
+        specifier: workspace:*
+        version: link:../platform-contract
 
   packages/kehto-adapters:
     dependencies:

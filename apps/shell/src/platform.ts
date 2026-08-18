@@ -57,7 +57,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const packageStore = await IndexedDbPackageStore.open();
   const engine = await createPersistentNostrEngine({ relayPolicy: { allowInsecureLocalhost: import.meta.env.DEV } });
   let windows: NappletWindowManager | undefined;
-  const audit = createHostAuditTrail();
+  const audit = createHostAuditTrail({ telemetry: engine.telemetry });
   const adapter = createPlatformShellAdapter({
     engine, discoveryRelays, readRelays, writeRelays,
     createWindow: () => null,
@@ -78,9 +78,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
       return `${engine.accounts.publicKey || "signed-out"}:${identity.dTag}:${identity.aggregateHash}`;
     }
   });
-  registerResourceService(shell.runtime, { grants: new Map(), allowHttpLocalhost: import.meta.env.DEV });
+  registerResourceService(shell.runtime, { grants: new Map(), allowHttpLocalhost: import.meta.env.DEV, telemetry: engine.telemetry });
   const windowBridge = new BrowserWindowBridge(shell);
-  windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL);
+  windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL, engine.telemetry);
   shell.registerConsentHandler((request) => {
     const identity = windows?.findByWindowId(request.windowId)?.identity;
     const operation = request.type === "undeclared-service"
@@ -97,6 +97,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const intentPreferences = createIntentPreferenceStore(localStorage);
   const activeAccount = (): string => engine.accounts.publicKey || "signed-out";
   const intentResolver = registerIntentService(shell.runtime, packageStore, windows, {
+    telemetry: engine.telemetry,
     getDefaultHandler: (archetype) => intentPreferences.get(activeAccount(), archetype),
     chooseHandler: (archetype, candidates, sender) => {
       const choices = candidates.map((candidate, index) => `${index + 1}. ${candidate.title ?? candidate.dTag}`).join("\n");

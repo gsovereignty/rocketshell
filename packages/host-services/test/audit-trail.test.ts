@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createHostAuditTrail } from "../src/index.js";
+import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 describe("host audit trail", () => {
   it("bounds records and excludes raw triggering messages", () => {
     let id = 0;
-    const audit = createHostAuditTrail({ maximumRecords: 2, now: () => 10, randomId: () => `id-${++id}` });
+    const telemetry = createPlatformTelemetry();
+    const audit = createHostAuditTrail({ maximumRecords: 2, now: () => 10, randomId: () => `id-${++id}`, telemetry });
     audit.recordAcl({
       identity: { pubkey: "public", dTag: "notes", hash: "hash" }, capability: "relay:write",
       decision: "deny", reason: "capability-missing", message: ["EVENT", { content: "private body" }]
@@ -16,5 +18,6 @@ describe("host audit trail", () => {
       { id: "id-3", timestamp: 10, category: "consent", reason: "user-decision", decision: "deny", operation: "sign-kind:5", dTag: "notes", aggregateHash: "hash" }
     ]);
     expect(JSON.stringify(audit.snapshot())).not.toContain("private body");
+    expect(telemetry.snapshot().map((record) => record.name)).toEqual(["acl.outcome", "message.unrouted", "consent.outcome"]);
   });
 });

@@ -9,6 +9,7 @@
     "@kehto/runtime": "0.22.0",
     "@kehto/services": "0.20.0",
     "@napplet/nap": "0.31.1",
-    "@platform/napplet-gateway": "workspace:*"
+    "@platform/napplet-gateway": "workspace:*",
+    "@project/platform-nap-contract": "workspace:*"
   }
 }
