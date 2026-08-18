@@ -10,7 +10,7 @@ try { void window.parent.document.body; } catch { results.hostDomBlocked = true;
 try { await fetch("https://example.com/"); } catch { results.fetchBlocked = true; }
 try { const socket = new WebSocket("wss://example.com/"); await new Promise((resolve) => { socket.onerror = resolve; setTimeout(resolve, 500); }); if (socket.readyState !== WebSocket.OPEN) results.websocketBlocked = true; socket.close(); } catch { results.websocketBlocked = true; }
 await window.napplet.shell.ready();
-const required = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link"];
+const required = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link", "upload"];
 results.platformProfile = required.every((domain) => window.napplet.shell.supports(domain) && typeof window.napplet[domain] === "object");
 results.optionalAbsent = !window.napplet.shell.supports("notify") && window.napplet.notify === undefined;
 results.pubkey = await window.napplet.identity.getPublicKey();
@@ -45,7 +45,7 @@ export async function installFixture(store: PackageStore, resourceUrl: string): 
   ];
   const declarations = await Promise.all(entries.map(async ({ path, bytes, mediaType }) => ({ path, sha256: await sha256(bytes), mediaType })));
   const aggregate = await aggregateHash(declarations);
-  const requires = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link"];
+  const requires = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link", "upload"];
   const content = JSON.stringify({ dTag: "platform-fixture", title: "Platform Fixture", aggregateHash: aggregate, entrypoint: "index.html", requires, archetypes: [{ slug: "fixture", convention: "napplet:fixture/open" }], artifacts: declarations });
   const secret = new Uint8Array(32); secret[31] = 1;
   const tags = [["d", "platform-fixture"], ["x", aggregate, "aggregate"], ...requires.map((domain) => ["requires", domain]), ...declarations.map((artifact) => ["path", `/${artifact.path}`, artifact.sha256])];
@@ -53,4 +53,16 @@ export async function installFixture(store: PackageStore, resourceUrl: string): 
   const inputs = new Map<string, ArtifactInput>(entries.map(({ path, bytes, mediaType }) => [path, { bytes, mediaType }]));
   await new PackageInstaller(store).install(event, inputs, { randomId: () => "built-in-platform-fixture" });
   return "platform-fixture";
+}
+
+export async function installBuiltFixture(store: PackageStore, manifestJson: string, indexHtml: string): Promise<string> {
+  const event = JSON.parse(manifestJson) as SignedManifest;
+  const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+  if (!dTag) throw new TypeError("Built fixture manifest needs a d tag");
+  if (await store.getActive(dTag)) return dTag;
+  const bytes = encoder.encode(indexHtml);
+  await new PackageInstaller(store).install(event, new Map([["index.html", { bytes, mediaType: "text/html" }]]), {
+    randomId: () => `built-fixture-${dTag}`
+  });
+  return dTag;
 }

@@ -1,10 +1,10 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
-import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, resourceGrantKey } from "@platform/host-services";
+import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, registerUploadService, resourceGrantKey } from "@platform/host-services";
 import { createManifestResolver, createPlatformShellAdapter, createRelayConfiguration, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
 import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/platform-nap-contract";
-import { installFixture } from "./fixture.js";
+import { installBuiltFixture, installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
 import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
 import { PlatformMetadataStore } from "./platform-metadata.js";
@@ -13,23 +13,22 @@ import { requireWiredDomains } from "./domain-environment.js";
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol"] as const;
 
+declare const __STLSTR_FIXTURE__: { readonly manifest: string; readonly indexHtml: string } | undefined;
+
 function relayUrls(raw: string | undefined, defaults: readonly string[]): string[] {
   const configured = (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean);
   return configured.length > 0 ? configured : [...defaults];
 }
 
-const WIRED_DOMAINS = new Set<string>(PLATFORM_REQUIRED_DOMAINS);
-const WIRED_SERVICES = new Set(["outbox", "config", "resource", "intent", "link"]);
-
 class BrowserWindowBridge implements WindowBridge {
   readonly #ready = createReadyRegistry();
-  constructor(private readonly shell: ShellBridge) {}
+  constructor(private readonly shell: ShellBridge, private readonly wiredDomains: ReadonlySet<string>, private readonly wiredServices: ReadonlySet<string>) {}
   register(identity: WindowIdentity): void {
     originRegistry.register(identity.source, identity.windowId, { dTag: identity.dTag, aggregateHash: identity.aggregateHash });
-    const domains = requireWiredDomains(identity.requiredDomains, WIRED_DOMAINS);
+    const domains = requireWiredDomains(identity.requiredDomains, this.wiredDomains);
     originRegistry.setEnvironment(identity.source, {
       capabilities: { domains },
-      services: domains.filter((domain) => WIRED_SERVICES.has(domain))
+      services: domains.filter((domain) => this.wiredServices.has(domain))
     });
     this.#ready.register(identity.windowId);
   }
@@ -68,6 +67,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const discoveryRelays = relayUrls(import.meta.env.VITE_DISCOVERY_RELAYS, DEFAULT_DISCOVERY_RELAYS);
   const readRelays = relayUrls(import.meta.env.VITE_READ_RELAYS, DEFAULT_NETWORK_RELAYS);
   const writeRelays = relayUrls(import.meta.env.VITE_WRITE_RELAYS, DEFAULT_NETWORK_RELAYS);
+  const blossomServers = relayUrls(import.meta.env.VITE_BLOSSOM_SERVERS, []);
   const metadataStore = await PlatformMetadataStore.open();
   const packageStore = await IndexedDbPackageStore.open();
   const engine = await createPersistentNostrEngine({ relayPolicy: { allowInsecureLocalhost: import.meta.env.DEV } });
@@ -106,13 +106,26 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     }
   });
   const resourceGrants = new Map<string, readonly string[]>();
-  registerResourceService(shell.runtime, { grants: resourceGrants, allowHttpLocalhost: allowLocalPlaintext, telemetry: engine.telemetry });
+  const resourcePublishers = new Map<string, string>();
+  const resourceIdentityKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
+  registerResourceService(shell.runtime, {
+    grants: resourceGrants,
+    resolvePublisher: (dTag, hash) => resourcePublishers.get(resourceIdentityKey(dTag, hash)),
+    allowHttpLocalhost: allowLocalPlaintext,
+    telemetry: engine.telemetry
+  });
   registerLinkService(shell.runtime, {
     allowHttpLocalhost: allowLocalPlaintext,
     confirm: (_windowId, url) => window.confirm(`Open ${url.href} in a new tab?`),
     openExternal: (url) => window.open(url.href, "_blank", "noopener,noreferrer") !== null
   });
-  const windowBridge = new BrowserWindowBridge(shell);
+  const wiredDomains = new Set<string>(PLATFORM_REQUIRED_DOMAINS);
+  const wiredServices = new Set(["outbox", "config", "resource", "intent", "link"]);
+  if (blossomServers.length > 0) {
+    registerUploadService(shell.runtime, { blossomServers, signEvent: (template) => engine.accounts.sign(template) });
+    wiredDomains.add("upload"); wiredServices.add("upload");
+  }
+  const windowBridge = new BrowserWindowBridge(shell, wiredDomains, wiredServices);
   windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL, engine.telemetry);
   shell.registerConsentHandler((request) => {
     const identity = windows?.findByWindowId(request.windowId)?.identity;
@@ -157,9 +170,14 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true"
     ? await installFixture(packageStore, fixtureResourceUrl)
     : undefined;
-  if (fixtureDTag) {
-    const fixture = await packageStore.getActive(fixtureDTag);
-    if (fixture) resourceGrants.set(resourceGrantKey(fixture.dTag, fixture.aggregateHash), [new URL(fixtureResourceUrl).origin]);
+  const stlstrFixtureDTag = import.meta.env.VITE_INSTALL_STLSTR_FIXTURE === "true" && __STLSTR_FIXTURE__
+    ? await installBuiltFixture(packageStore, __STLSTR_FIXTURE__.manifest, __STLSTR_FIXTURE__.indexHtml)
+    : undefined;
+  for (const installedDTag of [fixtureDTag, stlstrFixtureDTag]) {
+    if (!installedDTag) continue;
+    const fixture = await packageStore.getActive(installedDTag);
+    if (fixture) resourcePublishers.set(resourceIdentityKey(fixture.dTag, fixture.aggregateHash), fixture.manifestEvent.pubkey);
+    if (fixture && installedDTag === fixtureDTag) resourceGrants.set(resourceGrantKey(fixture.manifestEvent.pubkey, fixture.dTag, fixture.aggregateHash), [new URL(fixtureResourceUrl).origin]);
     for (const archetype of fixture?.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
@@ -171,15 +189,16 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     location.reload();
     return new Promise<BrowserPlatform>(() => {});
   }
-  let fixturePending = fixtureDTag !== undefined;
+  let fixturePending = fixtureDTag !== undefined || stlstrFixtureDTag !== undefined;
   const updates = coordinateServiceWorkerUpdates(registration, navigator.serviceWorker, {
     activeWindowCount: () => (windows?.listWindowIds().length ?? 0) + (fixturePending ? 1 : 0),
     closeWindows: () => windows?.close(),
     confirmActivation: () => !fixturePending && window.confirm("Platform update ready. Close active Napplet windows and reload now?"),
     reload: () => location.reload()
   });
-  if (fixtureDTag) {
-    void windows.create(fixtureDTag).finally(() => { fixturePending = false; updates.check(); });
+  const startupFixtures = [fixtureDTag, stlstrFixtureDTag].filter((dTag): dTag is string => dTag !== undefined);
+  if (startupFixtures.length > 0) {
+    void Promise.all(startupFixtures.map((dTag) => windows.create(dTag))).finally(() => { fixturePending = false; updates.check(); });
   }
   let closed = false;
   return {
@@ -190,6 +209,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
       const installation = await installRemotePackage(packageStore, event, { allowHttpLocalhost: allowLocalPlaintext });
+      resourcePublishers.set(resourceIdentityKey(installation.dTag, installation.aggregateHash), installation.manifestEvent.pubkey);
       for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
       const managed = await windows.create(installation.dTag);
       return { dTag: installation.dTag, title: installation.manifest.title ?? installation.dTag, windowId: managed.identity.windowId };

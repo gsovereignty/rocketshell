@@ -10,6 +10,7 @@ pnpm check
 pnpm test
 pnpm test:conformance
 pnpm test:browser
+pnpm test:stlstr
 pnpm build
 ```
 
@@ -50,5 +51,17 @@ Set Vite base for target path, build, then publish whole `apps/shell/dist` direc
 ## Compatibility
 
 Exact versions live in `PLATFORM_COMPATIBILITY`, workspace manifests, and `pnpm-lock.yaml`. CI installs frozen lockfile, compiles import probes, runs unit/browser/conformance suites, and builds both shell and reference Napplet.
+
+The supported contract is profile `platform-nap-v1`: `@napplet/nap` and
+`@napplet/core` 0.31.1, Kehto runtime 0.22.0, and Kehto shell/services 0.20.0.
+The host supplies the required NAP domains plus manifest-selected `identity`,
+`outbox`, `relay`, `storage`, `resource`, `config`, `theme`, `intent`, `inc`,
+and `link`. `upload` is available only when `VITE_BLOSSOM_SERVERS` contains at
+least one host-approved server. Optional `notify`, `payments`, `clipboard`,
+`geolocation`, and `camera` domains are deliberately unsupported. A package
+requiring an unavailable domain is refused before application code runs.
+
+`pnpm test:stlstr` runs the built STLstr `stl-preview` package from
+`../hzrd149/stlstr` by default. Set `STLSTR_ROOT` to validate another checkout.
 
 Application guidance lives in [`packages/platform-contract/README.md`](packages/platform-contract/README.md).

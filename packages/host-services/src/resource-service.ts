@@ -4,6 +4,7 @@ import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-co
 
 export interface ResourcePolicy {
   readonly grants: ReadonlyMap<string, readonly string[]>;
+  readonly resolvePublisher?: (dTag: string, hash: string) => string | undefined;
   readonly maximumBytes?: number;
   readonly timeoutMs?: number;
   readonly allowedMimeTypes?: readonly string[];
@@ -11,7 +12,7 @@ export interface ResourcePolicy {
   readonly telemetry?: PlatformTelemetry;
 }
 
-export const resourceGrantKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
+export const resourceGrantKey = (publisher: string, dTag: string, hash: string): string => `${publisher}\0${dTag}\0${hash}`;
 const isLocalhost = (hostname: string): boolean => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 
 function validateUrl(raw: string, allowHttpLocalhost: boolean): URL {
@@ -76,7 +77,10 @@ export function registerResourceService(runtime: Runtime, policy: ResourcePolicy
   runtime.registerService("resource", createResourceService({
     fetch: createPolicyFetch(policy),
     isOriginGranted: (origin, grants) => grants.includes(origin),
-    getConnectGrants: (dTag, hash) => policy.grants.get(resourceGrantKey(dTag, hash)) ?? [],
+    getConnectGrants: (dTag, hash) => {
+      const publisher = policy.resolvePublisher?.(dTag, hash);
+      return publisher ? policy.grants.get(resourceGrantKey(publisher, dTag, hash)) ?? [] : [];
+    },
     resolveIdentity: (windowId) => {
       const entry = runtime.sessionRegistry.getEntryByWindowId(windowId);
       return entry ? { dTag: entry.dTag, aggregateHash: entry.aggregateHash } : null;

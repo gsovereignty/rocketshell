@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPolicyFetch } from "../src/index.js";
+import { createPolicyFetch, resourceGrantKey } from "../src/index.js";
 import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 describe("resource policy fetch", () => {
+  it("scopes grant keys to publisher, d-tag, and aggregate", () => {
+    expect(resourceGrantKey("publisher-a", "viewer", "hash")).not.toBe(resourceGrantKey("publisher-b", "viewer", "hash"));
+    expect(resourceGrantKey("publisher-a", "viewer", "old")).not.toBe(resourceGrantKey("publisher-a", "viewer", "new"));
+  });
   afterEach(() => vi.unstubAllGlobals());
   it("strips ambient credential headers and sniffs returned bytes", async () => {
     const telemetry = createPlatformTelemetry();

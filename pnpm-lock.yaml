@@ -129,6 +129,9 @@ importers:
       '@project/platform-nap-contract':
         specifier: workspace:*
         version: link:../platform-contract
+      applesauce-core:
+        specifier: 6.2.0
+        version: 6.2.0(typescript@5.9.2)
 
   packages/kehto-adapters:
     dependencies:

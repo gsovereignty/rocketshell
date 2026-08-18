@@ -4,6 +4,9 @@ export const NAPPLET_CSP = "default-src 'none'; script-src 'self'; style-src 'se
 
 const escapeAttribute = (value: string): string => value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
 
+const SEALED_GLOBALS = ["nostr", "fetch", "WebSocket", "EventSource", "XMLHttpRequest", "__platformTestSignEvent"] as const;
+const sealedGlobalsPrelude = `<script>(()=>{for(const key of ${JSON.stringify(SEALED_GLOBALS)}){try{Object.defineProperty(globalThis,key,{value:undefined,writable:false,configurable:false})}catch{try{globalThis[key]=undefined}catch{}}}})();</script>`;
+
 const toBase64 = (bytes: Uint8Array): string => {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
@@ -43,7 +46,7 @@ export function artifactResponse(artifact: StoredArtifact, namespacePrelude = ""
     const nonceBytes = crypto.getRandomValues(new Uint8Array(18));
     const nonce = btoa(String.fromCharCode(...nonceBytes));
     const html = new TextDecoder().decode(artifact.bytes);
-    const prelude = namespacePrelude;
+    const prelude = `${sealedGlobalsPrelude}${namespacePrelude}`;
     const nonceScripts = (value: string): string => value.replace(/<script\b(?![^>]*\bnonce=)/gi, `<script nonce="${nonce}"`);
     csp = NAPPLET_CSP.replace("script-src 'self'", `script-src 'self' 'nonce-${nonce}'`);
     const base = assetBaseUrl ? `<base href="${escapeAttribute(assetBaseUrl)}">` : "";

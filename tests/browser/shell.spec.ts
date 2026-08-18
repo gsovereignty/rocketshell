@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
 
 declare global {
   interface Window {
@@ -7,6 +9,7 @@ declare global {
       destroyWindow(windowId: string): void;
       authenticatedWindowIds(): readonly string[];
       telemetrySnapshot(): readonly { name: string; value: number }[];
+      connectExtension(): Promise<string>;
     };
   }
 }
@@ -54,6 +57,51 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   expect(dataset).toMatchObject({ origin: "null", nostr: "undefined", storageBlocked: "true", hostDomBlocked: "true", fetchBlocked: "true", websocketBlocked: "true", resourceFetched: "true", resourceObjectUrl: "true", resourceRevoked: "true", pubkey: "", intentReceived: "true", platformProfile: "true", optionalAbsent: "true" });
   expect(await page.locator("iframe").getAttribute("data-virtual-url")).toMatch(/^\/shell\/__napplet__\/platform-fixture\/[a-f0-9]{64}\/index\.html$/);
   expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
+});
+
+test("mediates Blossom upload without exposing signer or server selection", async ({ page }) => {
+  const secret = new Uint8Array(32); secret[31] = 7;
+  const pubkey = getPublicKey(secret);
+  await page.exposeFunction("__platformTestSignEvent", (template: Parameters<typeof finalizeEvent>[0]) => finalizeEvent(template, secret));
+  await page.addInitScript((activePubkey) => {
+    Object.defineProperty(window, "nostr", { value: {
+      getPublicKey: async () => activePubkey,
+      signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) => (window as unknown as { __platformTestSignEvent(value: typeof template): Promise<unknown> }).__platformTestSignEvent(template)
+    }, configurable: true });
+  }, pubkey);
+  let authorization = "";
+  await page.route("**/mock-blossom/upload", async (route) => {
+    const request = route.request();
+    const bytes = request.postDataBuffer() ?? Buffer.alloc(0);
+    authorization = request.headers().authorization ?? "";
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        url: "https://cdn.example/uploaded.txt",
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        size: bytes.length,
+        type: request.headers()["content-type"]
+      })
+    });
+  });
+  await page.goto("./");
+  await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("#fixture-status")).toHaveText("ready");
+  await page.evaluate(() => window.__platformTest?.connectExtension());
+  const result = await page.frameLocator('iframe[title="platform-fixture"]').locator("html").evaluate(async () => {
+    const value = await window.napplet.upload.upload({ data: new Blob(["host-owned upload"], { type: "text/plain" }), rail: "blossom", filename: "proof.txt", mimeType: "text/plain" });
+    return {
+      ok: value.ok, rail: value.rail, url: value.url, size: value.size, error: value.error,
+      signer: typeof window.nostr,
+      rawFetchServerKnown: document.documentElement.innerHTML.includes("mock-blossom")
+    };
+  });
+  expect(result).toEqual({
+    ok: true, rail: "blossom", url: "https://cdn.example/uploaded.txt", size: 17, error: undefined,
+    signer: "undefined", rawFetchServerKnown: false
+  });
+  expect(authorization).toMatch(/^Nostr /);
+  const event = JSON.parse(Buffer.from(authorization.slice(6), "base64").toString("utf8"));
+  expect(event).toMatchObject({ kind: 24242, pubkey, tags: expect.arrayContaining([["t", "upload"]]) });
 });
 
 test("rejects shell messages from an unregistered source window", async ({ page }) => {

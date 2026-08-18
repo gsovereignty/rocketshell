@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 
@@ -31,18 +32,26 @@ const devServiceWorker = (): Plugin => ({
   }
 });
 
-export default defineConfig(({ mode }) => ({
-  base: mode === "github" ? "/shell/" : process.env.PLATFORM_BASE ?? "/",
-  plugins: [devServiceWorker()],
-  build: {
-    sourcemap: true,
-    rollupOptions: {
-      input: { shell: resolve(__dirname, "index.html"), "service-worker": resolve(__dirname, "src/service-worker.ts") },
-      output: {
-        entryFileNames: (chunk) => chunk.name === "service-worker" ? "service-worker.js" : "assets/[name]-[hash].js",
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash][extname]"
+export default defineConfig(({ mode }) => {
+  const stlstrFixtureDirectory = process.env.VITE_STLSTR_FIXTURE_DIR;
+  const stlstrFixture = stlstrFixtureDirectory ? {
+    manifest: readFileSync(resolve(stlstrFixtureDirectory, ".nip5a-manifest.json"), "utf8"),
+    indexHtml: readFileSync(resolve(stlstrFixtureDirectory, "index.html"), "utf8")
+  } : undefined;
+  return {
+    base: mode === "github" ? "/shell/" : process.env.PLATFORM_BASE ?? "/",
+    define: { __STLSTR_FIXTURE__: JSON.stringify(stlstrFixture) },
+    plugins: [devServiceWorker()],
+    build: {
+      sourcemap: true,
+      rollupOptions: {
+        input: { shell: resolve(__dirname, "index.html"), "service-worker": resolve(__dirname, "src/service-worker.ts") },
+        output: {
+          entryFileNames: (chunk) => chunk.name === "service-worker" ? "service-worker.js" : "assets/[name]-[hash].js",
+          chunkFileNames: "assets/[name]-[hash].js",
+          assetFileNames: "assets/[name]-[hash][extname]"
+        }
       }
     }
-  }
-}));
+  };
+});
