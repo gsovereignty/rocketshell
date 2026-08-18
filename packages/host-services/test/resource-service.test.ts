@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPolicyFetch, resourceGrantKey } from "../src/index.js";
+import { createPolicyFetch, resourceGrantKey, resolveResourceGrants } from "../src/index.js";
 import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 describe("resource policy fetch", () => {
   it("scopes grant keys to publisher, d-tag, and aggregate", () => {
     expect(resourceGrantKey("publisher-a", "viewer", "hash")).not.toBe(resourceGrantKey("publisher-b", "viewer", "hash"));
     expect(resourceGrantKey("publisher-a", "viewer", "old")).not.toBe(resourceGrantKey("publisher-a", "viewer", "new"));
+  });
+  it("does not carry resource grants into a package update", () => {
+    const publishers = new Map([["viewer\0old-hash", "publisher-a"], ["viewer\0new-hash", "publisher-b"]]);
+    const grants = new Map([[resourceGrantKey("publisher-a", "viewer", "old-hash"), ["https://media.example"]]]);
+    const policy = { grants, resolvePublisher: (dTag: string, hash: string) => publishers.get(`${dTag}\0${hash}`) };
+    expect(resolveResourceGrants(policy, "viewer", "old-hash")).toEqual(["https://media.example"]);
+    expect(resolveResourceGrants(policy, "viewer", "new-hash")).toEqual([]);
   });
   afterEach(() => vi.unstubAllGlobals());
   it("strips ambient credential headers and sniffs returned bytes", async () => {

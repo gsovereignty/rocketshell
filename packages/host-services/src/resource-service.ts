@@ -13,6 +13,10 @@ export interface ResourcePolicy {
 }
 
 export const resourceGrantKey = (publisher: string, dTag: string, hash: string): string => `${publisher}\0${dTag}\0${hash}`;
+export const resolveResourceGrants = (policy: Pick<ResourcePolicy, "grants" | "resolvePublisher">, dTag: string, hash: string): readonly string[] => {
+  const publisher = policy.resolvePublisher?.(dTag, hash);
+  return publisher ? policy.grants.get(resourceGrantKey(publisher, dTag, hash)) ?? [] : [];
+};
 const isLocalhost = (hostname: string): boolean => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 
 function validateUrl(raw: string, allowHttpLocalhost: boolean): URL {
@@ -77,10 +81,7 @@ export function registerResourceService(runtime: Runtime, policy: ResourcePolicy
   runtime.registerService("resource", createResourceService({
     fetch: createPolicyFetch(policy),
     isOriginGranted: (origin, grants) => grants.includes(origin),
-    getConnectGrants: (dTag, hash) => {
-      const publisher = policy.resolvePublisher?.(dTag, hash);
-      return publisher ? policy.grants.get(resourceGrantKey(publisher, dTag, hash)) ?? [] : [];
-    },
+    getConnectGrants: (dTag, hash) => resolveResourceGrants(policy, dTag, hash),
     resolveIdentity: (windowId) => {
       const entry = runtime.sessionRegistry.getEntryByWindowId(windowId);
       return entry ? { dTag: entry.dTag, aggregateHash: entry.aggregateHash } : null;
