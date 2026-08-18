@@ -39,6 +39,10 @@ worker.addEventListener("fetch", (event: FetchEvent) => {
     event.respondWith(storePromise.then((store) => routeNappletRequest(event.request, scopePath, store)).then((response) => response ?? new Response("Not found", { status: 404 })));
     return;
   }
+  if (import.meta.env.DEV) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   event.respondWith(caches.match(event.request).then(async (cached) => {
     if (cached) return cached;
     const response = await fetch(event.request);
