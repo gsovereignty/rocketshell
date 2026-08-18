@@ -143,7 +143,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   };
   window.addEventListener("message", onMessage);
   const fixtureResourceUrl = new URL(`${import.meta.env.BASE_URL}fixture-resource.txt`, location.href).href;
-  const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true" ? await installFixture(packageStore, fixtureResourceUrl) : undefined;
+  const fixtureDTag = import.meta.env.DEV || import.meta.env.VITE_INSTALL_FIXTURE === "true"
+    ? await installFixture(packageStore, fixtureResourceUrl)
+    : undefined;
   if (fixtureDTag) {
     const fixture = await packageStore.getActive(fixtureDTag);
     if (fixture) resourceGrants.set(resourceGrantKey(fixture.dTag, fixture.aggregateHash), [new URL(fixtureResourceUrl).origin]);
