@@ -21,7 +21,10 @@ export class MemoryPackageStore implements PackageStore {
     if (!this.#committed.has(key(dTag, aggregateHash))) throw new Error("Cannot activate uncommitted package");
     this.#active.set(dTag, aggregateHash);
   }
-  async get(dTag: string, aggregateHash: string): Promise<InstallationRecord | undefined> { return this.#committed.get(key(dTag, aggregateHash)); }
+  async get(dTag: string, aggregateHash: string): Promise<InstallationRecord | undefined> {
+    const record = this.#committed.get(key(dTag, aggregateHash));
+    return record ? structuredClone(record) : undefined;
+  }
   async getActive(dTag: string): Promise<InstallationRecord | undefined> {
     const hash = this.#active.get(dTag); return hash ? this.get(dTag, hash) : undefined;
   }
