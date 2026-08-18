@@ -6,6 +6,7 @@ import { createPersistentNostrEngine } from "@platform/nostr-engine";
 import { PLATFORM_REQUIRED_DOMAINS } from "@project/platform-nap-contract";
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
+import { coordinateServiceWorkerUpdates } from "./service-worker-update.js";
 
 function relayUrls(raw: string | undefined): string[] { return (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean); }
 
@@ -122,7 +123,13 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     location.reload();
     return new Promise<BrowserPlatform>(() => {});
   }
-  if (fixtureDTag) void windows.create(fixtureDTag);
+  if (fixtureDTag) await windows.create(fixtureDTag);
+  const updates = coordinateServiceWorkerUpdates(registration, navigator.serviceWorker, {
+    activeWindowCount: () => windows?.listWindowIds().length ?? 0,
+    closeWindows: () => windows?.close(),
+    confirmActivation: () => window.confirm("Platform update ready. Close active Napplet windows and reload now?"),
+    reload: () => location.reload()
+  });
   let closed = false;
   return {
     windows,
@@ -130,7 +137,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
     async close() {
       if (closed) return; closed = true;
-      windows?.close(); window.removeEventListener("message", onMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
+      updates.close(); windows?.close(); window.removeEventListener("message", onMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
       void registration;
     }
   };
