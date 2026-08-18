@@ -130,7 +130,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
     async close() {
       if (closed) return; closed = true;
-      windows?.close(); window.removeEventListener("message", onMessage); shell.destroy(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
+      windows?.close(); window.removeEventListener("message", onMessage); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
       void registration;
     }
   };

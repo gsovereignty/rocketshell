@@ -21,6 +21,7 @@ export interface ShellAdapterOptions {
   readonly onAclCheck?: (event: AclCheckEvent) => void;
   readonly onUnroutedMessage?: (info: { readonly type?: string; readonly origin: string; readonly reason: string }) => void;
 }
+export type PlatformShellAdapter = ShellAdapter & { close(): void };
 
 function advertisedService(name: string): ServiceHandler {
   return {
@@ -33,9 +34,20 @@ function plainEvent(event: NostrEvent): NostrEvent {
   return { id: event.id, pubkey: event.pubkey, created_at: event.created_at, kind: event.kind, tags: event.tags.map((tag) => [...tag]), content: event.content, sig: event.sig };
 }
 
-export function createPlatformShellAdapter(options: ShellAdapterOptions): ShellAdapter {
+export function createPlatformShellAdapter(options: ShellAdapterOptions): PlatformShellAdapter {
   const { engine } = options; const subscriptions = new Map<string, () => void>();
   const scoped = new Map<string, { relay: string; close: () => void }>();
+  let initialAccount = true; let closed = false;
+  const closeAccountWork = (): void => {
+    for (const cleanup of subscriptions.values()) cleanup();
+    subscriptions.clear();
+    for (const entry of scoped.values()) entry.close();
+    scoped.clear();
+  };
+  const accountChanges = engine.accounts.manager.active$.subscribe(() => {
+    if (initialAccount) initialAccount = false;
+    else closeAccountWork();
+  });
   const discovery = engine.relayPolicy.select(options.discoveryRelays, "discovery");
   const read = engine.relayPolicy.select(options.readRelays, "read"); const write = engine.relayPolicy.select(options.writeRelays, "write");
   return {
@@ -95,6 +107,10 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): ShellA
         });
         return { domains, services: available.services.filter((service) => domains.includes(service)) };
       }
+    },
+    close() {
+      if (closed) return;
+      closed = true; accountChanges.unsubscribe(); closeAccountWork();
     }
   };
 }
