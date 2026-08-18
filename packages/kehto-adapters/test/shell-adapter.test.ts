@@ -76,6 +76,21 @@ describe("shell adapter lifecycle", () => {
     expect(postMessage).not.toHaveBeenCalled();
     adapter.close(); await engine.close();
   });
+  it("verifies and admits accepted scoped publication", async () => {
+    const engine = createNostrEngine(); const messages = new Subject<GroupReqMessage>();
+    vi.spyOn(engine.relayPool, "req").mockReturnValue(messages);
+    const publish = vi.spyOn(engine.relayPool, "publish").mockResolvedValue([{ from: "wss://relay.example/", ok: true, message: "saved" }]);
+    const adapter = createPlatformShellAdapter({
+      engine, discoveryRelays: [], readRelays: [], writeRelays: [], createWindow: () => null
+    });
+    adapter.relayPool.openScopedRelay("window-1", "wss://relay.example/", "sub-1", [{}], { postMessage: vi.fn() } as unknown as Window);
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "scoped", tags: [] }, generateSecretKey());
+    await expect(adapter.relayPool.publishToScopedRelay("window-1", event)).resolves.toBe(true);
+    expect(engine.eventStore.getEvent(event.id)?.id).toBe(event.id);
+    await expect(adapter.relayPool.publishToScopedRelay("window-1", { ...event, content: "tampered" })).resolves.toBe(false);
+    expect(publish).toHaveBeenCalledOnce();
+    adapter.close(); await engine.close();
+  });
   it("delivers identity changes only to authorized live windows", async () => {
     const engine = createNostrEngine();
     const adapter = createPlatformShellAdapter({

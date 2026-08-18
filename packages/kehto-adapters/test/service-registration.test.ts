@@ -36,6 +36,10 @@ describe("core service lifecycle", () => {
       "wss://one.example/": true, "wss://two.example/": false
     });
     expect(publish).toHaveBeenCalledWith(["wss://one.example/", "wss://two.example/"], event, { retries: false, timeout: 4_000 });
+    expect(engine.eventStore.getEvent(event.id)?.id).toBe(event.id);
+    const invalid = { ...event, content: "tampered" };
+    await expect(pool.publish(invalid, ["wss://one.example/"])).rejects.toThrow("invalid-event");
+    expect(publish).toHaveBeenCalledOnce();
     await engine.close();
   });
 });

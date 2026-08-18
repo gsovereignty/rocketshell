@@ -18,10 +18,13 @@ export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly 
       return { unsubscribe: () => handle.close() };
     },
     async publish(event: CoreNostrEvent, relayUrls: string[]) {
+      if (!engine.ingress.verify(event)) throw new Error("invalid-event");
       const selected = engine.relayPolicy.select(relayUrls, "write");
       const outcomes = await engine.relayPool.publish(selected, event, { retries: false, timeout: DEFAULT_PUBLISH_TIMEOUT_MS });
       for (const outcome of outcomes) engine.telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
       if (!outcomes.some((outcome) => outcome.ok)) engine.telemetry.record("publication.failed", 1, { relayCount: selected.length });
+      const accepted = outcomes.find((outcome) => outcome.ok);
+      if (accepted) engine.ingress.admit(event, accepted.from);
       return Object.fromEntries(outcomes.map((outcome) => [outcome.from, outcome.ok]));
     },
     isAvailable: () => readRelays.length > 0 || writeRelays.length > 0
