@@ -3,7 +3,7 @@ import type { PackageStore, NappletWindowManager } from "@platform/napplet-gatew
 import { describe, expect, it, vi } from "vitest";
 import { registerIntentService } from "../src/index.js";
 
-function setup() {
+function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
   let handler: ServiceHandler | undefined;
   const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
   const source = { postMessage: vi.fn() };
@@ -15,7 +15,7 @@ function setup() {
       archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }]
     }
   }]) } as unknown as PackageStore;
-  registerIntentService(runtime, store, windows);
+  registerIntentService(runtime, store, windows, options);
   handler!.onRegistered?.({
     resolveDTag: () => "runtime-attested-sender", listWindowIds: () => ["sender-1"],
     hasCapability: () => true, sendToEligibleNapplet: () => true
@@ -75,5 +75,31 @@ describe("intent host boundary", () => {
       type: "intent.invoke.result",
       result: expect.objectContaining({ ok: true, handler: "viewer-app", windowId: "target-1" })
     }));
+  });
+
+  it("requires host authorization for an explicit handler", async () => {
+    const authorizeExplicitHandler = vi.fn(async () => false);
+    const { handler, windows } = setup({ authorizeExplicitHandler });
+    const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "explicit", request: { archetype: "viewer", handler: "viewer-app" }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(authorizeExplicitHandler).toHaveBeenCalledWith("runtime-attested-sender", "viewer-app");
+    expect(windows.create).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: false }) }));
+  });
+
+  it("returns failure when target disappears before delivery", async () => {
+    const { handler, windows, source } = setup();
+    const target = (windows.findByDTag as ReturnType<typeof vi.fn>)();
+    target.ready = Promise.reject(new Error("window destroyed"));
+    const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "destroyed", request: { archetype: "viewer", payload: { id: 3 } }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(source.postMessage).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: false }) }));
   });
 });
