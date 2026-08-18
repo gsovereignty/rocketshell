@@ -20,7 +20,7 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
     resolveDTag: () => "runtime-attested-sender", listWindowIds: () => ["sender-1"],
     hasCapability: () => true, sendToEligibleNapplet: () => true
   } as ServiceRuntimeContext);
-  return { handler: handler!, windows, source, target };
+  return { handler: handler!, windows, source, target, store };
 }
 
 describe("intent host boundary", () => {
@@ -75,6 +75,38 @@ describe("intent host boundary", () => {
       type: "intent.invoke.result",
       result: expect.objectContaining({ ok: true, handler: "viewer-app", windowId: "target-1" })
     }));
+  });
+
+  it("uses the account default before opening among multiple handlers", async () => {
+    const getDefaultHandler = vi.fn(() => "alternate-viewer");
+    const { handler, windows, store } = setup({ getDefaultHandler });
+    (store.listActive as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { dTag: "viewer-app", manifest: { dTag: "viewer-app", aggregateHash: "a".repeat(64), entrypoint: "index.html", requires: [], artifacts: [], archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }] } },
+      { dTag: "alternate-viewer", manifest: { dTag: "alternate-viewer", aggregateHash: "b".repeat(64), entrypoint: "index.html", requires: [], artifacts: [], archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }] } }
+    ]);
+    const send = vi.fn();
+    handler.handleMessage("sender-1", { type: "intent.invoke", id: "default", request: { archetype: "viewer" } } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(getDefaultHandler).toHaveBeenCalledWith("viewer");
+    expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer");
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "alternate-viewer" }) }));
+  });
+
+  it("uses host user choice before opening a requested handler", async () => {
+    const chooseHandler = vi.fn(async () => "alternate-viewer");
+    const { handler, windows, store } = setup({ chooseHandler });
+    (store.listActive as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { dTag: "viewer-app", manifest: { dTag: "viewer-app", aggregateHash: "a".repeat(64), entrypoint: "index.html", requires: [], artifacts: [], archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }] } },
+      { dTag: "alternate-viewer", manifest: { dTag: "alternate-viewer", aggregateHash: "b".repeat(64), entrypoint: "index.html", requires: [], artifacts: [], archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }] } }
+    ]);
+    const send = vi.fn();
+    handler.handleMessage("sender-1", { type: "intent.invoke", id: "choose", request: { archetype: "viewer", handler: "choose" } } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(chooseHandler).toHaveBeenCalledWith("viewer", expect.arrayContaining([
+      expect.objectContaining({ dTag: "viewer-app" }), expect.objectContaining({ dTag: "alternate-viewer" })
+    ]), "runtime-attested-sender");
+    expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer");
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "alternate-viewer" }) }));
   });
 
   it("requires host authorization for an explicit handler", async () => {
