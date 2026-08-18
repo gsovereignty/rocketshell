@@ -1,5 +1,5 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
-import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerResourceService } from "@platform/host-services";
+import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService } from "@platform/host-services";
 import { createPlatformShellAdapter, createRelayConfiguration, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
@@ -95,6 +95,11 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     }
   });
   registerResourceService(shell.runtime, { grants: new Map(), allowHttpLocalhost: import.meta.env.DEV, telemetry: engine.telemetry });
+  registerLinkService(shell.runtime, {
+    allowHttpLocalhost: import.meta.env.DEV,
+    confirm: (_windowId, url) => window.confirm(`Open ${url.href} in a new tab?`),
+    openExternal: (url) => window.open(url.href, "_blank", "noopener,noreferrer") !== null
+  });
   const windowBridge = new BrowserWindowBridge(shell);
   windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL, engine.telemetry);
   shell.registerConsentHandler((request) => {
