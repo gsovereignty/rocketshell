@@ -62,7 +62,7 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
   return {
     services: Object.fromEntries((options.advertisedServices ?? []).map((name) => [name, advertisedService(name)])),
     relayPool: {
-      getRelayPool: () => createRelayPoolLike(engine.relayPool, engine.relayPolicy),
+      getRelayPool: () => createRelayPoolLike(engine),
       trackSubscription(key, cleanup) { subscriptions.get(key)?.(); subscriptions.set(key, cleanup); },
       untrackSubscription(key) { subscriptions.get(key)?.(); subscriptions.delete(key); },
       openScopedRelay(windowId, relayUrl, subId, filters, sourceWindow) {

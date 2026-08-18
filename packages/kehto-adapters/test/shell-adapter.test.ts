@@ -5,13 +5,18 @@ import type { GroupReqMessage } from "applesauce-relay";
 import { Subject } from "rxjs";
 import { describe, expect, it, vi } from "vitest";
 import { createPlatformShellAdapter, createRelayPoolLike } from "../src/index.js";
+import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("shell adapter lifecycle", () => {
   it("policy-gates shell fallback relay URLs before transport", async () => {
-    const engine = createNostrEngine(); const subscription = vi.spyOn(engine.relayPool, "subscription");
-    const pool = createRelayPoolLike(engine.relayPool, engine.relayPolicy);
+    const engine = createNostrEngine(); const req = vi.spyOn(engine.relayPool, "req");
+    const pool = createRelayPoolLike(engine);
     expect(() => pool.subscription(["ws://remote.example"], [{}])).toThrow("scheme");
-    expect(subscription).not.toHaveBeenCalled();
+    expect(req).not.toHaveBeenCalled();
+    const publish = vi.spyOn(engine.relayPool, "publish");
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "valid", tags: [] }, generateSecretKey());
+    await expect(pool.publish(["wss://relay.example"], { ...event, content: "tampered" })).rejects.toThrow("invalid-event");
+    expect(publish).not.toHaveBeenCalled();
     await engine.close();
   });
   it("applies relay configuration changes through the shared policy", async () => {
