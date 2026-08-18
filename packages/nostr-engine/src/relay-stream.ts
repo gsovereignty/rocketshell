@@ -25,6 +25,13 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
     eoseSent = true;
     callbacks.eose({ partial, pendingRelays: selected.filter((relay) => !barriers.has(relay)) });
   };
+  if (selected.length === 0) {
+    emitEose(false);
+    return {
+      get closed() { return closed; },
+      close() { closed = true; }
+    };
+  }
   const timer = setTimeout(() => emitEose(barriers.size < selected.length), timeoutMs);
   const barrier = (relay: string): void => {
     if (!selected.includes(relay)) return;
