@@ -8,6 +8,20 @@ import { createPlatformShellAdapter, createRelayPoolLike } from "../src/index.js
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("shell adapter lifecycle", () => {
+  it("exposes active signer encryption without exposing the account", async () => {
+    const engine = createNostrEngine();
+    const account = {
+      id: "encrypted", type: "test", pubkey: "11".repeat(32), signer: undefined as never,
+      getPublicKey: async () => "11".repeat(32), signEvent: async () => finalizeEvent({ kind: 1, created_at: 1, content: "x", tags: [] }, generateSecretKey()),
+      nip44: { encrypt: vi.fn(async () => "ciphertext"), decrypt: vi.fn(async () => "plaintext") }, toJSON: () => ({})
+    };
+    account.signer = account as never; engine.accounts.manager.addAccount(account as never); engine.accounts.manager.setActive(account as never);
+    const adapter = createPlatformShellAdapter({ engine, discoveryRelays: [], readRelays: [], writeRelays: [], createWindow: () => null });
+    const signer = adapter.auth.getSigner();
+    await expect(signer.nip44.encrypt("22".repeat(32), "secret")).resolves.toBe("ciphertext");
+    expect(signer.manager).toBeUndefined(); expect(signer.account).toBeUndefined();
+    adapter.close(); await engine.close();
+  });
   it("policy-gates shell fallback relay URLs before transport", async () => {
     const engine = createNostrEngine(); const req = vi.spyOn(engine.relayPool, "req");
     const pool = createRelayPoolLike(engine);

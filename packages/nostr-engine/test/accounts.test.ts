@@ -24,4 +24,18 @@ describe("account controller", () => {
     expect(controller.publicKey).toBe("");
     controller.close();
   });
+  it("invalidates encrypted work when the active account changes", async () => {
+    const manager = new AccountManager(); let finish: ((value: string) => void) | undefined;
+    const pending = new Promise<string>((resolve) => { finish = resolve; });
+    const account = {
+      id: "encrypted", type: "test", pubkey: "11".repeat(32), signer: undefined as never,
+      getPublicKey: async () => "11".repeat(32), signEvent: async () => ({} as NostrEvent), toJSON: () => ({}),
+      nip44: { encrypt: () => pending, decrypt: async () => "plain" }
+    };
+    account.signer = account as never; manager.addAccount(account as never); manager.setActive(account as never);
+    const controller = createAccountController(manager); const encryption = controller.nip44Encrypt("22".repeat(32), "secret");
+    manager.removeAccount(account as never); finish?.("ciphertext");
+    await expect(encryption).rejects.toMatchObject({ failure: { code: "signer-unavailable" } });
+    controller.close();
+  });
 });

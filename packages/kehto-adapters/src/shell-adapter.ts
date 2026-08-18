@@ -102,10 +102,22 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     windowManager: { createWindow: options.createWindow },
     auth: {
       getUserPubkey: () => engine.accounts.publicKey || null,
-      getSigner: () => engine.accounts.manager.active ? {
-        getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),
-        signEvent: (template: Parameters<typeof engine.accounts.manager.signer.signEvent>[0]) => engine.accounts.sign(template)
-      } : null
+      getSigner: () => {
+        const active = engine.accounts.manager.active;
+        if (!active) return null;
+        return {
+          getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),
+          signEvent: (template: Parameters<typeof engine.accounts.manager.signer.signEvent>[0]) => engine.accounts.sign(template),
+          ...(active.nip04 ? { nip04: {
+            encrypt: (pubkey: string, plaintext: string) => engine.accounts.nip04Encrypt(pubkey, plaintext),
+            decrypt: (pubkey: string, ciphertext: string) => engine.accounts.nip04Decrypt(pubkey, ciphertext)
+          } } : {}),
+          ...(active.nip44 ? { nip44: {
+            encrypt: (pubkey: string, plaintext: string) => engine.accounts.nip44Encrypt(pubkey, plaintext),
+            decrypt: (pubkey: string, ciphertext: string) => engine.accounts.nip44Decrypt(pubkey, ciphertext)
+          } } : {})
+        };
+      }
     },
     config: { getNappUpdateBehavior: () => "banner" },
     hotkeys: { executeHotkeyFromForward: (event) => options.executeHotkey?.(event) },
