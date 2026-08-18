@@ -26,12 +26,31 @@ describe("publication", () => {
 
 describe("relay-list resolution", () => {
   it("uses fixed discovery query, admits result, and caches it", async () => {
-    const key = generateSecretKey(); const event = finalizeEvent({ kind: 10002, created_at: 100, content: "", tags: [["r", "wss://read.example", "read"], ["r", "wss://write.example", "write"]] }, key);
+    const key = generateSecretKey(); const event = finalizeEvent({ kind: 10002, created_at: 100, content: "", tags: [["r", "wss://read.example", "read"], ["r", "ws://denied.example", "read"], ["r", "wss://write.example", "write"]] }, key);
     const store = new EventStore({ verifyEvent }); const query = vi.fn(async (): Promise<readonly NostrEvent[]> => [event]);
     const resolver = createRelayListResolver(store, createEventIngress(store, verifyEvent), createRelayPolicy(), ["wss://discovery.example"], query, { now: () => 100_000 });
     const first = await resolver.resolve([event.pubkey]); const second = await resolver.resolve([event.pubkey]);
     expect(first.get(event.pubkey)?.read).toEqual(["wss://read.example/"]); expect(first.get(event.pubkey)?.write).toEqual(["wss://write.example/"]);
     expect(second.get(event.pubkey)?.event?.id).toBe(event.id); expect(query).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledWith(["wss://discovery.example"], [event.pubkey]); store.dispose();
+  });
+  it("caches missing relay lists for the negative freshness window", async () => {
+    const store = new EventStore({ verifyEvent }); const query = vi.fn(async (): Promise<readonly NostrEvent[]> => []);
+    const resolver = createRelayListResolver(store, createEventIngress(store, verifyEvent), createRelayPolicy(), ["wss://discovery.example"], query, { now: () => 100_000 });
+    const pubkey = "11".repeat(32);
+    expect((await resolver.resolve([pubkey])).get(pubkey)).toBeUndefined();
+    expect((await resolver.resolve([pubkey])).get(pubkey)).toBeUndefined();
+    expect(query).toHaveBeenCalledOnce(); store.dispose();
+  });
+  it("uses a stale stored list without disguising it as fresh", async () => {
+    let now = 10_000; const key = generateSecretKey();
+    const event = finalizeEvent({ kind: 10002, created_at: 1, content: "", tags: [["r", "wss://stale.example"]] }, key);
+    const store = new EventStore({ verifyEvent }); const ingress = createEventIngress(store, verifyEvent); ingress.admit(event, "wss://discovery.example");
+    const query = vi.fn(async (): Promise<readonly NostrEvent[]> => []);
+    const resolver = createRelayListResolver(store, ingress, createRelayPolicy(), ["wss://discovery.example"], query, { positiveFreshnessMs: 100, staleUsableMs: 60_000, now: () => now });
+    expect((await resolver.resolve([event.pubkey])).get(event.pubkey)?.read).toEqual(["wss://stale.example/"]);
+    now += 1_000;
+    expect((await resolver.resolve([event.pubkey])).get(event.pubkey)?.read).toEqual(["wss://stale.example/"]);
+    expect(query).toHaveBeenCalledTimes(2); store.dispose();
   });
 });

@@ -20,7 +20,8 @@ export function createRelayListResolver(store: EventStore, ingress: EventIngress
     const read: string[] = []; const write: string[] = [];
     for (const tag of event.tags) {
       if (tag[0] !== "r" || !tag[1]) continue;
-      const marker = tag[2]; const normalized = policy.normalize(tag[1], "discovery");
+      const marker = tag[2]; let normalized: string;
+      try { normalized = policy.normalize(tag[1], "discovery"); } catch { continue; }
       if (marker !== "write") read.push(normalized);
       if (marker !== "read") write.push(normalized);
     }
