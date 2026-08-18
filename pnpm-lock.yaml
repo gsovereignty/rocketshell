@@ -141,6 +141,9 @@ importers:
       '@kehto/shell':
         specifier: 0.20.0
         version: 0.20.0(@napplet/core@0.31.1)(@napplet/nap@0.31.1)(nostr-tools@2.24.0)
+      '@napplet/core':
+        specifier: 0.31.1
+        version: 0.31.1
       '@napplet/nap':
         specifier: 0.31.1
         version: 0.31.1

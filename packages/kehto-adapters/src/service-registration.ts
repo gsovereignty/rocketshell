@@ -8,6 +8,7 @@ import { DEFAULT_PUBLISH_TIMEOUT_MS, createRelayListResolver, createRelayPublish
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 import { createIdentityProviders } from "./identity-providers.js";
+import { limitServiceSubscriptions } from "./subscription-limit.js";
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
 export interface CoreServiceRegistration { close(): void }
@@ -42,7 +43,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
   const writeRelays = configuration.values("outbox");
   const discoveryRelays = configuration.values("discovery");
   const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress, 1, engine.telemetry);
-  const relayService = createRelayPoolService({
+  const relayService = limitServiceSubscriptions(createRelayPoolService({
     subscribe(filters, callback, relayUrls) {
       const selected = engine.relayPolicy.select(relayUrls?.length ? relayUrls : readRelays, "read");
       const handle = openRelayStream(engine.relayPool, engine.ingress, selected, validateFilters(filters as Filter[]), {
@@ -53,7 +54,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     async publish(event) { await publisher.publishSigned(writeRelays, event as CoreNostrEvent); },
     selectRelayTier() { return [...readRelays]; },
     isAvailable() { return readRelays.length > 0 || writeRelays.length > 0; }
-  });
+  }), { subscribe: "relay.subscribe", close: "relay.close", closed: "relay.closed" });
   runtime.registerService("relay", relayService);
   const identityProviders = createIdentityProviders(engine, readRelays);
   runtime.registerService("identity", createIdentityService({
@@ -88,7 +89,9 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     isRelayAllowed: (url) => { try { engine.relayPolicy.normalize(url, "explicit"); return true; } catch { return false; } },
     defaultTimeoutMs: 4_000
   });
-  const outboxService = createOutboxService({ router: outboxRouter });
+  const outboxService = limitServiceSubscriptions(createOutboxService({ router: outboxRouter }), {
+    subscribe: "outbox.subscribe", close: "outbox.close", closed: "outbox.closed"
+  });
   runtime.registerService("outbox", outboxService);
   const accountSensitiveServices: ServiceHandler[] = [relayService, outboxService];
   let initialAccount = true; let closed = false;
