@@ -9,6 +9,7 @@ export interface CoreHostServiceOptions {
   readonly openSettings: (windowId: string, section: string | undefined) => void;
   readonly configStore?: ConfigValueStore;
   readonly resolveConfigScope?: (windowId: string) => string | undefined;
+  readonly publishTheme?: (theme: Theme) => void;
 }
 
 export function registerCoreHostServices(runtime: Runtime, options: CoreHostServiceOptions): CoreHostServices {
@@ -19,7 +20,10 @@ export function registerCoreHostServices(runtime: Runtime, options: CoreHostServ
     if (!scope) throw new Error("Config identity unavailable");
     return scope;
   };
-  const theme = createThemeService(options.initialTheme ? { initialTheme: options.initialTheme } : undefined);
+  const theme = createThemeService({
+    ...(options.initialTheme ? { initialTheme: options.initialTheme } : {}),
+    onBroadcast: (envelope) => options.publishTheme?.(envelope.theme)
+  });
   const config = createConfigService({
     getValues: (windowId) => values.get(scopeFor(windowId)),
     saveValues: (windowId, next) => values.set(scopeFor(windowId), next),

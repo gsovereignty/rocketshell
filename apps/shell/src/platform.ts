@@ -30,7 +30,7 @@ class BrowserWindowBridge implements WindowBridge {
   }
   accept(event: MessageEvent): void {
     if (!event.data || typeof event.data !== "object" || event.data.type !== "shell.ready") return;
-    const windowId = event.source instanceof Window ? originRegistry.getWindowId(event.source) : undefined;
+    const windowId = event.source ? originRegistry.getWindowId(event.source as Window) : undefined;
     if (!windowId) return;
     this.#ready.resolve(windowId);
   }
@@ -72,6 +72,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const coreServices = registerCoreServices(shell, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
   const hostServices = registerCoreHostServices(shell.runtime, {
     openSettings: () => undefined,
+    publishTheme: (theme) => shell.publishTheme(theme),
     configStore: createStorageConfigStore(localStorage),
     resolveConfigScope: (windowId) => {
       const identity = windows?.findByWindowId(windowId)?.identity;
@@ -111,7 +112,14 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     },
     authorizeExplicitHandler: (sender, handler) => window.confirm(`${sender} wants to open ${handler}. Allow?`)
   });
-  const onMessage = (event: MessageEvent): void => { windowBridge.accept(event); shell.handleMessage(event); };
+  const onMessage = (event: MessageEvent): void => {
+    shell.handleMessage(event);
+    windowBridge.accept(event);
+    if (event.data?.type === "shell.ready" && event.source && originRegistry.getWindowId(event.source as Window)) {
+      shell.publishIdentityChanged(engine.accounts.publicKey);
+      hostServices.theme.publishTheme(hostServices.theme.getCurrentTheme());
+    }
+  };
   window.addEventListener("message", onMessage);
   const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true" ? await installFixture(packageStore) : undefined;
   if (fixtureDTag) {
