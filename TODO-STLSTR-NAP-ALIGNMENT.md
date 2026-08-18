@@ -79,3 +79,14 @@ complete until the acceptance checks below pass with a production Napplet.
 - [x] Pass unit, conformance, and browser suites with frozen dependencies.
 - [x] Document supported NAP versions and any deliberate unsupported optional
       domains.
+
+## Verification baseline
+
+- Napplet specifications: `napplet/naps` commit
+  `c0f7dd14460622fc3a9870ea57a538474cf776fa`, especially NAP-INTENT,
+  NAP-SHELL, NAP-IDENTITY, and NAP-INC.
+- Production Napplet: STLstr commit
+  `9e55b8f5b3f16f091aa496b5d604acde9aa6d8df`, built `stl-preview` signed
+  artifact and manifest.
+- Host gate: frozen install, type checks, unit suite, project conformance,
+  Chromium browser suite, `test:stlstr`, and production build.
