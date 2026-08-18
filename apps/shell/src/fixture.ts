@@ -4,8 +4,9 @@ import { finalizeEvent } from "nostr-tools/pure";
 const encoder = new TextEncoder();
 const SCRIPT = `
 const status = document.querySelector("#fixture-status");
-const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, fetchBlocked: false, websocketBlocked: false, pubkey: null, intentReceived: false };
+const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, pubkey: null, intentReceived: false };
 try { localStorage.setItem("x", "x"); } catch { results.storageBlocked = true; }
+try { void window.parent.document.body; } catch { results.hostDomBlocked = true; }
 try { await fetch("https://example.com/"); } catch { results.fetchBlocked = true; }
 try { const socket = new WebSocket("wss://example.com/"); await new Promise((resolve) => { socket.onerror = resolve; setTimeout(resolve, 500); }); if (socket.readyState !== WebSocket.OPEN) results.websocketBlocked = true; socket.close(); } catch { results.websocketBlocked = true; }
 await window.napplet.shell.ready();
