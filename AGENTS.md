@@ -11,6 +11,9 @@
   examining relevant real Applesauce examples through the Applesauce MCP
   server. Base work on those examples and current Applesauce APIs rather than
   memory or invented patterns.
+- Always use functional programming for Applesauce-related code. Never use
+  object-oriented programming, including classes, inheritance, or
+  object-oriented design patterns, for anything related to Applesauce.
 - If the Applesauce skill or MCP server is unavailable, stop Applesauce
   implementation and report the blocker instead of building from assumptions.
 
