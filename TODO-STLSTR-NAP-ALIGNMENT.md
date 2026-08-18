@@ -6,37 +6,37 @@ complete until the acceptance checks below pass with a production Napplet.
 
 ## Intent routing
 
-- [ ] Route Napplet requests by archetype rather than URL, route name, or
+- [x] Route Napplet requests by archetype rather than URL, route name, or
       concrete Napplet location.
   - Resolve candidates from installed, signed manifests.
   - Keep URLs and shell navigation details private to the host.
   - Add a browser test proving the caller supplies only an archetype, action,
     convention, and payload.
 
-- [ ] Make `intent.open()` pass exclusively through the shell intent service.
+- [x] Make `intent.open()` pass exclusively through the shell intent service.
   - Apply default-handler selection and user choice before opening a target.
   - Prevent callers from bypassing mediation with an iframe or artifact URL.
   - Return the standard structured intent result for success and failure.
 
-- [ ] Validate actions and conventions before dispatch.
+- [x] Validate actions and conventions before dispatch.
   - Record supported actions and conventions from each installed manifest.
   - Reject unsupported combinations without opening or focusing a window.
   - Test unknown archetypes, unsupported actions, unsupported conventions, and
     explicit handlers.
 
-- [ ] Return the intent result before navigation can destroy the caller.
+- [x] Return the intent result before navigation can destroy the caller.
   - Send the correlated result envelope before replacing, closing, or
     navigating the calling surface.
   - Add a regression test where successful navigation unmounts the caller.
 
-- [ ] Buffer cold-start intent payloads until the receiver is ready.
+- [x] Buffer cold-start intent payloads until the receiver is ready.
   - Wait for the target's NAP-SHELL readiness handshake before delivery.
   - Deliver each payload once to the resolved target only.
   - Cover cold start, reuse, concurrent opens, timeout, and target teardown.
 
 ## Manifest capabilities
 
-- [ ] Derive every Napplet capability from its signed manifest declarations.
+- [x] Derive every Napplet capability from its signed manifest declarations.
   - Reject undeclared capability calls.
   - Refuse activation when a required capability is unavailable.
   - Scope grants to publisher, `dTag`, and aggregate hash; re-evaluate them on
@@ -46,7 +46,7 @@ complete until the acceptance checks below pass with a production Napplet.
 
 ## Host-owned services
 
-- [ ] Keep keys, relay connections, uploads, and resource fetching inside the
+- [x] Keep keys, relay connections, uploads, and resource fetching inside the
       host.
   - Expose only structured-clone-safe NAP request and result values.
   - Never expose signers, private keys, relay objects, upload credentials,
@@ -56,7 +56,7 @@ complete until the acceptance checks below pass with a production Napplet.
 
 ## Napplet isolation
 
-- [ ] Seal and sandbox every Napplet iframe before its code runs.
+- [x] Seal and sandbox every Napplet iframe before its code runs.
   - Use `sandbox="allow-scripts"` without `allow-same-origin`.
   - Install namespace/bootstrap code before application code.
   - Serve only verified package artifacts with restrictive response policy.
@@ -65,7 +65,7 @@ complete until the acceptance checks below pass with a production Napplet.
 
 ## Identity lifecycle
 
-- [ ] Push account changes through the NAP-IDENTITY channel.
+- [x] Push account changes through the NAP-IDENTITY channel.
   - Send the signed-out sentinel and active public key through the standard
     identity-change envelope.
   - Notify every eligible live Napplet after login, logout, or account switch.
@@ -74,8 +74,8 @@ complete until the acceptance checks below pass with a production Napplet.
 
 ## Completion gate
 
-- [ ] Run these checks against at least one built STLstr Napplet, not only the
+- [x] Run these checks against at least one built STLstr Napplet, not only the
       synthetic reference fixture.
-- [ ] Pass unit, conformance, and browser suites with frozen dependencies.
-- [ ] Document supported NAP versions and any deliberate unsupported optional
+- [x] Pass unit, conformance, and browser suites with frozen dependencies.
+- [x] Document supported NAP versions and any deliberate unsupported optional
       domains.
