@@ -68,8 +68,7 @@ export interface PersistentAccountManager {
   close(): Promise<void>;
 }
 
-export async function createPersistentAccountManager(store: AccountSnapshotStore): Promise<PersistentAccountManager> {
-  const manager = new AccountManager();
+export async function createPersistentAccountManager(store: AccountSnapshotStore, manager = new AccountManager()): Promise<PersistentAccountManager> {
   registerCommonAccountTypes(manager);
   const restored = await store.load();
   if (restored) {

@@ -4,6 +4,7 @@ import type { Subscription } from "rxjs";
 import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 import { createNostrEngine, type EngineOptions, type NostrEngine } from "./engine.js";
 import { createPersistentAccountManager, IndexedDbAccountSnapshotStore } from "./account-persistence.js";
+import { AccountManager } from "applesauce-accounts";
 
 export interface EventCache {
   start(): Promise<void>;
@@ -43,22 +44,25 @@ export async function attachEventCache(engine: NostrEngine, cache: EventCache, h
 export interface PersistentEngineOptions extends EngineOptions { readonly maximumCachedEvents?: number; readonly hydrateLimit?: number; readonly databaseName?: string }
 
 export async function createPersistentNostrEngine(options: PersistentEngineOptions = {}): Promise<NostrEngine> {
-  const accountStore = await IndexedDbAccountSnapshotStore.open();
-  let persistentAccounts: Awaited<ReturnType<typeof createPersistentAccountManager>>;
-  try { persistentAccounts = await createPersistentAccountManager(accountStore); }
-  catch (error) { accountStore.close(); throw error; }
+  const database = await openDB(options.databaseName ?? PUBLIC_EVENT_DATABASE_NAME);
+  const accountManager = new AccountManager();
   const engineOptions: EngineOptions = {
     ...(options.verifyEvent ? { verifyEvent: options.verifyEvent } : {}),
     ...(options.relayPolicy ? { relayPolicy: options.relayPolicy } : {}),
     ...(options.telemetry ? { telemetry: options.telemetry } : {}),
-    accountManager: persistentAccounts.manager
+    accountManager
   };
   const engine = createNostrEngine(engineOptions);
-  let database: Awaited<ReturnType<typeof openDB>>;
-  try { database = await openDB(options.databaseName ?? PUBLIC_EVENT_DATABASE_NAME); }
-  catch (error) { await engine.close(); await persistentAccounts.close(); throw error; }
+  let accountStore: IndexedDbAccountSnapshotStore;
+  try { accountStore = await IndexedDbAccountSnapshotStore.open(); }
+  catch (error) { await engine.close(); database.close(); throw error; }
+  let persistentAccounts: Awaited<ReturnType<typeof createPersistentAccountManager>>;
+  try { persistentAccounts = await createPersistentAccountManager(accountStore, accountManager); }
+  catch (error) { accountStore.close(); await engine.close(); database.close(); throw error; }
   const cache = new NostrIDB<NostrEvent>(database, { maxEvents: options.maximumCachedEvents ?? 100_000 });
-  const persistent = await attachEventCache(engine, cache, options.hydrateLimit ?? 10_000);
+  let persistent: NostrEngine;
+  try { persistent = await attachEventCache(engine, cache, options.hydrateLimit ?? 10_000); }
+  catch (error) { await persistentAccounts.close(); await engine.close(); database.close(); throw error; }
   let closed = false;
   return {
     ...persistent,
