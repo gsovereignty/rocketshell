@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { validateManifestEvent } from "@napplet/conformance";
-import { MemoryPackageStore, PackageInstaller, aggregateHash, parseManifest, routeNappletRequest, sha256, virtualNappletUrl, type SignedManifest } from "../src/index.js";
+import { MemoryPackageStore, NappletWindowManager, PackageInstaller, aggregateHash, parseManifest, routeNappletRequest, sha256, virtualNappletUrl, type SignedManifest } from "../src/index.js";
+import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 async function fixture(html = "<h1>Hello</h1>"): Promise<{ event: SignedManifest; inputs: Map<string, { bytes: Uint8Array }> }> {
   const bytes = new TextEncoder().encode(html);
@@ -56,5 +57,19 @@ describe("package gateway", () => {
     expect(parseManifest(optional, () => true).requires).toContain("notify");
     const unknown = { ...event, content: JSON.stringify({ ...content, requires: ["identity", "not-real"] }) };
     expect(() => parseManifest(unknown, () => true)).toThrow("Invalid required domain");
+  });
+  it("removes a registered window when bridge readiness fails", async () => {
+    const store = new MemoryPackageStore(); const input = await fixture();
+    await new PackageInstaller(store, () => true).install(input.event, input.inputs);
+    const iframe = { setAttribute: vi.fn(), remove: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
+    vi.stubGlobal("document", { createElement: () => iframe });
+    const telemetry = createPlatformTelemetry();
+    const manager = new NappletWindowManager(store, {
+      register: vi.fn(), waitUntilReady: vi.fn(async () => { throw new Error("not ready"); }), unregister: vi.fn()
+    }, { append: vi.fn() } as unknown as HTMLElement, "/shell/", telemetry);
+    await expect(manager.create("hello/world")).rejects.toThrow("not ready");
+    expect(manager.listWindowIds()).toEqual([]);
+    expect(telemetry.snapshot().filter((record) => record.name === "window.active").map((record) => record.value)).toEqual([1, -1]);
+    vi.unstubAllGlobals();
   });
 });

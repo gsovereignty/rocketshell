@@ -1,5 +1,6 @@
 import { SubscriptionRegistry } from "@project/platform-nap-contract";
 import type { PlatformDomain } from "@project/platform-nap-contract";
+import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-contract";
 import { artifactResponse } from "./response-builder.js";
 import type { PackageStore } from "./types.js";
 import { virtualNappletUrl } from "./virtual-url.js";
@@ -30,7 +31,7 @@ export class NappletWindowManager {
   readonly #windows = new Map<string, ManagedNappletWindow>();
   #closed = false;
 
-  constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string) {}
+  constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string, private readonly telemetry: PlatformTelemetry = NOOP_TELEMETRY) {}
 
   findByDTag(dTag: string): ManagedNappletWindow | undefined {
     return [...this.#windows.values()].find((window) => window.identity.dTag === dTag);
@@ -76,9 +77,13 @@ export class NappletWindowManager {
       const ready = this.bridge.waitUntilReady(identity);
       const managed = { identity, iframe, resources: new SubscriptionRegistry(), ready };
       this.#windows.set(windowId, managed);
+      this.telemetry.record("window.active", 1, { dTag: identity.dTag });
       await ready;
       return managed;
-    } catch (error) { this.bridge.unregister(windowId); iframe.remove(); throw error; }
+    } catch (error) {
+      if (this.#windows.delete(windowId)) this.telemetry.record("window.active", -1, { dTag: installation.dTag });
+      this.bridge.unregister(windowId); iframe.remove(); throw error;
+    }
   }
 
   destroy(windowId: string): void {
@@ -86,6 +91,8 @@ export class NappletWindowManager {
     if (!managed) return;
     this.#windows.delete(windowId);
     managed.resources.close(); this.bridge.unregister(windowId); managed.iframe.remove();
+    this.telemetry.record("window.active", -1, { dTag: managed.identity.dTag });
+    this.telemetry.record("subscription.cleanup", 1, { operation: "window-destroy" });
   }
 
   close(): void {
