@@ -60,7 +60,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
         event: (event) => events.push(event), eose: () => { resolve(events); handle?.close(); }
       }, 15_000, engine.telemetry);
     });
-  });
+  }, { telemetry: engine.telemetry });
   const outboxPool = createOutboxRelayPool(engine, readRelays, writeRelays);
   const outboxRouter = createRelayPoolOutboxRouter({
     relayPool: outboxPool,

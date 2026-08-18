@@ -46,11 +46,13 @@ describe("relay-list resolution", () => {
   });
   it("caches missing relay lists for the negative freshness window", async () => {
     const store = new EventStore({ verifyEvent }); const query = vi.fn(async (): Promise<readonly NostrEvent[]> => []);
-    const resolver = createRelayListResolver(store, createEventIngress(store, verifyEvent), createRelayPolicy(), ["wss://discovery.example"], query, { now: () => 100_000 });
+    const telemetry = createPlatformTelemetry();
+    const resolver = createRelayListResolver(store, createEventIngress(store, verifyEvent), createRelayPolicy(), ["wss://discovery.example"], query, { now: () => 100_000, telemetry });
     const pubkey = "11".repeat(32);
     expect((await resolver.resolve([pubkey])).get(pubkey)).toBeUndefined();
     expect((await resolver.resolve([pubkey])).get(pubkey)).toBeUndefined();
     expect(query).toHaveBeenCalledOnce(); store.dispose();
+    expect(telemetry.snapshot().map((record) => record.name)).toEqual(["relay-list.miss", "relay-list.negative", "relay-list.hit", "relay-list.negative"]);
   });
   it("uses a stale stored list without disguising it as fresh", async () => {
     let now = 10_000; const key = generateSecretKey();
