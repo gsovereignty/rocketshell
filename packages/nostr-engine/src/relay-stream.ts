@@ -3,6 +3,7 @@ import type { Filter } from "applesauce-core/helpers/filter";
 import type { GroupReqMessage } from "applesauce-relay";
 import type { Observable, Subscription } from "rxjs";
 import type { EventIngress } from "./event-ingress.js";
+import { validateFilters } from "./request-limits.js";
 
 export interface RelayRequestSource {
   req(relays: string[], filters: Filter | Filter[]): Observable<GroupReqMessage>;
@@ -18,6 +19,7 @@ export interface RelayStreamHandle { readonly closed: boolean; close(): void }
 
 export function openRelayStream(source: RelayRequestSource, ingress: EventIngress, relays: readonly string[], filters: Filter | Filter[], callbacks: RelayStreamCallbacks, timeoutMs = 4_000): RelayStreamHandle {
   const selected = [...new Set(relays)];
+  const validatedFilters = validateFilters(filters);
   const barriers = new Set<string>(); const delivered = new Set<string>();
   let closed = false; let eoseSent = false; let subscription: Subscription | undefined;
   const emitEose = (partial: boolean): void => {
@@ -38,7 +40,7 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
     barriers.add(relay);
     if (barriers.size === selected.length) { clearTimeout(timer); emitEose(false); }
   };
-  subscription = source.req(selected, filters).subscribe({
+  subscription = source.req(selected, validatedFilters).subscribe({
     next(message) {
       if (closed) return;
       if (message.type === "EVENT") {

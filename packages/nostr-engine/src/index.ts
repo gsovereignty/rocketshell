@@ -6,3 +6,4 @@ export * from "./relay-lists.js";
 export * from "./relay-publish.js";
 export * from "./relay-stream.js";
 export * from "./persistence.js";
+export * from "./request-limits.js";
