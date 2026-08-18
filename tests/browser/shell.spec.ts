@@ -111,8 +111,10 @@ test("coordinate loader reports malformed input without opening a window", async
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   await page.locator("#coordinate").fill("not-a-coordinate");
-  await page.getByRole("button", { name: "Open Napplet" }).click();
+  const openButton = page.getByRole("button", { name: "Open Napplet" });
+  await expect(openButton).toBeEnabled();
+  await openButton.click();
   await expect(page.locator("#loader-status")).toHaveAttribute("data-state", "error");
-  await expect(page.locator("#loader-status")).toHaveText("Use kind:pubkey:identifier");
+  await expect(page.locator("#loader-status")).toHaveText("Use naddr or kind:pubkey:identifier");
   await expect(page.locator("#windows iframe")).toHaveCount(1);
 });

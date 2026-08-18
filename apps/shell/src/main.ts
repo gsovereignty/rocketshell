@@ -20,7 +20,6 @@ void bootstrap().then((platform) => {
   if (import.meta.env.VITE_INSTALL_FIXTURE === "true") {
     Object.defineProperty(window, "__platformTest", { value: platform, configurable: true });
   }
-  if (status) status.textContent = "Platform ready";
   if (button) button.disabled = false;
 
   const renderAccount = (): void => {
@@ -67,6 +66,7 @@ void bootstrap().then((platform) => {
   };
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
+  if (status) status.textContent = "Platform ready";
   const initialCoordinate = new URL(location.href).searchParams.get("napplet");
   if (initialCoordinate && input) { input.value = initialCoordinate; void openCoordinate(); }
 }).catch((error: unknown) => {
