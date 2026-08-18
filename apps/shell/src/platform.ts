@@ -4,28 +4,28 @@ import { createPlatformShellAdapter, registerCoreServices } from "@platform/keht
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
 import { installFixture } from "./fixture.js";
+import { createReadyRegistry } from "./ready-registry.js";
 
 function relayUrls(raw: string | undefined): string[] { return (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean); }
 
 class BrowserWindowBridge implements WindowBridge {
-  readonly #ready = new Map<string, { identity: WindowIdentity; resolve: () => void; promise: Promise<void> }>();
+  readonly #ready = createReadyRegistry();
   constructor(private readonly shell: ShellBridge) {}
   register(identity: WindowIdentity): void {
     originRegistry.register(identity.source, identity.windowId, { dTag: identity.dTag, aggregateHash: identity.aggregateHash });
-    let resolve: () => void = () => {}; const promise = new Promise<void>((done) => { resolve = done; });
-    this.#ready.set(identity.windowId, { identity, resolve, promise });
+    this.#ready.register(identity.windowId);
   }
   waitUntilReady(identity: WindowIdentity): Promise<void> {
-    const pending = this.#ready.get(identity.windowId); if (!pending) return Promise.reject(new Error("Window identity not registered"));
-    return pending.promise;
+    return this.#ready.wait(identity.windowId);
   }
   accept(event: MessageEvent): void {
     if (!event.data || typeof event.data !== "object" || event.data.type !== "shell.ready") return;
     const windowId = event.source instanceof Window ? originRegistry.getWindowId(event.source) : undefined;
-    if (windowId) this.#ready.get(windowId)?.resolve();
+    if (!windowId) return;
+    this.#ready.resolve(windowId);
   }
   unregister(windowId: string): void {
-    this.#ready.delete(windowId); this.shell.runtime.destroyWindow(windowId); originRegistry.unregister(windowId);
+    this.#ready.remove(windowId); this.shell.runtime.destroyWindow(windowId); originRegistry.unregister(windowId);
   }
 }
 
