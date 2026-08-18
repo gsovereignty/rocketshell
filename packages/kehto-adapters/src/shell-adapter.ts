@@ -62,13 +62,15 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
         const handle = openRelayStream(engine.relayPool, engine.ingress, [relay], filters as Filter[], {
           event: (event) => sourceWindow.postMessage(["EVENT", subId, event], "*"),
           eose: () => sourceWindow.postMessage(["EOSE", subId], "*")
-        }, 15_000);
+        }, 15_000, engine.telemetry);
         scoped.set(windowId, { relay, close: () => handle.close() });
       },
       closeScopedRelay(windowId) { scoped.get(windowId)?.close(); scoped.delete(windowId); },
       async publishToScopedRelay(windowId, event) {
         const entry = scoped.get(windowId); if (!entry) return false;
         const outcomes = await engine.relayPool.publish([entry.relay], event as NostrEvent, { retries: false });
+        for (const outcome of outcomes) engine.telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
+        if (!outcomes.some((outcome) => outcome.ok)) engine.telemetry.record("publication.failed", 1, { relayCount: 1 });
         return outcomes.some((outcome) => outcome.ok);
       },
       selectRelayTier: () => [...read]

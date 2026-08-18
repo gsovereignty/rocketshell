@@ -4,6 +4,7 @@ import type { GroupReqMessage } from "applesauce-relay";
 import type { Observable, Subscription } from "rxjs";
 import type { EventIngress } from "./event-ingress.js";
 import { validateFilters } from "./request-limits.js";
+import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-contract";
 
 export interface RelayRequestSource {
   req(relays: string[], filters: Filter | Filter[]): Observable<GroupReqMessage>;
@@ -17,14 +18,18 @@ export interface RelayStreamCallbacks {
 }
 export interface RelayStreamHandle { readonly closed: boolean; close(): void }
 
-export function openRelayStream(source: RelayRequestSource, ingress: EventIngress, relays: readonly string[], filters: Filter | Filter[], callbacks: RelayStreamCallbacks, timeoutMs = 4_000): RelayStreamHandle {
+export function openRelayStream(source: RelayRequestSource, ingress: EventIngress, relays: readonly string[], filters: Filter | Filter[], callbacks: RelayStreamCallbacks, timeoutMs = 4_000, telemetry: PlatformTelemetry = NOOP_TELEMETRY): RelayStreamHandle {
   const selected = [...new Set(relays)];
   const validatedFilters = validateFilters(filters);
   const barriers = new Set<string>(); const delivered = new Set<string>();
+  const startedAt = Date.now(); let firstEvent = false;
   let closed = false; let eoseSent = false; let subscription: Subscription | undefined;
   const emitEose = (partial: boolean): void => {
     if (closed || eoseSent) return;
     eoseSent = true;
+    const elapsed = Date.now() - startedAt;
+    telemetry.record("query.eose", elapsed, { partial });
+    telemetry.record("query.completed", elapsed, { partial });
     callbacks.eose({ partial, pendingRelays: selected.filter((relay) => !barriers.has(relay)) });
   };
   if (selected.length === 0) {
@@ -35,6 +40,7 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
     };
   }
   const timer = setTimeout(() => emitEose(barriers.size < selected.length), timeoutMs);
+  telemetry.record("subscription.active", 1, { relayCount: selected.length });
   const barrier = (relay: string): void => {
     if (!selected.includes(relay)) return;
     barriers.add(relay);
@@ -42,9 +48,10 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
   };
   subscription = source.req(selected, validatedFilters).subscribe({
     next(message) {
-      if (closed) return;
+      if (closed) { telemetry.record("callback.suppressed", 1, { operation: "relay-stream" }); return; }
       if (!message || typeof message !== "object" || typeof message.type !== "string") return;
       if (message.type === "EVENT" && typeof message.from === "string" && message.event && typeof message.event === "object") {
+        if (!firstEvent) { firstEvent = true; telemetry.record("query.first-event", Date.now() - startedAt); }
         const admitted = ingress.admit(message.event, message.from);
         if (admitted && !delivered.has(admitted.id)) { delivered.add(admitted.id); callbacks.event(admitted); }
       } else if ((message.type === "EOSE" || message.type === "CLOSED") && typeof message.from === "string") barrier(message.from);
@@ -57,6 +64,11 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
   });
   return {
     get closed() { return closed; },
-    close() { if (closed) return; closed = true; clearTimeout(timer); subscription?.unsubscribe(); }
+    close() {
+      if (closed) return;
+      closed = true; clearTimeout(timer); subscription?.unsubscribe();
+      telemetry.record("subscription.active", -1, { relayCount: selected.length });
+      telemetry.record("subscription.cleanup", 1, { operation: "relay-stream" });
+    }
   };
 }

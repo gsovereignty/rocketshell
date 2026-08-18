@@ -13,12 +13,14 @@ export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly 
   return {
     subscribe(filters: Filter[], relayUrls: string[], callback: (item: CoreNostrEvent | "EOSE") => void) {
       const selected = engine.relayPolicy.select(relayUrls, "read");
-      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, { event: callback, eose: () => callback("EOSE") }, 15_000);
+      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, { event: callback, eose: () => callback("EOSE") }, 15_000, engine.telemetry);
       return { unsubscribe: () => handle.close() };
     },
     async publish(event: CoreNostrEvent, relayUrls: string[]) {
       const selected = engine.relayPolicy.select(relayUrls, "write");
       const outcomes = await engine.relayPool.publish(selected, event, { retries: false });
+      for (const outcome of outcomes) engine.telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
+      if (!outcomes.some((outcome) => outcome.ok)) engine.telemetry.record("publication.failed", 1, { relayCount: selected.length });
       return Object.fromEntries(outcomes.map((outcome) => [outcome.from, outcome.ok]));
     },
     isAvailable: () => readRelays.length > 0 || writeRelays.length > 0
@@ -29,13 +31,13 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
   const readRelays = engine.relayPolicy.select(options.directReadRelays, "read");
   const writeRelays = engine.relayPolicy.select(options.directWriteRelays, "write");
   const discoveryRelays = engine.relayPolicy.select(options.discoveryRelays ?? [], "discovery");
-  const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress);
+  const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress, 1, engine.telemetry);
   const relayService = createRelayPoolService({
     subscribe(filters, callback, relayUrls) {
       const selected = engine.relayPolicy.select(relayUrls?.length ? relayUrls : readRelays, "read");
       const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters as Filter[], {
         event: (event) => callback(event), eose: () => callback("EOSE")
-      }, 15_000);
+      }, 15_000, engine.telemetry);
       return { unsubscribe: () => handle.close() };
     },
     async publish(event) { await publisher.publishSigned(writeRelays, event as CoreNostrEvent); },
@@ -56,7 +58,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
       let handle: { close(): void } | undefined;
       handle = openRelayStream(engine.relayPool, engine.ingress, relays, [{ kinds: [10002], authors: [...authors] }], {
         event: (event) => events.push(event), eose: () => { resolve(events); handle?.close(); }
-      }, 15_000);
+      }, 15_000, engine.telemetry);
     });
   });
   const outboxPool = createOutboxRelayPool(engine, readRelays, writeRelays);

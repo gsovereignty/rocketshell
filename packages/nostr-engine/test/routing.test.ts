@@ -3,6 +3,7 @@ import type { NostrEvent } from "applesauce-core/helpers/event";
 import { finalizeEvent, generateSecretKey, verifyEvent } from "nostr-tools/pure";
 import { describe, expect, it, vi } from "vitest";
 import { createEventIngress, createRelayListResolver, createRelayPolicy, createRelayPublisher } from "../src/index.js";
+import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 describe("publication", () => {
   it("signs once, waits for outcomes, and reuses signed event on retry", async () => {
@@ -17,9 +18,11 @@ describe("publication", () => {
   });
   it("rejects total relay failure", async () => {
     const store = new EventStore({ verifyEvent }); const ingress = createEventIngress(store, verifyEvent);
+    const telemetry = createPlatformTelemetry();
     const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
-    const publisher = createRelayPublisher({ publish: async () => [{ ok: false, from: "wss://relay.example", message: "no" }] }, { sign: async () => event } as never, ingress);
+    const publisher = createRelayPublisher({ publish: async () => [{ ok: false, from: "wss://relay.example", message: "no" }] }, { sign: async () => event } as never, ingress, 1, telemetry);
     await expect(publisher.publishTemplate(["wss://relay.example"], { kind: 1, created_at: 1, content: "publish", tags: [] })).rejects.toThrow("publish-rejected");
+    expect(telemetry.snapshot().map((record) => record.name)).toEqual(["publication.outcome", "publication.failed"]);
     store.dispose();
   });
   it("rejects an invalid signed event before transport", async () => {
