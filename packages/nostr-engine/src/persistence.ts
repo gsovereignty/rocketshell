@@ -3,6 +3,7 @@ import { NostrIDB, openDB } from "nostr-idb";
 import type { Subscription } from "rxjs";
 import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 import { createNostrEngine, type EngineOptions, type NostrEngine } from "./engine.js";
+import { createPersistentAccountManager, IndexedDbAccountSnapshotStore } from "./account-persistence.js";
 
 export interface EventCache {
   start(): Promise<void>;
@@ -42,13 +43,20 @@ export async function attachEventCache(engine: NostrEngine, cache: EventCache, h
 export interface PersistentEngineOptions extends EngineOptions { readonly maximumCachedEvents?: number; readonly hydrateLimit?: number; readonly databaseName?: string }
 
 export async function createPersistentNostrEngine(options: PersistentEngineOptions = {}): Promise<NostrEngine> {
+  const accountStore = await IndexedDbAccountSnapshotStore.open();
+  let persistentAccounts: Awaited<ReturnType<typeof createPersistentAccountManager>>;
+  try { persistentAccounts = await createPersistentAccountManager(accountStore); }
+  catch (error) { accountStore.close(); throw error; }
   const engineOptions: EngineOptions = {
     ...(options.verifyEvent ? { verifyEvent: options.verifyEvent } : {}),
     ...(options.relayPolicy ? { relayPolicy: options.relayPolicy } : {}),
-    ...(options.telemetry ? { telemetry: options.telemetry } : {})
+    ...(options.telemetry ? { telemetry: options.telemetry } : {}),
+    accountManager: persistentAccounts.manager
   };
   const engine = createNostrEngine(engineOptions);
-  const database = await openDB(options.databaseName ?? PUBLIC_EVENT_DATABASE_NAME);
+  let database: Awaited<ReturnType<typeof openDB>>;
+  try { database = await openDB(options.databaseName ?? PUBLIC_EVENT_DATABASE_NAME); }
+  catch (error) { await engine.close(); await persistentAccounts.close(); throw error; }
   const cache = new NostrIDB<NostrEvent>(database, { maxEvents: options.maximumCachedEvents ?? 100_000 });
   const persistent = await attachEventCache(engine, cache, options.hydrateLimit ?? 10_000);
   let closed = false;
@@ -56,7 +64,12 @@ export async function createPersistentNostrEngine(options: PersistentEngineOptio
     ...persistent,
     async close() {
       if (closed) return;
-      closed = true; await persistent.close(); database.close();
+      closed = true;
+      try { await persistent.close(); }
+      finally {
+        try { await persistentAccounts.close(); }
+        finally { database.close(); }
+      }
     }
   };
 }

@@ -18,14 +18,14 @@ export interface NostrEngine {
   close(): Promise<void>;
 }
 
-export interface EngineOptions { readonly verifyEvent?: VerifyNostrEvent; readonly relayPolicy?: RelayPolicyOptions; readonly telemetry?: PlatformTelemetry }
+export interface EngineOptions { readonly verifyEvent?: VerifyNostrEvent; readonly relayPolicy?: RelayPolicyOptions; readonly telemetry?: PlatformTelemetry; readonly accountManager?: AccountManager }
 
 export function createNostrEngine(options: EngineOptions = {}): NostrEngine {
   const verification = options.verifyEvent ?? verifyEvent;
   const telemetry = options.telemetry ?? createPlatformTelemetry();
   const eventStore = new EventStore({ verifyEvent: verification });
   const relayPool = new RelayPool();
-  const accounts = createAccountController(new AccountManager());
+  const accounts = createAccountController(options.accountManager ?? new AccountManager());
   const authenticator = createRelayAuthenticator(relayPool, accounts, undefined, telemetry);
   const ingress = createEventIngress(eventStore, verification, telemetry);
   const relayPolicy = createRelayPolicy(options.relayPolicy);
