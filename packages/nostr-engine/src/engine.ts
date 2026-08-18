@@ -5,6 +5,7 @@ import { verifyEvent } from "nostr-tools/pure";
 import { createAccountController, type AccountController } from "./accounts.js";
 import { createEventIngress, type EventIngress, type VerifyNostrEvent } from "./event-ingress.js";
 import { createRelayPolicy, type RelayPolicy, type RelayPolicyOptions } from "./relay-policy.js";
+import { createRelayAuthenticator } from "./relay-auth.js";
 
 export interface NostrEngine {
   readonly relayPool: RelayPool;
@@ -22,6 +23,7 @@ export function createNostrEngine(options: EngineOptions = {}): NostrEngine {
   const eventStore = new EventStore({ verifyEvent: verification });
   const relayPool = new RelayPool();
   const accounts = createAccountController(new AccountManager());
+  const authenticator = createRelayAuthenticator(relayPool, accounts);
   const ingress = createEventIngress(eventStore, verification);
   const relayPolicy = createRelayPolicy(options.relayPolicy);
   let closed = false;
@@ -30,7 +32,7 @@ export function createNostrEngine(options: EngineOptions = {}): NostrEngine {
     async close() {
       if (closed) return;
       closed = true;
-      accounts.close(); relayPool.close(); eventStore.dispose();
+      authenticator.close(); accounts.close(); relayPool.close(); eventStore.dispose();
     }
   };
 }
