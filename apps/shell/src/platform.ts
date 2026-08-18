@@ -123,13 +123,16 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     location.reload();
     return new Promise<BrowserPlatform>(() => {});
   }
-  if (fixtureDTag) await windows.create(fixtureDTag);
+  let fixturePending = fixtureDTag !== undefined;
   const updates = coordinateServiceWorkerUpdates(registration, navigator.serviceWorker, {
-    activeWindowCount: () => windows?.listWindowIds().length ?? 0,
+    activeWindowCount: () => (windows?.listWindowIds().length ?? 0) + (fixturePending ? 1 : 0),
     closeWindows: () => windows?.close(),
-    confirmActivation: () => window.confirm("Platform update ready. Close active Napplet windows and reload now?"),
+    confirmActivation: () => !fixturePending && window.confirm("Platform update ready. Close active Napplet windows and reload now?"),
     reload: () => location.reload()
   });
+  if (fixtureDTag) {
+    void windows.create(fixtureDTag).finally(() => { fixturePending = false; updates.check(); });
+  }
   let closed = false;
   return {
     windows,
