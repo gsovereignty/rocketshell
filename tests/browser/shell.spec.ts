@@ -55,7 +55,7 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   await expect(frame.locator("#fixture-status")).toHaveText("ready");
   const dataset = await frame.locator("html").evaluate((element) => ({ ...element.dataset }));
   expect(dataset.resourceError).toBe("");
-  expect(dataset).toMatchObject({ origin: "null", nostr: "undefined", storageBlocked: "true", hostDomBlocked: "true", fetchBlocked: "true", websocketBlocked: "true", relayQueried: "true", resourceFetched: "true", resourceObjectUrl: "true", resourceRevoked: "true", pubkey: "", intentReceived: "true", intentStructured: "true", platformProfile: "true", optionalAbsent: "true" });
+  expect(dataset).toMatchObject({ origin: "null", nostr: "undefined", storageBlocked: "true", persistenceSealed: "true", hostDomBlocked: "true", fetchBlocked: "true", websocketBlocked: "true", relayQueried: "true", resourceFetched: "true", resourceObjectUrl: "true", resourceRevoked: "true", pubkey: "", intentReceived: "true", intentStructured: "true", platformProfile: "true", optionalAbsent: "true" });
   expect(await page.locator("iframe").getAttribute("data-virtual-url")).toMatch(/^\/shell\/__napplet__\/platform-fixture\/[a-f0-9]{64}\/index\.html$/);
   expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
 });

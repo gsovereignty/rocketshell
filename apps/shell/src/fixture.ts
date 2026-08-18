@@ -4,8 +4,9 @@ import { finalizeEvent } from "nostr-tools/pure";
 const encoder = new TextEncoder();
 const script = (resourceUrl: string): string => `
 const status = document.querySelector("#fixture-status");
-const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, relayQueried: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, intentStructured: false, platformProfile: false, optionalAbsent: false };
+const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, persistenceSealed: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, relayQueried: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, intentStructured: false, platformProfile: false, optionalAbsent: false };
 try { localStorage.setItem("x", "x"); } catch { results.storageBlocked = true; }
+results.persistenceSealed = typeof localStorage === "undefined" && typeof sessionStorage === "undefined" && typeof indexedDB === "undefined" && typeof caches === "undefined";
 try { void window.parent.document.body; } catch { results.hostDomBlocked = true; }
 try { await fetch("https://example.com/"); } catch { results.fetchBlocked = true; }
 try { const socket = new WebSocket("wss://example.com/"); await new Promise((resolve) => { socket.onerror = resolve; setTimeout(resolve, 500); }); if (socket.readyState !== WebSocket.OPEN) results.websocketBlocked = true; socket.close(); } catch { results.websocketBlocked = true; }

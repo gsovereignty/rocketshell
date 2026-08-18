@@ -20,12 +20,13 @@ test("runs built STLstr Napplet with exact manifest environment", async ({ page 
       required: required.every((domain) => window.napplet.shell.supports(domain)),
       undeclared: undeclared.every((domain) => !window.napplet.shell.supports(domain)),
       directFetchBlocked, storageBlocked, hostDomBlocked,
-      nostr: typeof window.nostr
+      nostr: typeof window.nostr,
+      persistenceSealed: typeof localStorage === "undefined" && typeof sessionStorage === "undefined" && typeof indexedDB === "undefined" && typeof caches === "undefined"
     };
   });
   expect(evidence).toEqual({
     origin: "null", required: true, undeclared: true,
     directFetchBlocked: true, storageBlocked: true, hostDomBlocked: true,
-    nostr: "undefined"
+    nostr: "undefined", persistenceSealed: true
   });
 });

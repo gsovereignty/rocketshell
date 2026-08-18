@@ -4,7 +4,7 @@ export const NAPPLET_CSP = "default-src 'none'; script-src 'self'; style-src 'se
 
 const escapeAttribute = (value: string): string => value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
 
-const SEALED_GLOBALS = ["nostr", "fetch", "WebSocket", "EventSource", "XMLHttpRequest", "__platformTestSignEvent"] as const;
+const SEALED_GLOBALS = ["nostr", "fetch", "WebSocket", "EventSource", "XMLHttpRequest", "localStorage", "sessionStorage", "indexedDB", "caches", "__platformTestSignEvent"] as const;
 const sealedGlobalsPrelude = `<script>(()=>{for(const key of ${JSON.stringify(SEALED_GLOBALS)}){try{Object.defineProperty(globalThis,key,{value:undefined,writable:false,configurable:false})}catch{try{globalThis[key]=undefined}catch{}}}})();</script>`;
 
 const toBase64 = (bytes: Uint8Array): string => {
