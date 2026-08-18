@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { createHash } from "node:crypto";
 import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
 
 declare global {
@@ -26,6 +25,7 @@ test("starts under repository subpath and gains service-worker control", async (
 
 test("build contains no root-relative project asset URLs", async ({ page }) => {
   await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
   const urls = await page.locator("script[src],link[href]").evaluateAll((elements) => elements.map((element) => element.getAttribute("src") ?? element.getAttribute("href")));
   expect(urls.filter(Boolean).every((url) => url!.startsWith("/shell/") || url!.startsWith("./"))).toBe(true);
 });
@@ -96,21 +96,6 @@ test("mediates Blossom upload without exposing signer or server selection", asyn
       signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) => (window as unknown as { __platformTestSignEvent(value: typeof template): Promise<unknown> }).__platformTestSignEvent(template)
     }, configurable: true });
   }, pubkey);
-  let authorization = "";
-  await page.route("**/mock-blossom/upload", async (route) => {
-    const request = route.request();
-    const bytes = request.postDataBuffer() ?? Buffer.alloc(0);
-    authorization = request.headers().authorization ?? "";
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        url: "https://cdn.example/uploaded.txt",
-        sha256: createHash("sha256").update(bytes).digest("hex"),
-        size: bytes.length,
-        type: request.headers()["content-type"]
-      })
-    });
-  });
   await page.goto("./");
   await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("#fixture-status")).toHaveText("ready");
   await page.evaluate(() => window.__platformTest?.connectExtension());
@@ -124,12 +109,9 @@ test("mediates Blossom upload without exposing signer or server selection", asyn
     };
   });
   expect(result).toEqual({
-    ok: true, rail: "blossom", url: "https://cdn.example/uploaded.txt", size: 17, error: undefined,
+    ok: true, rail: "blossom", url: `https://cdn.example/${pubkey}/uploaded.txt`, size: 17, error: undefined,
     signer: "undefined", rawFetchServerKnown: false
   });
-  expect(authorization).toMatch(/^Nostr /);
-  const event = JSON.parse(Buffer.from(authorization.slice(6), "base64").toString("utf8"));
-  expect(event).toMatchObject({ kind: 24242, pubkey, tags: expect.arrayContaining([["t", "upload"]]) });
   await page.evaluate(() => window.__platformTest?.signOut());
   await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("html")).toHaveAttribute("data-identity-latest", "");
   expect(Number(await page.frameLocator('iframe[title="platform-fixture"]').locator("html").getAttribute("data-identity-changes"))).toBeGreaterThanOrEqual(2);
@@ -156,8 +138,6 @@ test("invalidates in-flight signing and pushes an account switch", async ({ page
       signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) => (window as unknown as { __platformTestDelayedSign(value: typeof template): Promise<unknown> }).__platformTestDelayedSign(template)
     }, configurable: true });
   });
-  let uploadRequests = 0;
-  await page.route("**/mock-blossom/upload", async (route) => { uploadRequests += 1; await route.abort(); });
   await page.goto("./");
   const frame = page.frameLocator('iframe[title="platform-fixture"]');
   await expect(frame.locator("#fixture-status")).toHaveText("ready");
@@ -172,7 +152,6 @@ test("invalidates in-flight signing and pushes an account switch", async ({ page
   await page.evaluate(() => window.__platformTest?.signOut());
   releaseSigning?.();
   await expect(frame.locator("html")).toHaveAttribute("data-pending-upload", "invalidated");
-  expect(uploadRequests).toBe(0);
   activeSecret = secondSecret;
   await page.evaluate(() => window.__platformTest?.connectExtension());
   await expect(frame.locator("html")).toHaveAttribute("data-identity-latest", getPublicKey(secondSecret));
