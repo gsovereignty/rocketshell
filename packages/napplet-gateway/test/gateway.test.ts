@@ -25,13 +25,24 @@ describe("package gateway", () => {
     const aggregate = "a88be8c8a4e52d3e390c3bbba921070803c568666ebff4c273efced38fb437cc";
     const event: SignedManifest = {
       id: "0".repeat(64), pubkey: "1".repeat(64), created_at: 1, kind: 35129, content: "", sig: "2".repeat(128),
-      tags: [["d", "good-morning"], ["path", "/index.html", hash], ["x", aggregate, "aggregate"], ["title", "Good Morning Protocol"], ["requires", "identity"]]
+      tags: [["d", "good-morning"], ["path", "/index.html", hash], ["x", aggregate, "aggregate"], ["title", "Good Morning Protocol"], ["requires", "identity"], ["archetype", "greeting", "napplet:greeting/open"], ["archetype", "greeting", "napplet:greeting/edit"]]
     };
     expect(parseManifest(event, () => true)).toEqual({
       dTag: "good-morning", title: "Good Morning Protocol", aggregateHash: aggregate, entrypoint: "index.html",
-      requires: ["identity"], artifacts: [{ path: "index.html", sha256: hash, mediaType: "text/html" }]
+      requires: ["identity"], artifacts: [{ path: "index.html", sha256: hash, mediaType: "text/html" }],
+      archetypes: [{ slug: "greeting", convention: "napplet:greeting/open" }, { slug: "greeting", convention: "napplet:greeting/edit" }]
     });
     expect(await aggregateHash([{ path: "index.html", sha256: hash }])).toBe(aggregate);
+  });
+  it("rejects archetype content that disagrees with signed tags", async () => {
+    const { event } = await fixture();
+    const content = JSON.parse(event.content) as Record<string, unknown>;
+    const mismatched = {
+      ...event,
+      tags: [...event.tags, ["archetype", "viewer", "napplet:viewer/open"]],
+      content: JSON.stringify({ ...content, archetypes: [{ slug: "editor", convention: "napplet:editor/open" }] })
+    };
+    expect(() => parseManifest(mismatched, () => true)).toThrow("archetype tags do not match content");
   });
   it("downloads tag-only manifests from signed servers before atomic install", async () => {
     const bytes = new TextEncoder().encode("<h1>Remote</h1>");

@@ -68,17 +68,30 @@ export function parseManifest(event: SignedManifest, verifier: EventVerifier = v
   if (!paths.has(entrypoint)) throw new TypeError("Entrypoint is not declared");
   const title = candidate?.title ?? event.tags.find((tag) => tag[0] === "title")?.[1];
   if (title !== undefined && (typeof title !== "string" || title.length > 200)) throw new TypeError("Invalid manifest title");
-  let archetypes: { slug: string; convention: string }[] | undefined;
-  if (candidate?.archetypes !== undefined) {
-    if (!Array.isArray(candidate.archetypes)) throw new TypeError("Invalid manifest archetypes");
-    archetypes = candidate.archetypes.map((raw) => {
+  const parseArchetypes = (rawArchetypes: unknown): { slug: string; convention: string }[] => {
+    if (!Array.isArray(rawArchetypes)) throw new TypeError("Invalid manifest archetypes");
+    const seen = new Set<string>();
+    return rawArchetypes.map((raw) => {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new TypeError("Invalid manifest archetype");
       const item = raw as Record<string, unknown>;
       if (typeof item.slug !== "string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(item.slug)) throw new TypeError("Invalid archetype slug");
       if (typeof item.convention !== "string" || !/^napplet:[^/?#\s]+\/[^/?#\s]+$/.test(item.convention)) throw new TypeError("Invalid archetype convention");
+      const key = `${item.slug}\u0000${item.convention}`;
+      if (seen.has(key)) throw new TypeError("Duplicate manifest archetype");
+      seen.add(key);
       return { slug: item.slug, convention: item.convention };
     });
+  };
+  const taggedArchetypeValues = event.tags.filter((tag) => tag[0] === "archetype");
+  const taggedArchetypes = taggedArchetypeValues.length === 0 ? undefined : parseArchetypes(taggedArchetypeValues.map((tag) => ({ slug: tag[1], convention: tag[2] })));
+  const contentArchetypes = candidate?.archetypes === undefined ? undefined : parseArchetypes(candidate.archetypes);
+  if (taggedArchetypes && contentArchetypes) {
+    const tagged = new Set(taggedArchetypes.map((item) => `${item.slug}\u0000${item.convention}`));
+    if (tagged.size !== contentArchetypes.length || contentArchetypes.some((item) => !tagged.has(`${item.slug}\u0000${item.convention}`))) {
+      throw new TypeError("Manifest archetype tags do not match content");
+    }
   }
+  const archetypes = contentArchetypes ?? taggedArchetypes;
   return {
     dTag, aggregateHash, entrypoint,
     requires: validRequires as PlatformDomain[], artifacts,
