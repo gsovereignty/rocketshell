@@ -15,13 +15,33 @@ pnpm build
 
 ## Relay configuration
 
-Set comma-separated build variables:
+The shell works without environment variables. It defaults to public discovery,
+read, and write relays. Override them with comma-separated build variables:
 
 - `VITE_DISCOVERY_RELAYS`
 - `VITE_READ_RELAYS`
 - `VITE_WRITE_RELAYS`
 
 Relay URLs pass host policy at runtime. Production deployment requires HTTPS; localhost development may use HTTP.
+
+## Open a Napplet
+
+Start development mode:
+
+```sh
+pnpm dev
+```
+
+Paste a named NIP-5D coordinate into the loader:
+
+```text
+35129:266815e0c9210dfa324c6cba3573b14bee49da4209a9456f9484e5106cd408a5:good-morning
+```
+
+Coordinates also work as deep links through the `napplet` query parameter. The
+shell resolves the latest signed manifest, downloads artifacts only from signed
+server hints, verifies every artifact and aggregate hash, commits atomically,
+then opens the verified package.
 
 ## Static deployment
 

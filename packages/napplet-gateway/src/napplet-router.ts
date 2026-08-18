@@ -8,5 +8,5 @@ export async function routeNappletRequest(request: Request, scopePath: string, s
   if (!location) return undefined;
   const installation = await store.get(location.dTag, location.aggregateHash);
   const artifact = installation?.artifacts.find((item) => item.path === location.path);
-  return artifact ? artifactResponse(artifact, installation?.namespacePrelude ?? "") : new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  return artifact ? artifactResponse(artifact, installation?.namespacePrelude ?? "", new URL("./", request.url).href, installation?.artifacts) : new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 }

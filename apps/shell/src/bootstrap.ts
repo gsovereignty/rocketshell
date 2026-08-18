@@ -1,8 +1,6 @@
-import { createBrowserPlatform } from "./platform.js";
+import { createBrowserPlatform, type BrowserPlatform } from "./platform.js";
 
-export interface PlatformHandle { close(): Promise<void> }
-
-export async function bootstrap(): Promise<PlatformHandle> {
+export async function bootstrap(): Promise<BrowserPlatform> {
   const container = document.querySelector<HTMLElement>("#windows");
   if (!container) throw new Error("Napplet window container missing");
   return createBrowserPlatform(container);

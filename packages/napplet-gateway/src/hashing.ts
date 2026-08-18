@@ -13,7 +13,7 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
 export function canonicalAggregateInput(artifacts: readonly { path: string; sha256: string }[]): Uint8Array {
   const canonical = [...artifacts]
     .sort((left, right) => left.path.localeCompare(right.path))
-    .map(({ path, sha256: hash }) => `${path}\0${hash}\n`)
+    .map(({ path, sha256: hash }) => `${hash} /${path.replace(/^\/+/, "")}\n`)
     .join("");
   return encoder.encode(canonical);
 }

@@ -106,3 +106,13 @@ test("destroying a Napplet removes its authenticated session", async ({ page }) 
   expect(await page.evaluate(() => window.__platformTest?.windows.listWindowIds())).toEqual([]);
   expect(await page.evaluate(() => window.__platformTest?.authenticatedWindowIds())).toEqual([]);
 });
+
+test("coordinate loader reports malformed input without opening a window", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await page.locator("#coordinate").fill("not-a-coordinate");
+  await page.getByRole("button", { name: "Open Napplet" }).click();
+  await expect(page.locator("#loader-status")).toHaveAttribute("data-state", "error");
+  await expect(page.locator("#loader-status")).toHaveText("Use kind:pubkey:identifier");
+  await expect(page.locator("#windows iframe")).toHaveCount(1);
+});

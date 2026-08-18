@@ -68,7 +68,8 @@ export class NappletWindowManager {
       } catch {
         const artifact = installation.artifacts.find((item) => item.path === installation.manifest.entrypoint);
         if (!artifact) throw new Error("Verified Napplet entrypoint unavailable");
-        response = artifactResponse(artifact, installation.namespacePrelude);
+        const hostUrl = typeof location === "undefined" ? "http://localhost/" : location.href;
+        response = artifactResponse(artifact, installation.namespacePrelude, new URL("./", new URL(virtualUrl, hostUrl)).href, installation.artifacts);
       }
       if (!response.ok || !response.headers.get("content-security-policy")) throw new Error("Verified Napplet response unavailable");
       iframe.dataset.virtualUrl = virtualUrl;

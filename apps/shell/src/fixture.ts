@@ -38,14 +38,17 @@ status.textContent = "ready";
 
 export async function installFixture(store: PackageStore, resourceUrl: string): Promise<string> {
   if (await store.getActive("platform-fixture")) return "platform-fixture";
-  const html = `<!doctype html><html><head><meta charset="UTF-8"><title>Fixture Napplet</title></head><body><output id="fixture-status">starting</output><script type="module">${script(resourceUrl)}</script></body></html>`;
-  const entries = [{ path: "index.html", bytes: encoder.encode(html), mediaType: "text/html" }];
+  const html = "<!doctype html><html><head><meta charset=\"UTF-8\"><title>Fixture Napplet</title></head><body><output id=\"fixture-status\">starting</output><script type=\"module\" src=\"./fixture.js\"></script></body></html>";
+  const entries = [
+    { path: "index.html", bytes: encoder.encode(html), mediaType: "text/html" },
+    { path: "fixture.js", bytes: encoder.encode(script(resourceUrl)), mediaType: "text/javascript" }
+  ];
   const declarations = await Promise.all(entries.map(async ({ path, bytes, mediaType }) => ({ path, sha256: await sha256(bytes), mediaType })));
   const aggregate = await aggregateHash(declarations);
   const requires = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link"];
   const content = JSON.stringify({ dTag: "platform-fixture", title: "Platform Fixture", aggregateHash: aggregate, entrypoint: "index.html", requires, archetypes: [{ slug: "fixture", convention: "napplet:fixture/open" }], artifacts: declarations });
   const secret = new Uint8Array(32); secret[31] = 1;
-  const tags = [["d", "platform-fixture"], ...requires.map((domain) => ["requires", domain]), ...declarations.map((artifact) => ["path", `/${artifact.path}`, artifact.sha256])];
+  const tags = [["d", "platform-fixture"], ["x", aggregate, "aggregate"], ...requires.map((domain) => ["requires", domain]), ...declarations.map((artifact) => ["path", `/${artifact.path}`, artifact.sha256])];
   const event = finalizeEvent({ kind: 35129, created_at: 1, content, tags }, secret) as SignedManifest;
   const inputs = new Map<string, ArtifactInput>(entries.map(({ path, bytes, mediaType }) => [path, { bytes, mediaType }]));
   await new PackageInstaller(store).install(event, inputs, { randomId: () => "built-in-platform-fixture" });

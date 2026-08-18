@@ -147,6 +147,9 @@ importers:
       '@napplet/nap':
         specifier: 0.31.1
         version: 0.31.1
+      '@platform/napplet-gateway':
+        specifier: workspace:*
+        version: link:../napplet-gateway
       '@platform/nostr-engine':
         specifier: workspace:*
         version: link:../nostr-engine

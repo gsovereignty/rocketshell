@@ -5,6 +5,7 @@ export * from "./memory-package-store.js";
 export * from "./napplet-router.js";
 export * from "./package-installer.js";
 export * from "./response-builder.js";
+export * from "./remote-package.js";
 export * from "./session-registry.js";
 export * from "./service-worker-protocol.js";
 export * from "./types.js";
