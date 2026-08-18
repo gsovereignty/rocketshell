@@ -1,5 +1,5 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
-import { createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerResourceService } from "@platform/host-services";
+import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerResourceService } from "@platform/host-services";
 import { createPlatformShellAdapter, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
@@ -48,12 +48,15 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const packageStore = await IndexedDbPackageStore.open();
   const engine = await createPersistentNostrEngine({ relayPolicy: { allowInsecureLocalhost: import.meta.env.DEV } });
   let windows: NappletWindowManager | undefined;
+  const audit = createHostAuditTrail();
   const adapter = createPlatformShellAdapter({
     engine, discoveryRelays, readRelays, writeRelays,
     createWindow: () => null,
     intentAvailable: () => windows !== undefined,
     linkAvailable: () => true,
-    advertisedServices: ["outbox", "config", "resource", "intent", "link"]
+    advertisedServices: ["outbox", "config", "resource", "intent", "link"],
+    onAclCheck: (event) => audit.recordAcl(event),
+    onUnroutedMessage: (info) => audit.recordUnrouted(info)
   });
   const shell = createShellBridge(adapter);
   registerCoreServices(shell.runtime, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
@@ -104,7 +107,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     windows,
     async close() {
       if (closed) return; closed = true;
-      windows?.close(); window.removeEventListener("message", onMessage); shell.destroy(); hostServices.close(); await engine.close(); packageStore.close();
+      windows?.close(); window.removeEventListener("message", onMessage); shell.destroy(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
       void registration;
     }
   };

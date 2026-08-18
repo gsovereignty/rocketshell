@@ -1,5 +1,6 @@
 import type { ShellAdapter } from "@kehto/shell";
 import type { ServiceHandler } from "@kehto/runtime";
+import type { AclCheckEvent } from "@kehto/runtime";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
 import type { NostrEngine } from "@platform/nostr-engine";
@@ -17,6 +18,8 @@ export interface ShellAdapterOptions {
   readonly intentAvailable?: () => boolean;
   readonly linkAvailable?: () => boolean;
   readonly advertisedServices?: readonly string[];
+  readonly onAclCheck?: (event: AclCheckEvent) => void;
+  readonly onUnroutedMessage?: (info: { readonly type?: string; readonly origin: string; readonly reason: string }) => void;
 }
 
 function advertisedService(name: string): ServiceHandler {
@@ -81,7 +84,8 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): ShellA
     crypto: { verifyEvent: async (event) => verifyEvent(plainEvent(event as NostrEvent)) },
     ...(options.intentAvailable ? { intent: { isAvailable: options.intentAvailable } } : {}),
     ...(options.linkAvailable ? { link: { isAvailable: options.linkAvailable } } : {}),
-    onUnroutedMessage: (info) => console.warn("Unrouted Napplet message", { reason: info.reason }),
+    ...(options.onAclCheck ? { onAclCheck: options.onAclCheck } : {}),
+    onUnroutedMessage: (info) => options.onUnroutedMessage?.(info),
     capabilities: {
       resolveEnvironment(_identity, available) {
         const domains = available.domains.filter((domain) => {
