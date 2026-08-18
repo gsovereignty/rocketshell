@@ -60,4 +60,22 @@ describe("full-message relay stream", () => {
     expect(error).toHaveBeenCalledOnce(); expect(error).toHaveBeenCalledWith("wss://two", expect.any(Error)); expect(eose).toHaveBeenCalledOnce();
     handle.close(); store.dispose();
   });
+  it("keeps aggregate EOSE singular across reconnect messages", () => {
+    const messages = new Subject<GroupReqMessage>(); const store = new EventStore({ verifyEvent }); const delivered = vi.fn(); const eose = vi.fn();
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "after reconnect", tags: [] }, generateSecretKey());
+    const handle = openRelayStream({ req: () => messages }, createEventIngress(store, verifyEvent), ["wss://one"], {}, { event: delivered, eose }, 10_000);
+    messages.next({ type: "EOSE", from: "wss://one", id: "first" });
+    messages.next({ type: "OPEN", from: "wss://one", id: "second", filters: [{}] });
+    messages.next({ type: "EVENT", from: "wss://one", id: "second", event });
+    messages.next({ type: "EOSE", from: "wss://one", id: "second" });
+    expect(eose).toHaveBeenCalledOnce(); expect(delivered).toHaveBeenCalledWith(expect.objectContaining({ id: event.id }));
+    handle.close(); store.dispose();
+  });
+  it("ignores malformed protocol messages", () => {
+    const messages = new Subject<unknown>(); const store = new EventStore({ verifyEvent }); const delivered = vi.fn(); const eose = vi.fn(); const error = vi.fn();
+    const handle = openRelayStream({ req: () => messages } as never, createEventIngress(store, verifyEvent), ["wss://one"], {}, { event: delivered, eose, error }, 10_000);
+    messages.next(null); messages.next({}); messages.next({ type: "EVENT", from: 42, event: {} }); messages.next({ type: "EOSE", from: null });
+    expect(delivered).not.toHaveBeenCalled(); expect(eose).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled();
+    handle.close(); store.dispose();
+  });
 });

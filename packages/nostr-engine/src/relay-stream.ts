@@ -43,11 +43,12 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
   subscription = source.req(selected, validatedFilters).subscribe({
     next(message) {
       if (closed) return;
-      if (message.type === "EVENT") {
+      if (!message || typeof message !== "object" || typeof message.type !== "string") return;
+      if (message.type === "EVENT" && typeof message.from === "string" && message.event && typeof message.event === "object") {
         const admitted = ingress.admit(message.event, message.from);
         if (admitted && !delivered.has(admitted.id)) { delivered.add(admitted.id); callbacks.event(admitted); }
-      } else if (message.type === "EOSE" || message.type === "CLOSED") barrier(message.from);
-      else if (message.type === "ERROR") { callbacks.error?.(message.from, message.error); barrier(message.from); }
+      } else if ((message.type === "EOSE" || message.type === "CLOSED") && typeof message.from === "string") barrier(message.from);
+      else if (message.type === "ERROR" && typeof message.from === "string") { callbacks.error?.(message.from, message.error); barrier(message.from); }
     },
     error(error: unknown) {
       for (const relay of selected.filter((item) => !barriers.has(item))) callbacks.error?.(relay, error);
