@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ALL_DOMAINS, OPTIONAL_DOMAINS, PLATFORM_REQUIRED_DOMAINS, SubscriptionRegistry, assertPlatformProfile, isPlatformFailure, isStructuredCloneSafe } from "../src/index.js";
+import { ALL_DOMAINS, OPTIONAL_DOMAINS, PLATFORM_REQUIRED_DOMAINS, SubscriptionRegistry, assertPlatformProfile, createPlatformTelemetry, isPlatformFailure, isStructuredCloneSafe } from "../src/index.js";
 
 describe("platform contract", () => {
   it("rejects missing required domains", () => {
@@ -24,5 +24,11 @@ describe("platform contract", () => {
     const close = vi.fn(); const registry = new SubscriptionRegistry();
     registry.add({ close }); registry.close(); registry.close();
     expect(close).toHaveBeenCalledOnce();
+  });
+  it("bounds telemetry and drops sensitive labels", () => {
+    const telemetry = createPlatformTelemetry({ maximumRecords: 1, now: () => 10 });
+    telemetry.record("event.received", 1, { relay: "wss://relay.example/", authorization: "secret" });
+    telemetry.record("event.admitted", 1, { kind: 1 });
+    expect(telemetry.snapshot()).toEqual([{ name: "event.admitted", value: 1, timestamp: 10, labels: { kind: 1 } }]);
   });
 });
