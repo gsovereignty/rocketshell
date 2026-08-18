@@ -1,0 +1,12 @@
+{
+  "name": "@project/platform-nap-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "check": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@napplet/core": "0.31.1",
+    "@napplet/nap": "0.31.1"
+  }
+}

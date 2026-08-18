@@ -1,0 +1,14 @@
+{
+  "name": "@platform/host-services",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "check": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@kehto/runtime": "0.22.0",
+    "@kehto/services": "0.20.0",
+    "@napplet/nap": "0.31.1",
+    "@platform/napplet-gateway": "workspace:*"
+  }
+}

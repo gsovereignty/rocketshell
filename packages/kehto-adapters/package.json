@@ -1,0 +1,19 @@
+{
+  "name": "@platform/kehto-adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "check": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@kehto/runtime": "0.22.0",
+    "@kehto/services": "0.20.0",
+    "@kehto/shell": "0.20.0",
+    "@platform/nostr-engine": "workspace:*",
+    "@project/platform-nap-contract": "workspace:*",
+    "applesauce-core": "6.2.0",
+    "applesauce-relay": "6.2.1",
+    "nostr-tools": "2.24.0",
+    "rxjs": "7.8.2"
+  }
+}

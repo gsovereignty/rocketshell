@@ -1,0 +1,13 @@
+{
+  "name": "@platform/napplet-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./worker": "./src/worker-index.ts" },
+  "scripts": { "check": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@kehto/shell": "0.20.0",
+    "@project/platform-nap-contract": "workspace:*",
+    "nostr-tools": "2.24.0"
+  }
+}

@@ -1,0 +1,25 @@
+import type { RelayPoolLike } from "@kehto/shell";
+import type { NostrEvent } from "applesauce-core/helpers/event";
+import type { Filter } from "applesauce-core/helpers/filter";
+import type { RelayPool } from "applesauce-relay";
+
+export function createRelayPoolLike(pool: RelayPool): RelayPoolLike {
+  return {
+    subscription(relayUrls, filters) { return pool.subscription(relayUrls, filters as Filter | Filter[]); },
+    async publish(relayUrls, event) {
+      const outcomes = await pool.publish(relayUrls, event as NostrEvent, { retries: false });
+      if (!outcomes.some((outcome) => outcome.ok)) throw new Error("publish-rejected");
+    },
+    request(relayUrls, filters) { return pool.request(relayUrls, filters as Filter | Filter[]); },
+    async count(relayUrls, filters) {
+      return new Promise<number>((resolve, reject) => {
+        let total = 0;
+        const subscription = pool.count(relayUrls, filters as Filter[]).subscribe({
+          next(counts) { total = Object.values(counts).reduce((sum, result) => sum + result.count, 0); },
+          complete() { resolve(total); }, error: reject
+        });
+        void subscription;
+      });
+    }
+  };
+}

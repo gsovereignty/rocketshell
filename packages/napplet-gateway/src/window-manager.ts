@@ -1,0 +1,82 @@
+import { SubscriptionRegistry } from "@project/platform-nap-contract";
+import type { PackageStore } from "./types.js";
+import { virtualNappletUrl } from "./virtual-url.js";
+
+export interface WindowIdentity {
+  readonly windowId: string;
+  readonly nonce: string;
+  readonly dTag: string;
+  readonly aggregateHash: string;
+  readonly source: Window;
+}
+
+export interface WindowBridge {
+  register(identity: WindowIdentity): void | Promise<void>;
+  waitUntilReady(identity: WindowIdentity): Promise<void>;
+  unregister(windowId: string): void;
+}
+
+export interface ManagedNappletWindow {
+  readonly identity: WindowIdentity;
+  readonly iframe: HTMLIFrameElement;
+  readonly resources: SubscriptionRegistry;
+  readonly ready: Promise<void>;
+}
+
+export class NappletWindowManager {
+  readonly #windows = new Map<string, ManagedNappletWindow>();
+  #closed = false;
+
+  constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string) {}
+
+  findByDTag(dTag: string): ManagedNappletWindow | undefined {
+    return [...this.#windows.values()].find((window) => window.identity.dTag === dTag);
+  }
+
+  findByWindowId(windowId: string): ManagedNappletWindow | undefined {
+    return this.#windows.get(windowId);
+  }
+
+  async create(dTag: string): Promise<ManagedNappletWindow> {
+    if (this.#closed) throw new Error("Window manager closed");
+    const installation = await this.store.getActive(dTag);
+    if (!installation) throw new Error("No active verified installation");
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("sandbox", "allow-scripts");
+    iframe.title = dTag;
+    const windowId = crypto.randomUUID(); const nonce = crypto.randomUUID();
+    this.container.append(iframe);
+    const source = iframe.contentWindow;
+    if (!source) { iframe.remove(); throw new Error("Iframe browsing context unavailable"); }
+    const identity: WindowIdentity = { windowId, nonce, dTag: installation.dTag, aggregateHash: installation.aggregateHash, source };
+    try {
+      await this.bridge.register(identity);
+      // Fetch occurs under controlled shell client. Opaque iframe navigations bypass
+      // service-worker routing in Chromium, so verified response becomes srcdoc.
+      const virtualUrl = virtualNappletUrl(this.applicationBase, identity.dTag, identity.aggregateHash, installation.manifest.entrypoint);
+      const response = await fetch(virtualUrl, { cache: "no-store", credentials: "same-origin" });
+      if (!response.ok || !response.headers.get("content-security-policy")) throw new Error("Verified Napplet response unavailable");
+      iframe.dataset.virtualUrl = virtualUrl;
+      // Navigation occurs only after authenticated identity registration.
+      iframe.srcdoc = await response.text();
+      const ready = this.bridge.waitUntilReady(identity);
+      const managed = { identity, iframe, resources: new SubscriptionRegistry(), ready };
+      this.#windows.set(windowId, managed);
+      await ready;
+      return managed;
+    } catch (error) { this.bridge.unregister(windowId); iframe.remove(); throw error; }
+  }
+
+  destroy(windowId: string): void {
+    const managed = this.#windows.get(windowId);
+    if (!managed) return;
+    this.#windows.delete(windowId);
+    managed.resources.close(); this.bridge.unregister(windowId); managed.iframe.remove();
+  }
+
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    for (const windowId of [...this.#windows.keys()]) this.destroy(windowId);
+  }
+}

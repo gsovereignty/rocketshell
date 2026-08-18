@@ -1,0 +1,17 @@
+{
+  "name": "@platform/shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build", "build:github": "vite build --mode github", "preview": "vite preview", "preview:github": "vite preview --mode github", "check": "tsc --noEmit" },
+  "dependencies": {
+    "@kehto/shell": "0.20.0",
+    "@platform/host-services": "workspace:*",
+    "@platform/kehto-adapters": "workspace:*",
+    "@platform/napplet-gateway": "workspace:*",
+    "@platform/nostr-engine": "workspace:*",
+    "@project/platform-nap-contract": "workspace:*",
+    "nostr-tools": "2.24.0"
+  },
+  "devDependencies": { "vite": "7.1.3" }
+}

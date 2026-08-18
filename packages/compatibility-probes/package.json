@@ -1,0 +1,21 @@
+{
+  "name": "@platform/compatibility-probes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "check": "tsc --noEmit" },
+  "dependencies": {
+    "@kehto/runtime": "0.22.0",
+    "@kehto/services": "0.20.0",
+    "@kehto/shell": "0.20.0",
+    "@napplet/core": "0.31.1",
+    "@napplet/nap": "0.31.1",
+    "applesauce-accounts": "6.2.0",
+    "applesauce-core": "6.2.0",
+    "applesauce-loaders": "6.2.0",
+    "applesauce-relay": "6.2.1",
+    "applesauce-signers": "6.2.2",
+    "nostr-tools": "2.24.0",
+    "rxjs": "7.8.2"
+  }
+}

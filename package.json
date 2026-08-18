@@ -1,0 +1,18 @@
+{
+  "name": "kehto-applesauce-host-platform",
+  "private": true,
+  "packageManager": "pnpm@8.15.5",
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm -r --if-present check",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "dev": "pnpm --filter @platform/shell dev"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "@playwright/test": "1.62.1",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}
