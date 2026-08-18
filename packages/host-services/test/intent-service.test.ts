@@ -7,7 +7,7 @@ function setup() {
   let handler: ServiceHandler | undefined;
   const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
   const source = { postMessage: vi.fn() };
-  const target = { identity: { dTag: "viewer-app", windowId: "target-1", source }, ready: Promise.resolve() };
+  const target = { identity: { dTag: "viewer-app", windowId: "target-1", source }, iframe: { focus: vi.fn() }, ready: Promise.resolve() };
   const windows = { findByDTag: vi.fn(() => target), create: vi.fn(async () => target) } as unknown as NappletWindowManager;
   const store = { listActive: vi.fn(async () => [{
     dTag: "viewer-app", manifest: {
@@ -40,7 +40,40 @@ describe("intent host boundary", () => {
     } as never, send);
     await vi.waitFor(() => expect(source.postMessage).toHaveBeenCalled());
     expect(source.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: "inc.event", sender: "runtime-attested-sender", payload: { id: 1 }
+      type: "inc.event", topic: "napplet:viewer/open", sender: "runtime-attested-sender", payload: { id: 1 }
     }), "*");
+  });
+
+  it("rejects unsupported contracts before window work", async () => {
+    const { handler, windows } = setup();
+    for (const request of [
+      { archetype: "unknown" },
+      { archetype: "viewer", action: "edit" },
+      { archetype: "viewer", convention: "napplet:viewer/edit" }
+    ]) {
+      const send = vi.fn();
+      handler.handleMessage("sender-1", { type: "intent.invoke", id: "reject", request } as never, send);
+      await vi.waitFor(() => expect(send).toHaveBeenCalled());
+      expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: false, handled: false }) }));
+    }
+    expect(windows.findByDTag).not.toHaveBeenCalled();
+    expect(windows.create).not.toHaveBeenCalled();
+  });
+
+  it("honors target lifecycle hints without exposing a URL", async () => {
+    const { handler, windows } = setup(); const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "fresh", request: {
+        archetype: "viewer", action: "open", convention: "napplet:viewer/open",
+        payload: { id: 2 }, behavior: { newWindow: true, focus: false }
+      }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(windows.findByDTag).not.toHaveBeenCalled();
+    expect(windows.create).toHaveBeenCalledWith("viewer-app", false);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "intent.invoke.result",
+      result: expect.objectContaining({ ok: true, handler: "viewer-app", windowId: "target-1" })
+    }));
   });
 });

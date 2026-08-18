@@ -29,9 +29,10 @@ export interface ManagedNappletWindow {
 
 export class NappletWindowManager {
   readonly #windows = new Map<string, ManagedNappletWindow>();
+  readonly #creating = new Map<string, Promise<ManagedNappletWindow>>();
   #closed = false;
 
-  constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string, private readonly telemetry: PlatformTelemetry = NOOP_TELEMETRY) {}
+  constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string, private readonly telemetry: PlatformTelemetry = NOOP_TELEMETRY, private readonly readyTimeoutMs = 10_000) {}
 
   findByDTag(dTag: string): ManagedNappletWindow | undefined {
     return [...this.#windows.values()].find((window) => window.identity.dTag === dTag);
@@ -45,8 +46,17 @@ export class NappletWindowManager {
     return Object.freeze([...this.#windows.keys()]);
   }
 
-  async create(dTag: string): Promise<ManagedNappletWindow> {
+  async create(dTag: string, reusePending = true): Promise<ManagedNappletWindow> {
     if (this.#closed) throw new Error("Window manager closed");
+    const pending = reusePending ? this.#creating.get(dTag) : undefined;
+    if (pending) return pending;
+    const creating = this.#create(dTag);
+    if (reusePending) this.#creating.set(dTag, creating);
+    try { return await creating; }
+    finally { if (reusePending && this.#creating.get(dTag) === creating) this.#creating.delete(dTag); }
+  }
+
+  async #create(dTag: string): Promise<ManagedNappletWindow> {
     const installation = await this.store.getActive(dTag);
     if (!installation) throw new Error("No active verified installation");
     const iframe = document.createElement("iframe");
@@ -75,7 +85,14 @@ export class NappletWindowManager {
       iframe.dataset.virtualUrl = virtualUrl;
       // Navigation occurs only after authenticated identity registration.
       iframe.srcdoc = await response.text();
-      const ready = this.bridge.waitUntilReady(identity);
+      const bridgeReady = this.bridge.waitUntilReady(identity);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const ready = Promise.race([
+        bridgeReady,
+        new Promise<void>((_resolve, reject) => {
+          timeout = setTimeout(() => reject(new Error("Napplet readiness timed out")), this.readyTimeoutMs);
+        })
+      ]).finally(() => { if (timeout !== undefined) clearTimeout(timeout); });
       const managed = { identity, iframe, resources: new SubscriptionRegistry(), ready };
       this.#windows.set(windowId, managed);
       this.telemetry.record("window.active", 1, { dTag: identity.dTag });

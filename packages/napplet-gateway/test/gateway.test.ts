@@ -118,4 +118,38 @@ describe("package gateway", () => {
     expect(telemetry.snapshot().filter((record) => record.name === "window.active").map((record) => record.value)).toEqual([1, -1]);
     vi.unstubAllGlobals();
   });
+  it("shares one cold start across concurrent opens", async () => {
+    const store = new MemoryPackageStore(); const input = await fixture();
+    await new PackageInstaller(store, () => true).install(input.event, input.inputs);
+    const iframe = { setAttribute: vi.fn(), remove: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
+    vi.stubGlobal("document", { createElement: vi.fn(() => iframe) });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    let ready: (() => void) | undefined;
+    const manager = new NappletWindowManager(store, {
+      register: vi.fn(), waitUntilReady: vi.fn(() => new Promise<void>((resolve) => { ready = resolve; })), unregister: vi.fn()
+    }, { append: vi.fn() } as unknown as HTMLElement, "/shell/");
+    const first = manager.create("hello/world");
+    const second = manager.create("hello/world");
+    await vi.waitFor(() => expect(ready).toBeTypeOf("function"));
+    ready?.();
+    expect(await first).toBe(await second);
+    expect(document.createElement).toHaveBeenCalledTimes(1);
+    manager.close(); vi.unstubAllGlobals();
+  });
+  it("tears down a cold start that misses readiness timeout", async () => {
+    const store = new MemoryPackageStore(); const input = await fixture();
+    await new PackageInstaller(store, () => true).install(input.event, input.inputs);
+    const iframe = { setAttribute: vi.fn(), remove: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
+    vi.stubGlobal("document", { createElement: () => iframe });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    const unregister = vi.fn();
+    const manager = new NappletWindowManager(store, {
+      register: vi.fn(), waitUntilReady: vi.fn(() => new Promise<void>(() => {})), unregister
+    }, { append: vi.fn() } as unknown as HTMLElement, "/shell/", undefined, 5);
+    await expect(manager.create("hello/world")).rejects.toThrow("readiness timed out");
+    expect(manager.listWindowIds()).toEqual([]);
+    expect(unregister).toHaveBeenCalledOnce();
+    expect(iframe.remove).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
 });

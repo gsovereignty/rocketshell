@@ -25,7 +25,8 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
     targets: {
       async dispatch(params) {
         const startedAt = Date.now();
-        const target = windows.findByDTag(params.handler) ?? await windows.create(params.handler);
+        const reuse = params.behavior?.newWindow !== true && params.behavior?.reuse !== false;
+        const target = (reuse ? windows.findByDTag(params.handler) : undefined) ?? await windows.create(params.handler, reuse);
         // Self-dispatch cannot await its own startup without deadlocking. Other
         // senders wait until target listeners are ready before delivery.
         if (target.identity.dTag !== params.sender) await target.ready;
@@ -33,6 +34,7 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
           type: "inc.event", topic: params.convention, sender: params.sender,
           ...(params.payload === undefined ? {} : { payload: params.payload })
         }, "*");
+        if (params.behavior?.focus !== false) target.iframe.focus();
         telemetry.record("intent.completed", Date.now() - startedAt, { handler: params.handler });
         return { windowId: target.identity.windowId };
       }
