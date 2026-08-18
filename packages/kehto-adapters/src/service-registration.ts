@@ -9,6 +9,22 @@ import { verifyEvent } from "nostr-tools/pure";
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[] }
 export interface CoreServiceRegistration { close(): void }
 
+export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly string[], writeRelays: readonly string[]) {
+  return {
+    subscribe(filters: Filter[], relayUrls: string[], callback: (item: CoreNostrEvent | "EOSE") => void) {
+      const selected = engine.relayPolicy.select(relayUrls, "read");
+      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, { event: callback, eose: () => callback("EOSE") }, 15_000);
+      return { unsubscribe: () => handle.close() };
+    },
+    async publish(event: CoreNostrEvent, relayUrls: string[]) {
+      const selected = engine.relayPolicy.select(relayUrls, "write");
+      const outcomes = await engine.relayPool.publish(selected, event, { retries: false });
+      return Object.fromEntries(outcomes.map((outcome) => [outcome.from, outcome.ok]));
+    },
+    isAvailable: () => readRelays.length > 0 || writeRelays.length > 0
+  };
+}
+
 export function registerCoreServices(runtime: Runtime, engine: NostrEngine, options: CoreServiceOptions): CoreServiceRegistration {
   const readRelays = engine.relayPolicy.select(options.directReadRelays, "read");
   const writeRelays = engine.relayPolicy.select(options.directWriteRelays, "write");
@@ -43,19 +59,7 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
       }, 15_000);
     });
   });
-  const outboxPool = {
-    subscribe(filters: Filter[], relayUrls: string[], callback: (item: CoreNostrEvent | "EOSE") => void) {
-      const selected = engine.relayPolicy.select(relayUrls, "read");
-      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, { event: callback, eose: () => callback("EOSE") }, 15_000);
-      return { unsubscribe: () => handle.close() };
-    },
-    async publish(event: CoreNostrEvent, relayUrls: string[]) {
-      const selected = engine.relayPolicy.select(relayUrls, "write");
-      const outcomes = await engine.relayPool.publish(selected, event, { retries: false });
-      return Object.fromEntries(outcomes.map((outcome) => [outcome.from, outcome.ok]));
-    },
-    isAvailable: () => readRelays.length > 0 || writeRelays.length > 0
-  };
+  const outboxPool = createOutboxRelayPool(engine, readRelays, writeRelays);
   const outboxRouter = createRelayPoolOutboxRouter({
     relayPool: outboxPool,
     loadRelayLists: async (pubkeys) => {

@@ -1,7 +1,8 @@
 import type { Runtime, ServiceHandler } from "@kehto/runtime";
 import { createNostrEngine } from "@platform/nostr-engine";
 import { describe, expect, it, vi } from "vitest";
-import { registerCoreServices } from "../src/index.js";
+import { createOutboxRelayPool, registerCoreServices } from "../src/index.js";
+import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("core service lifecycle", () => {
   it("notifies account-sensitive services for every live window on account change", async () => {
@@ -19,5 +20,19 @@ describe("core service lifecycle", () => {
     expect(relayCleanup.mock.calls).toEqual([["window-1"], ["window-2"]]);
     expect(outboxCleanup.mock.calls).toEqual([["window-1"], ["window-2"]]);
     registration.close(); await engine.close();
+  });
+  it("maps each Applesauce publish outcome to its relay", async () => {
+    const engine = createNostrEngine();
+    const publish = vi.spyOn(engine.relayPool, "publish").mockResolvedValue([
+      { from: "wss://one.example/", ok: true, message: "saved" },
+      { from: "wss://two.example/", ok: false, message: "blocked" }
+    ]);
+    const pool = createOutboxRelayPool(engine, [], ["wss://one.example/", "wss://two.example/"]);
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
+    await expect(pool.publish(event, ["wss://one.example/", "wss://two.example/"])).resolves.toEqual({
+      "wss://one.example/": true, "wss://two.example/": false
+    });
+    expect(publish).toHaveBeenCalledWith(["wss://one.example/", "wss://two.example/"], event, { retries: false });
+    await engine.close();
   });
 });
