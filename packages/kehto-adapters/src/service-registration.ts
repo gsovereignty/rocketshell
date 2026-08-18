@@ -1,4 +1,4 @@
-import type { Runtime } from "@kehto/runtime";
+import type { Runtime, ServiceHandler } from "@kehto/runtime";
 import { createIdentityService, createOutboxService, createRelayPoolOutboxRouter, createRelayPoolService } from "@kehto/services";
 import type { NostrEvent as CoreNostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
@@ -7,13 +7,14 @@ import { createRelayListResolver, createRelayPublisher, openRelayStream } from "
 import { verifyEvent } from "nostr-tools/pure";
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[] }
+export interface CoreServiceRegistration { close(): void }
 
-export function registerCoreServices(runtime: Runtime, engine: NostrEngine, options: CoreServiceOptions): void {
+export function registerCoreServices(runtime: Runtime, engine: NostrEngine, options: CoreServiceOptions): CoreServiceRegistration {
   const readRelays = engine.relayPolicy.select(options.directReadRelays, "read");
   const writeRelays = engine.relayPolicy.select(options.directWriteRelays, "write");
   const discoveryRelays = engine.relayPolicy.select(options.discoveryRelays ?? [], "discovery");
   const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress);
-  runtime.registerService("relay", createRelayPoolService({
+  const relayService = createRelayPoolService({
     subscribe(filters, callback, relayUrls) {
       const selected = engine.relayPolicy.select(relayUrls?.length ? relayUrls : readRelays, "read");
       const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters as Filter[], {
@@ -24,7 +25,8 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
     async publish(event) { await publisher.publishSigned(writeRelays, event as CoreNostrEvent); },
     selectRelayTier() { return [...readRelays]; },
     isAvailable() { return readRelays.length > 0 || writeRelays.length > 0; }
-  }));
+  });
+  runtime.registerService("relay", relayService);
   runtime.registerService("identity", createIdentityService({
     getSigner: () => engine.accounts.manager.active ? {
       getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),
@@ -67,5 +69,18 @@ export function registerCoreServices(runtime: Runtime, engine: NostrEngine, opti
     isRelayAllowed: (url) => { try { engine.relayPolicy.normalize(url, "explicit"); return true; } catch { return false; } },
     defaultTimeoutMs: 4_000
   });
-  runtime.registerService("outbox", createOutboxService({ router: outboxRouter }));
+  const outboxService = createOutboxService({ router: outboxRouter });
+  runtime.registerService("outbox", outboxService);
+  const accountSensitiveServices: ServiceHandler[] = [relayService, outboxService];
+  let initialAccount = true; let closed = false;
+  const accountChanges = engine.accounts.manager.active$.subscribe(() => {
+    if (initialAccount) { initialAccount = false; return; }
+    for (const entry of runtime.sessionRegistry.getAllEntries()) {
+      for (const service of accountSensitiveServices) service.onWindowDestroyed?.(entry.windowId);
+    }
+  });
+  return { close() {
+    if (closed) return;
+    closed = true; accountChanges.unsubscribe();
+  } };
 }

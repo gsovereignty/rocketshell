@@ -67,7 +67,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     onUnroutedMessage: (info) => audit.recordUnrouted(info)
   });
   const shell = createShellBridge(adapter);
-  registerCoreServices(shell.runtime, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
+  const coreServices = registerCoreServices(shell.runtime, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
   const hostServices = registerCoreHostServices(shell.runtime, {
     openSettings: () => undefined,
     configStore: createStorageConfigStore(localStorage),
@@ -130,7 +130,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
     async close() {
       if (closed) return; closed = true;
-      windows?.close(); window.removeEventListener("message", onMessage); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
+      windows?.close(); window.removeEventListener("message", onMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
       void registration;
     }
   };
