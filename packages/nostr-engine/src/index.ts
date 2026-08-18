@@ -2,6 +2,7 @@ export * from "./accounts.js";
 export * from "./account-persistence.js";
 export * from "./engine.js";
 export * from "./event-ingress.js";
+export * from "./event-limits.js";
 export * from "./relay-policy.js";
 export * from "./relay-lists.js";
 export * from "./relay-auth.js";

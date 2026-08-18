@@ -2,6 +2,7 @@ import type { EventStore } from "applesauce-core/event-store";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import { isReplaceable } from "applesauce-core/helpers";
 import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-contract";
+import { isEventWithinLimits } from "./event-limits.js";
 
 export type VerifyNostrEvent = (event: NostrEvent) => boolean;
 export interface EventIngress {
@@ -18,9 +19,11 @@ function plainEvent(event: NostrEvent): NostrEvent {
 
 export function createEventIngress(store: EventStore, verify: VerifyNostrEvent, telemetry: PlatformTelemetry = NOOP_TELEMETRY): EventIngress {
   return {
-    verify: (event) => verify(plainEvent(event)),
+    verify: (event) => isEventWithinLimits(event) && verify(plainEvent(event)),
     admit(event, observedRelay) {
-    telemetry.record("event.received", 1, { relay: observedRelay, kind: event.kind });
+    const kind = event && typeof event === "object" && typeof event.kind === "number" ? event.kind : -1;
+    telemetry.record("event.received", 1, { relay: observedRelay, kind });
+    if (!isEventWithinLimits(event)) { telemetry.record("event.rejected", 1, { reason: "limits", kind }); return null; }
     // Relay input must never inherit library verification/cache symbols.
     const canonical = plainEvent(event);
     if (!verify(canonical)) { telemetry.record("event.rejected", 1, { reason: "signature", kind: event.kind }); return null; }

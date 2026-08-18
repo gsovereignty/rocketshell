@@ -1,5 +1,5 @@
 import { generateSecretKey, finalizeEvent } from "nostr-tools/pure";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createNostrEngine, createRelayPolicy } from "../src/index.js";
 
 describe("relay policy", () => {
@@ -25,6 +25,13 @@ describe("shared engine", () => {
       "event.received", "event.admitted", "event.received", "event.rejected"
     ]);
     await engine.close(); await engine.close();
+  });
+  it("rejects malformed and oversized events before verification", async () => {
+    const verify = vi.fn(() => true); const engine = createNostrEngine({ verifyEvent: verify });
+    expect(engine.ingress.admit({ kind: 1, created_at: 1, content: "x", tags: null } as never, "wss://relay.example/")).toBeNull();
+    expect(engine.ingress.admit({ id: "id", pubkey: "pk", sig: "sig", kind: 1, created_at: 1, content: "x".repeat(256 * 1024 + 1), tags: [] }, "wss://relay.example/")).toBeNull();
+    expect(verify).not.toHaveBeenCalled();
+    await engine.close();
   });
   it("keeps the newest replaceable winner", async () => {
     const engine = createNostrEngine(); const key = generateSecretKey();

@@ -1,6 +1,7 @@
 import type { AccountManager, IAccount } from "applesauce-accounts";
 import type { EventTemplate, NostrEvent } from "applesauce-core/helpers/event";
 import { failure } from "@project/platform-nap-contract";
+import { validateEventTemplate } from "./event-limits.js";
 import type { Subscription } from "rxjs";
 
 export interface AccountController {
@@ -37,7 +38,7 @@ export function createAccountController(manager: AccountManager): AccountControl
     manager,
     get generation() { return generation; },
     get publicKey() { return manager.active?.pubkey ?? ""; },
-    sign: (template) => withCurrent((account) => account.signEvent(template)),
+    sign: async (template) => { validateEventTemplate(template); return withCurrent((account) => account.signEvent(template)); },
     nip04Encrypt: (pubkey, plaintext) => withCurrent((account) => {
       if (!account.nip04) throw unavailable("NIP-04 unavailable"); return account.nip04.encrypt(pubkey, plaintext);
     }),
