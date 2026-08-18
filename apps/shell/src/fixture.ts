@@ -4,7 +4,7 @@ import { finalizeEvent } from "nostr-tools/pure";
 const encoder = new TextEncoder();
 const script = (resourceUrl: string): string => `
 const status = document.querySelector("#fixture-status");
-const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, platformProfile: false, optionalAbsent: false };
+const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, intentStructured: false, platformProfile: false, optionalAbsent: false };
 try { localStorage.setItem("x", "x"); } catch { results.storageBlocked = true; }
 try { void window.parent.document.body; } catch { results.hostDomBlocked = true; }
 try { await fetch("https://example.com/"); } catch { results.fetchBlocked = true; }
@@ -30,7 +30,8 @@ try {
 const intentReceived = new Promise((resolve) => {
   const handle = window.napplet.inc.on("napplet:fixture/open", (event) => { results.intentReceived = event.payload?.ok === true; handle.close(); resolve(); });
 });
-await window.napplet.intent.open("fixture", { ok: true });
+const intentResult = await window.napplet.intent.invoke({ archetype: "fixture", action: "open", convention: "napplet:fixture/open", payload: { ok: true } });
+results.intentStructured = intentResult.ok === true && intentResult.handler === "platform-fixture" && typeof intentResult.windowId === "string";
 await intentReceived;
 Object.assign(document.documentElement.dataset, Object.fromEntries(Object.entries(results).map(([key, value]) => [key, String(value)])));
 status.textContent = "ready";
