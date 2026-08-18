@@ -1,6 +1,6 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
 import { createHostAuditTrail, createIntentPreferenceStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerResourceService } from "@platform/host-services";
-import { createPlatformShellAdapter, registerCoreServices } from "@platform/kehto-adapters";
+import { createPlatformShellAdapter, createRelayConfiguration, registerCoreServices } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
 import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/platform-nap-contract";
@@ -60,10 +60,11 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const metadataStore = await PlatformMetadataStore.open();
   const packageStore = await IndexedDbPackageStore.open();
   const engine = await createPersistentNostrEngine({ relayPolicy: { allowInsecureLocalhost: import.meta.env.DEV } });
+  const relayConfiguration = createRelayConfiguration(engine.relayPolicy, { discovery: discoveryRelays, super: readRelays, outbox: writeRelays });
   let windows: NappletWindowManager | undefined;
   const audit = createHostAuditTrail({ telemetry: engine.telemetry });
   const adapter = createPlatformShellAdapter({
-    engine, discoveryRelays, readRelays, writeRelays,
+    engine, discoveryRelays, readRelays, writeRelays, relayConfiguration,
     createWindow: () => null,
     intentAvailable: () => windows !== undefined,
     linkAvailable: () => true,
@@ -72,7 +73,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     onUnroutedMessage: (info) => audit.recordUnrouted(info)
   });
   const shell = createShellBridge(adapter);
-  const coreServices = registerCoreServices(shell, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
+  const coreServices = registerCoreServices(shell, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays, relayConfiguration });
   const hostServices = registerCoreHostServices(shell.runtime, {
     openSettings: (_windowId, section, context) => {
       const input = window.prompt(`Edit Napplet settings${section ? ` (${section})` : ""} as JSON`, JSON.stringify(context.values, null, 2));

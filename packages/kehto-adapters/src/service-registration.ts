@@ -6,8 +6,9 @@ import type { Filter } from "applesauce-core/helpers/filter";
 import type { NostrEngine } from "@platform/nostr-engine";
 import { DEFAULT_PUBLISH_TIMEOUT_MS, createRelayListResolver, createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
+import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 
-export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[] }
+export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
 export interface CoreServiceRegistration { close(): void }
 
 export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly string[], writeRelays: readonly string[]) {
@@ -33,9 +34,12 @@ export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly 
 
 export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publishIdentityChanged">, engine: NostrEngine, options: CoreServiceOptions): CoreServiceRegistration {
   const { runtime } = shell;
-  const readRelays = engine.relayPolicy.select(options.directReadRelays, "read");
-  const writeRelays = engine.relayPolicy.select(options.directWriteRelays, "write");
-  const discoveryRelays = engine.relayPolicy.select(options.discoveryRelays ?? [], "discovery");
+  const configuration = options.relayConfiguration ?? createRelayConfiguration(engine.relayPolicy, {
+    discovery: [...(options.discoveryRelays ?? [])], super: [...options.directReadRelays], outbox: [...options.directWriteRelays]
+  });
+  const readRelays = configuration.values("super");
+  const writeRelays = configuration.values("outbox");
+  const discoveryRelays = configuration.values("discovery");
   const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress, 1, engine.telemetry);
   const relayService = createRelayPoolService({
     subscribe(filters, callback, relayUrls) {
@@ -74,7 +78,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
       for (const [pubkey, list] of resolved) if (list) result.set(pubkey, { read: [...list.read], write: [...list.write] });
       return result;
     },
-    fallbackRelays: [...readRelays],
+    fallbackRelays: readRelays,
     signEvent: (template) => engine.accounts.sign(template),
     verifyEvent: (event) => verifyEvent({ id: event.id, pubkey: event.pubkey, created_at: event.created_at, kind: event.kind, tags: event.tags.map((tag) => [...tag]), content: event.content, sig: event.sig }),
     isRelayAllowed: (url) => { try { engine.relayPolicy.normalize(url, "explicit"); return true; } catch { return false; } },

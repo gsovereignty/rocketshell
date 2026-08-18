@@ -1,7 +1,7 @@
 import type { Runtime, ServiceHandler } from "@kehto/runtime";
 import { createNostrEngine } from "@platform/nostr-engine";
 import { describe, expect, it, vi } from "vitest";
-import { createOutboxRelayPool, registerCoreServices } from "../src/index.js";
+import { createOutboxRelayPool, createRelayConfiguration, registerCoreServices } from "../src/index.js";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("core service lifecycle", () => {
@@ -40,6 +40,19 @@ describe("core service lifecycle", () => {
     const invalid = { ...event, content: "tampered" };
     await expect(pool.publish(invalid, ["wss://one.example/"])).rejects.toThrow("invalid-event");
     expect(publish).toHaveBeenCalledOnce();
+    await engine.close();
+  });
+  it("keeps service relay tiers synchronized with shell mutations", async () => {
+    const engine = createNostrEngine();
+    const configuration = createRelayConfiguration(engine.relayPolicy, { discovery: [], super: [], outbox: [] });
+    const pool = createOutboxRelayPool(engine, configuration.values("super"), configuration.values("outbox"));
+    expect(pool.isAvailable()).toBe(false);
+    const liveReadRelays = configuration.values("super");
+    configuration.add("super", "wss://read.example");
+    configuration.add("outbox", "wss://relay.example");
+    expect(pool.isAvailable()).toBe(true);
+    expect(liveReadRelays).toEqual(["wss://read.example/"]);
+    expect(configuration.snapshot().outbox).toEqual(["wss://relay.example/"]);
     await engine.close();
   });
 });

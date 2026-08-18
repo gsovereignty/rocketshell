@@ -7,6 +7,7 @@ import type { NostrEngine } from "@platform/nostr-engine";
 import { createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayPoolLike } from "./relay-pool-like.js";
+import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 
 export interface ShellAdapterOptions {
   readonly engine: NostrEngine;
@@ -20,6 +21,7 @@ export interface ShellAdapterOptions {
   readonly advertisedServices?: readonly string[];
   readonly onAclCheck?: (event: AclCheckEvent) => void;
   readonly onUnroutedMessage?: (info: { readonly type?: string; readonly origin: string; readonly reason: string }) => void;
+  readonly relayConfiguration?: PlatformRelayConfiguration;
 }
 export type PlatformShellAdapter = ShellAdapter & { close(): void };
 
@@ -49,17 +51,9 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     if (initialAccount) initialAccount = false;
     else closeAccountWork();
   });
-  const relayConfiguration = {
-    discovery: new Set(engine.relayPolicy.select(options.discoveryRelays, "discovery")),
-    super: new Set(engine.relayPolicy.select(options.readRelays, "read")),
-    outbox: new Set(engine.relayPolicy.select(options.writeRelays, "write"))
-  };
-  const relayTier = (tier: string): { readonly values: Set<string>; readonly context: "discovery" | "read" | "write" } => {
-    if (tier === "discovery") return { values: relayConfiguration.discovery, context: "discovery" };
-    if (tier === "super") return { values: relayConfiguration.super, context: "read" };
-    if (tier === "outbox") return { values: relayConfiguration.outbox, context: "write" };
-    throw new Error(`Unsupported relay tier: ${tier}`);
-  };
+  const relayConfiguration = options.relayConfiguration ?? createRelayConfiguration(engine.relayPolicy, {
+    discovery: [...options.discoveryRelays], super: [...options.readRelays], outbox: [...options.writeRelays]
+  });
   return {
     services: Object.fromEntries((options.advertisedServices ?? []).map((name) => [name, advertisedService(name)])),
     relayPool: {
@@ -81,22 +75,12 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
         try { await publisher.publishSigned([entry.relay], event as NostrEvent); return true; }
         catch { return false; }
       },
-      selectRelayTier: () => [...relayConfiguration.super]
+      selectRelayTier: () => [...relayConfiguration.values("super")]
     },
     relayConfig: {
-      addRelay(tier, url) {
-        const selected = relayTier(tier);
-        selected.values.add(engine.relayPolicy.normalize(url, selected.context));
-      },
-      removeRelay(tier, url) {
-        const selected = relayTier(tier);
-        selected.values.delete(engine.relayPolicy.normalize(url, selected.context));
-      },
-      getRelayConfig: () => ({
-        discovery: [...relayConfiguration.discovery],
-        super: [...relayConfiguration.super],
-        outbox: [...relayConfiguration.outbox]
-      }),
+      addRelay: (tier, url) => relayConfiguration.add(tier, url),
+      removeRelay: (tier, url) => relayConfiguration.remove(tier, url),
+      getRelayConfig: () => relayConfiguration.snapshot(),
       getNip66Suggestions: () => []
     },
     windowManager: { createWindow: options.createWindow },
