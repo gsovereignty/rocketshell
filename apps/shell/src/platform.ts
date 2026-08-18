@@ -52,6 +52,9 @@ class BrowserWindowBridge implements WindowBridge {
 
 export interface BrowserPlatform {
   readonly windows: NappletWindowManager;
+  readonly activeAccountPubkey: string;
+  connectExtension(): Promise<string>;
+  signOut(): void;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
   destroyWindow(windowId: string): void;
   authenticatedWindowIds(): readonly string[];
@@ -181,6 +184,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   let closed = false;
   return {
     windows,
+    get activeAccountPubkey() { return engine.accounts.publicKey; },
+    connectExtension: () => engine.accounts.connectExtension(),
+    signOut: () => engine.accounts.signOut(),
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
       const installation = await installRemotePackage(packageStore, event, { allowHttpLocalhost: allowLocalPlaintext });

@@ -6,6 +6,9 @@ const form = document.querySelector<HTMLFormElement>("#napplet-loader");
 const input = document.querySelector<HTMLInputElement>("#coordinate");
 const button = form?.querySelector<HTMLButtonElement>("button[type=submit]");
 const loaderStatus = document.querySelector<HTMLElement>("#loader-status");
+const connectAccount = document.querySelector<HTMLButtonElement>("#connect-account");
+const signOut = document.querySelector<HTMLButtonElement>("#sign-out");
+const accountStatus = document.querySelector<HTMLElement>("#account-status");
 
 const setLoaderStatus = (message: string, state: "idle" | "busy" | "success" | "error" = "idle"): void => {
   if (!loaderStatus) return;
@@ -19,6 +22,26 @@ void bootstrap().then((platform) => {
   }
   if (status) status.textContent = "Platform ready";
   if (button) button.disabled = false;
+
+  const renderAccount = (): void => {
+    const pubkey = platform.activeAccountPubkey;
+    if (accountStatus) accountStatus.textContent = pubkey ? `Active: ${pubkey.slice(0, 12)}…${pubkey.slice(-8)}` : "No active identity";
+    if (connectAccount) connectAccount.hidden = Boolean(pubkey);
+    if (signOut) signOut.hidden = !pubkey;
+  };
+  renderAccount();
+  if (connectAccount) connectAccount.disabled = false;
+  connectAccount?.addEventListener("click", () => {
+    connectAccount.disabled = true;
+    if (accountStatus) accountStatus.textContent = "Waiting for Nostr extension…";
+    void platform.connectExtension()
+      .then(renderAccount)
+      .catch((error: unknown) => {
+        if (accountStatus) accountStatus.textContent = error instanceof Error ? error.message : "Unable to connect Nostr extension";
+      })
+      .finally(() => { connectAccount.disabled = false; });
+  });
+  signOut?.addEventListener("click", () => { platform.signOut(); renderAccount(); });
 
   const openCoordinate = async (): Promise<void> => {
     if (!input || !button) return;

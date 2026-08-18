@@ -1,4 +1,5 @@
 import type { AccountManager, IAccount } from "applesauce-accounts";
+import { ExtensionAccount } from "applesauce-accounts/accounts";
 import type { EventTemplate, NostrEvent } from "applesauce-core/helpers/event";
 import { failure } from "@project/platform-nap-contract";
 import { validateEventTemplate } from "./event-limits.js";
@@ -13,6 +14,8 @@ export interface AccountController {
   nip04Decrypt(pubkey: string, ciphertext: string): Promise<string>;
   nip44Encrypt(pubkey: string, plaintext: string): Promise<string>;
   nip44Decrypt(pubkey: string, ciphertext: string): Promise<string>;
+  connectExtension(): Promise<string>;
+  signOut(): void;
   close(): void;
 }
 
@@ -51,6 +54,13 @@ export function createAccountController(manager: AccountManager): AccountControl
     nip44Decrypt: (pubkey, ciphertext) => withCurrent((account) => {
       if (!account.nip44) throw unavailable("NIP-44 unavailable"); return account.nip44.decrypt(pubkey, ciphertext);
     }),
+    async connectExtension() {
+      const account = await ExtensionAccount.fromExtension();
+      manager.addAccount(account as never);
+      manager.setActive(account.id);
+      return account.pubkey;
+    },
+    signOut() { manager.clearActive(); },
     close() { if (closed) return; closed = true; subscription.unsubscribe(); }
   };
 }

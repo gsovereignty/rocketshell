@@ -4,11 +4,19 @@
   <body>
     <main id="app">
       <header>
-        <div><h1>Kehto Host</h1><p id="status">Starting platform…</p></div>
+        <div>
+          <h1>Kehto Host</h1>
+          <p id="status">Starting platform…</p>
+          <div id="account-controls">
+            <button id="connect-account" type="button" disabled>Connect Nostr extension</button>
+            <button id="sign-out" type="button" hidden>Sign out</button>
+            <p id="account-status" role="status" aria-live="polite">No active identity</p>
+          </div>
+        </div>
         <form id="napplet-loader">
           <label for="coordinate">Napplet coordinate</label>
           <div class="loader-row">
-            <input id="coordinate" name="coordinate" type="text" autocomplete="off" spellcheck="false" placeholder="35129:pubkey:identifier" required>
+            <input id="coordinate" name="coordinate" type="text" autocomplete="off" spellcheck="false" placeholder="naddr1… or 35129:pubkey:identifier" required>
             <button type="submit" disabled>Open Napplet</button>
           </div>
           <p id="loader-status" role="status" aria-live="polite">Enter a signed kind 35129 coordinate.</p>

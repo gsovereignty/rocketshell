@@ -1,10 +1,23 @@
 import { AccountManager } from "applesauce-accounts";
 import type { EventTemplate, NostrEvent } from "applesauce-core/helpers/event";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAccountController } from "../src/index.js";
 
 describe("account controller", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("connects and activates a NIP-07 extension account", async () => {
+    const pubkey = "11".repeat(32);
+    vi.stubGlobal("window", { nostr: { getPublicKey: vi.fn(async () => pubkey) } });
+    const controller = createAccountController(new AccountManager());
+    await expect(controller.connectExtension()).resolves.toBe(pubkey);
+    expect(controller.publicKey).toBe(pubkey);
+    controller.signOut();
+    expect(controller.publicKey).toBe("");
+    controller.close();
+  });
+
   it("invalidates signing work when active account is removed", async () => {
     const manager = new AccountManager();
     let finish: ((event: NostrEvent) => void) | undefined;
