@@ -20,4 +20,10 @@ describe("resource policy fetch", () => {
     await expect(createPolicyFetch({ grants: new Map(), allowHttpLocalhost: true })("http://remote.example/a", { signal: new AbortController().signal })).rejects.toThrow("scheme denied");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+  it("does not let a redirect leave the granted origin", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location: "https://other.example/private" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createPolicyFetch({ grants: new Map() })("https://media.example/a", { signal: new AbortController().signal })).rejects.toThrow("Cross-origin resource redirect denied");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });
