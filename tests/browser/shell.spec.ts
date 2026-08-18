@@ -30,8 +30,18 @@ test("isolates package, public event, and private account persistence", async ({
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   const names = await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name));
-  expect(names).toEqual(expect.arrayContaining(["napplet-packages", "platform-events", "platform-private"]));
+  expect(names).toEqual(expect.arrayContaining(["napplet-packages", "platform-events", "platform-private", "platform-metadata"]));
   expect(new Set(names).size).toBe(names.length);
+  const metadata = await page.evaluate(async () => new Promise<Record<string, unknown>>((resolve, reject) => {
+    const request = indexedDB.open("platform-metadata");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const transaction = request.result.transaction("records", "readonly");
+      const get = transaction.objectStore("records").get("compatibility");
+      get.onerror = () => reject(get.error); get.onsuccess = () => resolve(get.result);
+    };
+  }));
+  expect(metadata).toMatchObject({ profile: "platform-nap-v1", schemaVersions: { metadata: 1, packages: 1, privateAccounts: 1 } });
 });
 
 test("runs verified fixture as opaque network-isolated Napplet", async ({ page }) => {

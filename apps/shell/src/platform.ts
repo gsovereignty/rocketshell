@@ -7,6 +7,7 @@ import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/p
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
 import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
+import { PlatformMetadataStore } from "./platform-metadata.js";
 
 function relayUrls(raw: string | undefined): string[] { return (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean); }
 
@@ -55,6 +56,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const discoveryRelays = relayUrls(import.meta.env.VITE_DISCOVERY_RELAYS);
   const readRelays = relayUrls(import.meta.env.VITE_READ_RELAYS);
   const writeRelays = relayUrls(import.meta.env.VITE_WRITE_RELAYS);
+  const metadataStore = await PlatformMetadataStore.open();
   const packageStore = await IndexedDbPackageStore.open();
   const engine = await createPersistentNostrEngine({ relayPolicy: { allowInsecureLocalhost: import.meta.env.DEV } });
   let windows: NappletWindowManager | undefined;
@@ -163,7 +165,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     telemetrySnapshot: () => engine.telemetry.snapshot(),
     async close() {
       if (closed) return; closed = true;
-      updates.close(); windows?.close(); window.removeEventListener("message", onMessage); navigator.serviceWorker.removeEventListener("message", onWorkerMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
+      updates.close(); windows?.close(); window.removeEventListener("message", onMessage); navigator.serviceWorker.removeEventListener("message", onWorkerMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear();
+      try { await engine.close(); }
+      finally { packageStore.close(); metadataStore.close(); }
       void registration;
     }
   };
