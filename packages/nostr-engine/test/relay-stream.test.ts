@@ -1,4 +1,5 @@
 import { EventStore } from "applesauce-core/event-store";
+import { getSeenRelays } from "applesauce-core/helpers";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import type { GroupReqMessage } from "applesauce-relay";
 import { generateSecretKey, finalizeEvent, verifyEvent } from "nostr-tools/pure";
@@ -15,6 +16,7 @@ describe("full-message relay stream", () => {
     messages.next({ type: "EVENT", from: "wss://one", id: "r", event }); messages.next({ type: "EVENT", from: "wss://two", id: "r", event });
     messages.next({ type: "EOSE", from: "wss://one", id: "r" }); messages.next({ type: "CLOSED", from: "wss://two", id: "r", reason: "done" }); messages.next({ type: "EOSE", from: "wss://two", id: "r" });
     expect(delivered).toHaveLength(1); expect(eose).toHaveBeenCalledOnce(); expect(eose).toHaveBeenCalledWith({ partial: false, pendingRelays: [] });
+    expect([...getSeenRelays(store.getEvent(event.id)!)!].sort()).toEqual(["wss://one", "wss://two"]);
     handle.close(); store.dispose();
   });
   it("suppresses callbacks after close", () => {
