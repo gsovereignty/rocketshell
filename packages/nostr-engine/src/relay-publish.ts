@@ -15,6 +15,7 @@ export interface RelayPublisher {
 
 export function createRelayPublisher(target: PublishTarget, accounts: AccountController, ingress: EventIngress, minimumAccepted = 1): RelayPublisher {
   const publishSigned = async (relays: readonly string[], event: NostrEvent): Promise<PublicationResult> => {
+    if (!ingress.verify(event)) throw new Error("invalid-event");
     const outcomes = await target.publish([...relays], event, { retries: false });
     const accepted = outcomes.filter((outcome) => outcome.ok).length;
     if (accepted < minimumAccepted) throw new Error("publish-rejected");

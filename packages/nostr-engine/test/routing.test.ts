@@ -22,6 +22,13 @@ describe("publication", () => {
     await expect(publisher.publishTemplate(["wss://relay.example"], { kind: 1, created_at: 1, content: "publish", tags: [] })).rejects.toThrow("publish-rejected");
     store.dispose();
   });
+  it("rejects an invalid signed event before transport", async () => {
+    const store = new EventStore({ verifyEvent }); const ingress = createEventIngress(store, verifyEvent); const publish = vi.fn(async () => []);
+    const valid = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
+    const publisher = createRelayPublisher({ publish }, { sign: async () => valid } as never, ingress);
+    await expect(publisher.publishSigned(["wss://relay.example"], { ...valid, content: "tampered" })).rejects.toThrow("invalid-event");
+    expect(publish).not.toHaveBeenCalled(); store.dispose();
+  });
 });
 
 describe("relay-list resolution", () => {
