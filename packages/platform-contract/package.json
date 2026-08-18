@@ -8,5 +8,8 @@
   "dependencies": {
     "@napplet/core": "0.31.1",
     "@napplet/nap": "0.31.1"
+  },
+  "devDependencies": {
+    "@napplet/conformance": "0.16.1"
   }
 }

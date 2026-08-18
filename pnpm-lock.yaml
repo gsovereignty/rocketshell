@@ -204,6 +204,10 @@ importers:
       '@napplet/nap':
         specifier: 0.31.1
         version: 0.31.1
+    devDependencies:
+      '@napplet/conformance':
+        specifier: 0.16.1
+        version: 0.16.1
 
 packages:
 
