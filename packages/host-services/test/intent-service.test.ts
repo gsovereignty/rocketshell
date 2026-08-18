@@ -1,0 +1,46 @@
+import type { Runtime, ServiceHandler, ServiceRuntimeContext } from "@kehto/runtime";
+import type { PackageStore, NappletWindowManager } from "@platform/napplet-gateway";
+import { describe, expect, it, vi } from "vitest";
+import { registerIntentService } from "../src/index.js";
+
+function setup() {
+  let handler: ServiceHandler | undefined;
+  const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
+  const source = { postMessage: vi.fn() };
+  const target = { identity: { dTag: "viewer-app", windowId: "target-1", source }, ready: Promise.resolve() };
+  const windows = { findByDTag: vi.fn(() => target), create: vi.fn(async () => target) } as unknown as NappletWindowManager;
+  const store = { listActive: vi.fn(async () => [{
+    dTag: "viewer-app", manifest: {
+      dTag: "viewer-app", aggregateHash: "a".repeat(64), entrypoint: "index.html", requires: [], artifacts: [],
+      archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }]
+    }
+  }]) } as unknown as PackageStore;
+  registerIntentService(runtime, store, windows);
+  handler!.onRegistered?.({
+    resolveDTag: () => "runtime-attested-sender", listWindowIds: () => ["sender-1"],
+    hasCapability: () => true, sendToEligibleNapplet: () => true
+  } as ServiceRuntimeContext);
+  return { handler: handler!, windows, source };
+}
+
+describe("intent host boundary", () => {
+  it("rejects malformed intent before window work", () => {
+    const { handler, windows } = setup(); const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "bad", request: { archetype: "viewer", forgedSender: "attacker" }
+    } as never, send);
+    expect(windows.findByDTag).not.toHaveBeenCalled(); expect(windows.create).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: "intent.invoke.result", result: expect.objectContaining({ ok: false }) }));
+  });
+
+  it("supplies runtime-attested sender to INC delivery", async () => {
+    const { handler, source } = setup(); const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "open", request: { archetype: "viewer", payload: { id: 1 } }
+    } as never, send);
+    await vi.waitFor(() => expect(source.postMessage).toHaveBeenCalled());
+    expect(source.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: "inc.event", sender: "runtime-attested-sender", payload: { id: 1 }
+    }), "*");
+  });
+});
