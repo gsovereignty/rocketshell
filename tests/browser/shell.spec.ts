@@ -26,6 +26,14 @@ test("build contains no root-relative project asset URLs", async ({ page }) => {
   expect(urls.filter(Boolean).every((url) => url!.startsWith("/shell/") || url!.startsWith("./"))).toBe(true);
 });
 
+test("isolates package, public event, and private account persistence", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  const names = await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name));
+  expect(names).toEqual(expect.arrayContaining(["napplet-packages", "platform-events", "platform-private"]));
+  expect(new Set(names).size).toBe(names.length);
+});
+
 test("runs verified fixture as opaque network-isolated Napplet", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts");
