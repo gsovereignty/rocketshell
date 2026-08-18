@@ -1,6 +1,7 @@
 import type { NostrEvent } from "applesauce-core/helpers/event";
-import { NostrIDB } from "nostr-idb";
+import { NostrIDB, openDB } from "nostr-idb";
 import type { Subscription } from "rxjs";
+import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 import { createNostrEngine, type EngineOptions, type NostrEngine } from "./engine.js";
 
 export interface EventCache {
@@ -9,6 +10,8 @@ export interface EventCache {
   add(event: NostrEvent): Promise<boolean>;
   query(filters: object | object[]): Promise<NostrEvent[]>;
 }
+
+export const PUBLIC_EVENT_DATABASE_NAME = PLATFORM_DATABASE_NAMES.publicEvents;
 
 function plainEvent(event: NostrEvent): NostrEvent {
   return { id: event.id, pubkey: event.pubkey, created_at: event.created_at, kind: event.kind, tags: event.tags.map((tag) => [...tag]), content: event.content, sig: event.sig };
@@ -36,7 +39,7 @@ export async function attachEventCache(engine: NostrEngine, cache: EventCache, h
   };
 }
 
-export interface PersistentEngineOptions extends EngineOptions { readonly maximumCachedEvents?: number; readonly hydrateLimit?: number }
+export interface PersistentEngineOptions extends EngineOptions { readonly maximumCachedEvents?: number; readonly hydrateLimit?: number; readonly databaseName?: string }
 
 export async function createPersistentNostrEngine(options: PersistentEngineOptions = {}): Promise<NostrEngine> {
   const engineOptions: EngineOptions = {
@@ -45,6 +48,15 @@ export async function createPersistentNostrEngine(options: PersistentEngineOptio
     ...(options.telemetry ? { telemetry: options.telemetry } : {})
   };
   const engine = createNostrEngine(engineOptions);
-  const cache = new NostrIDB<NostrEvent>(undefined, { maxEvents: options.maximumCachedEvents ?? 100_000 });
-  return attachEventCache(engine, cache, options.hydrateLimit ?? 10_000);
+  const database = await openDB(options.databaseName ?? PUBLIC_EVENT_DATABASE_NAME);
+  const cache = new NostrIDB<NostrEvent>(database, { maxEvents: options.maximumCachedEvents ?? 100_000 });
+  const persistent = await attachEventCache(engine, cache, options.hydrateLimit ?? 10_000);
+  let closed = false;
+  return {
+    ...persistent,
+    async close() {
+      if (closed) return;
+      closed = true; await persistent.close(); database.close();
+    }
+  };
 }

@@ -1,6 +1,8 @@
 import type { InstallationRecord, PackageStore, StoredArtifact } from "./types.js";
+import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 
 const DATABASE_VERSION = 1;
+export const PACKAGE_DATABASE_NAME = PLATFORM_DATABASE_NAMES.packages;
 const STAGED = "staged";
 const PACKAGES = "packages";
 const ACTIVE = "active";
@@ -27,7 +29,7 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 export class IndexedDbPackageStore implements PackageStore {
   private constructor(private readonly database: IDBDatabase) {}
 
-  static async open(name = "napplet-packages"): Promise<IndexedDbPackageStore> {
+  static async open(name = PACKAGE_DATABASE_NAME): Promise<IndexedDbPackageStore> {
     const request = indexedDB.open(name, DATABASE_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
