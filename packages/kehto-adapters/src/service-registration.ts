@@ -4,7 +4,7 @@ import { createIdentityService, createOutboxService, createRelayPoolOutboxRouter
 import type { NostrEvent as CoreNostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
 import type { NostrEngine } from "@platform/nostr-engine";
-import { DEFAULT_PUBLISH_TIMEOUT_MS, createRelayListResolver, createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
+import { DEFAULT_PUBLISH_TIMEOUT_MS, createRelayListResolver, createRelayPublisher, openRelayStream, validateFilters } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 import { createIdentityProviders } from "./identity-providers.js";
@@ -16,7 +16,7 @@ export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly 
   return {
     subscribe(filters: Filter[], relayUrls: string[], callback: (item: CoreNostrEvent | "EOSE") => void) {
       const selected = engine.relayPolicy.select(relayUrls, "read");
-      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, { event: callback, eose: () => callback("EOSE") }, 15_000, engine.telemetry);
+      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, validateFilters(filters), { event: callback, eose: () => callback("EOSE") }, 15_000, engine.telemetry);
       return { unsubscribe: () => handle.close() };
     },
     async publish(event: CoreNostrEvent, relayUrls: string[]) {
@@ -45,7 +45,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
   const relayService = createRelayPoolService({
     subscribe(filters, callback, relayUrls) {
       const selected = engine.relayPolicy.select(relayUrls?.length ? relayUrls : readRelays, "read");
-      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters as Filter[], {
+      const handle = openRelayStream(engine.relayPool, engine.ingress, selected, validateFilters(filters as Filter[]), {
         event: (event) => callback(event), eose: () => callback("EOSE")
       }, 15_000, engine.telemetry);
       return { unsubscribe: () => handle.close() };

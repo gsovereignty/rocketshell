@@ -4,7 +4,7 @@ import type { AclCheckEvent } from "@kehto/runtime";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
 import type { NostrEngine } from "@platform/nostr-engine";
-import { createRelayPublisher, openRelayStream } from "@platform/nostr-engine";
+import { createRelayPublisher, openRelayStream, validateFilters } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayPoolLike } from "./relay-pool-like.js";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
@@ -64,7 +64,7 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
       openScopedRelay(windowId, relayUrl, subId, filters, sourceWindow) {
         scoped.get(windowId)?.close();
         const relay = engine.relayPolicy.normalize(relayUrl, "explicit");
-        const handle = openRelayStream(engine.relayPool, engine.ingress, [relay], filters as Filter[], {
+        const handle = openRelayStream(engine.relayPool, engine.ingress, [relay], validateFilters(filters as Filter[]), {
           event: (event) => sourceWindow.postMessage(["EVENT", subId, event], "*"),
           eose: () => sourceWindow.postMessage(["EOSE", subId], "*")
         }, 15_000, engine.telemetry);

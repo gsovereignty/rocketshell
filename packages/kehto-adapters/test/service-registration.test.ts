@@ -42,6 +42,13 @@ describe("core service lifecycle", () => {
     expect(publish).toHaveBeenCalledOnce();
     await engine.close();
   });
+  it("rejects excessive outbox filters before opening relay work", async () => {
+    const engine = createNostrEngine(); const req = vi.spyOn(engine.relayPool, "req");
+    const pool = createOutboxRelayPool(engine, ["wss://relay.example/"], []);
+    expect(() => pool.subscribe(Array.from({ length: 9 }, () => ({})), ["wss://relay.example/"], vi.fn())).toThrow("invalid-filter");
+    expect(req).not.toHaveBeenCalled();
+    await engine.close();
+  });
   it("keeps service relay tiers synchronized with shell mutations", async () => {
     const engine = createNostrEngine();
     const configuration = createRelayConfiguration(engine.relayPolicy, { discovery: [], super: [], outbox: [] });
