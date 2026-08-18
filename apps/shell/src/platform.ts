@@ -71,7 +71,17 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const shell = createShellBridge(adapter);
   const coreServices = registerCoreServices(shell, engine, { discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays });
   const hostServices = registerCoreHostServices(shell.runtime, {
-    openSettings: () => undefined,
+    openSettings: (_windowId, section, context) => {
+      const input = window.prompt(`Edit Napplet settings${section ? ` (${section})` : ""} as JSON`, JSON.stringify(context.values, null, 2));
+      if (input === null) return;
+      try {
+        const parsed: unknown = JSON.parse(input);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Settings must be a JSON object");
+        context.commit(parsed as Parameters<typeof context.commit>[0]);
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Invalid settings");
+      }
+    },
     publishTheme: (theme) => shell.publishTheme(theme),
     configStore: createStorageConfigStore(localStorage),
     resolveConfigScope: (windowId) => {

@@ -14,4 +14,15 @@ describe("core host services", () => {
     expect(publishTheme).toHaveBeenCalledWith(theme);
     expect(registerService.mock.calls.map(([name]) => name)).toEqual(["theme", "config", "link"]);
   });
+  it("passes validated schema state to the host settings editor", () => {
+    const handlers = new Map<string, { handleMessage: Function }>(); const openSettings = vi.fn();
+    registerCoreHostServices({ registerService: (name: string, handler: { handleMessage: Function }) => handlers.set(name, handler) } as unknown as Runtime, { openSettings });
+    const send = vi.fn(); const config = handlers.get("config")!;
+    config.handleMessage("window-1", {
+      type: "config.registerSchema", id: "schema-1",
+      schema: { type: "object", properties: { color: { type: "string", default: "blue" } } }
+    }, send);
+    config.handleMessage("window-1", { type: "config.openSettings", section: "missing" }, send);
+    expect(openSettings).toHaveBeenCalledWith("window-1", undefined, expect.objectContaining({ values: { color: "blue" }, commit: expect.any(Function) }));
+  });
 });

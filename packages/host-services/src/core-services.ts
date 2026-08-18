@@ -1,12 +1,12 @@
 import type { Runtime } from "@kehto/runtime";
-import { createConfigService, createLinkService, createThemeService, type ConfigService, type ThemeService } from "@kehto/services";
+import { createConfigService, createLinkService, createThemeService, type ConfigService, type ConfigSettingsContext, type ThemeService } from "@kehto/services";
 import type { Theme } from "@napplet/nap/theme/types";
 import { createMemoryConfigStore, type ConfigValueStore } from "./config-store.js";
 
 export interface CoreHostServices { readonly theme: ThemeService; readonly config: ConfigService; close(): void }
 export interface CoreHostServiceOptions {
   readonly initialTheme?: Theme;
-  readonly openSettings: (windowId: string, section: string | undefined) => void;
+  readonly openSettings: (windowId: string, section: string | undefined, context: ConfigSettingsContext) => void;
   readonly configStore?: ConfigValueStore;
   readonly resolveConfigScope?: (windowId: string) => string | undefined;
   readonly publishTheme?: (theme: Theme) => void;
@@ -27,7 +27,7 @@ export function registerCoreHostServices(runtime: Runtime, options: CoreHostServ
   const config = createConfigService({
     getValues: (windowId) => values.get(scopeFor(windowId)),
     saveValues: (windowId, next) => values.set(scopeFor(windowId), next),
-    openSettings: (windowId, section) => options.openSettings(windowId, section),
+    openSettings: (windowId, section, context) => options.openSettings(windowId, section, context),
     onWindowDestroyed() {}
   });
   runtime.registerService("theme", theme.handler); runtime.registerService("config", config.handler);
