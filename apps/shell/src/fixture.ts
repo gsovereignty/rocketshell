@@ -4,16 +4,22 @@ import { finalizeEvent } from "nostr-tools/pure";
 const encoder = new TextEncoder();
 const script = (resourceUrl: string): string => `
 const status = document.querySelector("#fixture-status");
-const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, intentStructured: false, platformProfile: false, optionalAbsent: false };
+const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, relayQueried: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, intentStructured: false, platformProfile: false, optionalAbsent: false };
 try { localStorage.setItem("x", "x"); } catch { results.storageBlocked = true; }
 try { void window.parent.document.body; } catch { results.hostDomBlocked = true; }
 try { await fetch("https://example.com/"); } catch { results.fetchBlocked = true; }
 try { const socket = new WebSocket("wss://example.com/"); await new Promise((resolve) => { socket.onerror = resolve; setTimeout(resolve, 500); }); if (socket.readyState !== WebSocket.OPEN) results.websocketBlocked = true; socket.close(); } catch { results.websocketBlocked = true; }
+window.napplet.identity.onChanged((pubkey) => {
+  document.documentElement.dataset.identityLatest = pubkey;
+  document.documentElement.dataset.identityChanges = String(Number(document.documentElement.dataset.identityChanges ?? "0") + 1);
+});
 await window.napplet.shell.ready();
 const required = ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link", "upload"];
 results.platformProfile = required.every((domain) => window.napplet.shell.supports(domain) && typeof window.napplet[domain] === "object");
 results.optionalAbsent = !window.napplet.shell.supports("notify") && window.napplet.notify === undefined;
 results.pubkey = await window.napplet.identity.getPublicKey();
+const relayResult = await window.napplet.outbox.query({ kinds: [1], limit: 1 }, { relays: ["ws://127.0.0.1:9"], timeoutMs: 25 });
+results.relayQueried = Array.isArray(relayResult.events);
 try {
   const resourceUrl = ${JSON.stringify(resourceUrl)};
   const blob = await window.napplet.resource.bytes(resourceUrl);

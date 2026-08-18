@@ -54,7 +54,7 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   await expect(frame.locator("#fixture-status")).toHaveText("ready");
   const dataset = await frame.locator("html").evaluate((element) => ({ ...element.dataset }));
   expect(dataset.resourceError).toBe("");
-  expect(dataset).toMatchObject({ origin: "null", nostr: "undefined", storageBlocked: "true", hostDomBlocked: "true", fetchBlocked: "true", websocketBlocked: "true", resourceFetched: "true", resourceObjectUrl: "true", resourceRevoked: "true", pubkey: "", intentReceived: "true", intentStructured: "true", platformProfile: "true", optionalAbsent: "true" });
+  expect(dataset).toMatchObject({ origin: "null", nostr: "undefined", storageBlocked: "true", hostDomBlocked: "true", fetchBlocked: "true", websocketBlocked: "true", relayQueried: "true", resourceFetched: "true", resourceObjectUrl: "true", resourceRevoked: "true", pubkey: "", intentReceived: "true", intentStructured: "true", platformProfile: "true", optionalAbsent: "true" });
   expect(await page.locator("iframe").getAttribute("data-virtual-url")).toMatch(/^\/shell\/__napplet__\/platform-fixture\/[a-f0-9]{64}\/index\.html$/);
   expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
 });
@@ -87,6 +87,7 @@ test("mediates Blossom upload without exposing signer or server selection", asyn
   await page.goto("./");
   await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("#fixture-status")).toHaveText("ready");
   await page.evaluate(() => window.__platformTest?.connectExtension());
+  await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("html")).toHaveAttribute("data-identity-latest", pubkey);
   const result = await page.frameLocator('iframe[title="platform-fixture"]').locator("html").evaluate(async () => {
     const value = await window.napplet.upload.upload({ data: new Blob(["host-owned upload"], { type: "text/plain" }), rail: "blossom", filename: "proof.txt", mimeType: "text/plain" });
     return {
@@ -102,6 +103,9 @@ test("mediates Blossom upload without exposing signer or server selection", asyn
   expect(authorization).toMatch(/^Nostr /);
   const event = JSON.parse(Buffer.from(authorization.slice(6), "base64").toString("utf8"));
   expect(event).toMatchObject({ kind: 24242, pubkey, tags: expect.arrayContaining([["t", "upload"]]) });
+  await page.evaluate(() => window.__platformTest?.signOut());
+  await expect(page.frameLocator('iframe[title="platform-fixture"]').locator("html")).toHaveAttribute("data-identity-latest", "");
+  expect(Number(await page.frameLocator('iframe[title="platform-fixture"]').locator("html").getAttribute("data-identity-changes"))).toBeGreaterThanOrEqual(2);
 });
 
 test("rejects shell messages from an unregistered source window", async ({ page }) => {
