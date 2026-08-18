@@ -1,5 +1,6 @@
 import type { Relay, RelayPool } from "applesauce-relay";
-import { distinctUntilChanged, filter, type Subscription } from "rxjs";
+import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-contract";
+import { distinctUntilChanged, filter, Subscription } from "rxjs";
 import type { AccountController } from "./accounts.js";
 
 export interface RelayAuthenticator { close(): void }
@@ -7,7 +8,8 @@ export interface RelayAuthenticator { close(): void }
 export function createRelayAuthenticator(
   pool: RelayPool,
   accounts: AccountController,
-  onError?: (relay: string, error: unknown) => void
+  onError?: (relay: string, error: unknown) => void,
+  telemetry: PlatformTelemetry = NOOP_TELEMETRY
 ): RelayAuthenticator {
   const watched = new Map<Relay, Subscription>();
   const attempted = new Map<Relay, string>();
@@ -19,14 +21,22 @@ export function createRelayAuthenticator(
     if (attempted.get(relay) === attempt) return;
     attempted.set(relay, attempt);
     void relay.authenticate({ signEvent: (template) => accounts.sign(template) })
-      .catch((error: unknown) => onError?.(relay.url, error));
+      .then((outcome) => telemetry.record("relay.authentication", outcome.ok ? 1 : 0, { relay: relay.url }))
+      .catch((error: unknown) => { telemetry.record("relay.authentication", 0, { relay: relay.url }); onError?.(relay.url, error); });
   };
   const watch = (relay: Relay): void => {
     if (closed || watched.has(relay)) return;
-    const subscription = relay.challenge$.pipe(
+    const subscription = new Subscription();
+    subscription.add(relay.challenge$.pipe(
       filter((challenge): challenge is string => typeof challenge === "string" && challenge.length > 0),
       distinctUntilChanged()
-    ).subscribe(() => authenticate(relay));
+    ).subscribe(() => authenticate(relay)));
+    subscription.add(relay.connected$.pipe(distinctUntilChanged()).subscribe((connected) => {
+      telemetry.record("relay.connection", connected ? 1 : 0, { relay: relay.url });
+    }));
+    subscription.add(relay.attempts$.pipe(distinctUntilChanged(), filter((attempts) => attempts > 0)).subscribe((attempts) => {
+      telemetry.record("relay.reconnect", attempts, { relay: relay.url });
+    }));
     watched.set(relay, subscription);
   };
   for (const relay of pool.relays.values()) watch(relay);
