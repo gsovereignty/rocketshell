@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { coordinateServiceWorkerUpdates, type UpdateRegistration } from "./service-worker-update.js";
+import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure, type UpdateRegistration } from "./service-worker-update.js";
+import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 function setup(activeWindows = 0, approve = true) {
   const worker = { postMessage: vi.fn() };
@@ -13,6 +14,12 @@ function setup(activeWindows = 0, approve = true) {
 }
 
 describe("service-worker update coordination", () => {
+  it("records only worker protocol failures", () => {
+    const telemetry = createPlatformTelemetry();
+    expect(recordWorkerProtocolFailure({ ok: false, error: "unsupported-protocol" }, telemetry)).toBe(true);
+    expect(recordWorkerProtocolFailure({ ok: true }, telemetry)).toBe(false);
+    expect(telemetry.snapshot()).toContainEqual(expect.objectContaining({ name: "protocol.failure", labels: { reason: "unsupported-protocol" } }));
+  });
   it("activates immediately when no Napplet window is live", () => {
     const state = setup();
     const coordinator = coordinateServiceWorkerUpdates(state.registration, state.container, state.options);

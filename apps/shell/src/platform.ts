@@ -6,7 +6,7 @@ import { createPersistentNostrEngine } from "@platform/nostr-engine";
 import { PLATFORM_REQUIRED_DOMAINS } from "@project/platform-nap-contract";
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
-import { coordinateServiceWorkerUpdates } from "./service-worker-update.js";
+import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
 
 function relayUrls(raw: string | undefined): string[] { return (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean); }
 
@@ -119,6 +119,8 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
   const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, { scope: import.meta.env.BASE_URL, type: "module" });
+  const onWorkerMessage = (event: MessageEvent): void => { recordWorkerProtocolFailure(event.data, engine.telemetry); };
+  navigator.serviceWorker.addEventListener("message", onWorkerMessage);
   await navigator.serviceWorker.ready;
   if (!controlledAtStartup) {
     location.reload();
@@ -141,7 +143,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
     async close() {
       if (closed) return; closed = true;
-      updates.close(); windows?.close(); window.removeEventListener("message", onMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
+      updates.close(); windows?.close(); window.removeEventListener("message", onMessage); navigator.serviceWorker.removeEventListener("message", onWorkerMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear(); await engine.close(); packageStore.close();
       void registration;
     }
   };

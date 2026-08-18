@@ -1,4 +1,5 @@
 import { SERVICE_WORKER_PROTOCOL_VERSION } from "@platform/napplet-gateway";
+import type { PlatformTelemetry } from "@project/platform-nap-contract";
 
 interface WaitingWorker { postMessage(message: unknown): void }
 
@@ -17,6 +18,14 @@ export interface UpdateRegistration extends EventTarget {
 export interface WorkerContainer extends EventTarget {}
 
 export interface UpdateCoordinator { check(): boolean; close(): void }
+
+export function recordWorkerProtocolFailure(value: unknown, telemetry: PlatformTelemetry): boolean {
+  if (!value || typeof value !== "object") return false;
+  const reply = value as Record<string, unknown>;
+  if (reply.ok !== false || (reply.error !== "unsupported-protocol" && reply.error !== "invalid-request")) return false;
+  telemetry.record("protocol.failure", 1, { reason: reply.error });
+  return true;
+}
 
 export function coordinateServiceWorkerUpdates(
   registration: UpdateRegistration,
