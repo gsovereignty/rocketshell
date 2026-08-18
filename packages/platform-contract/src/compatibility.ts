@@ -10,7 +10,8 @@ export const PLATFORM_COMPATIBILITY = {
     signers: "6.2.2"
   },
   nostrTools: "2.24.0",
-  rxjs: "7.8.2"
+  rxjs: "7.8.2",
+  tooling: { conformance: "0.16.1", conformanceCli: "0.2.18" }
 } as const;
 
 export type PlatformCompatibility = typeof PLATFORM_COMPATIBILITY;

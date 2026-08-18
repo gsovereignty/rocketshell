@@ -4,3 +4,4 @@ export * from "./domains.js";
 export * from "./failures.js";
 export * from "./subscriptions.js";
 export * from "./validation.js";
+export type * from "./nap-types.js";
