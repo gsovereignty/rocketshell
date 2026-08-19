@@ -15,7 +15,6 @@ const profileLabel = document.querySelector<HTMLElement>("#profile-menu-label");
 const profileImage = document.querySelector<HTMLImageElement>("#profile-avatar-image");
 const profileFallback = document.querySelector<HTMLElement>("#profile-avatar-fallback");
 const accountPopover = document.querySelector<HTMLElement>("#account-popover");
-const accountCard = document.querySelector<HTMLElement>("#account-card");
 const profileActions = Array.from(document.querySelectorAll<HTMLButtonElement>(".profile-action"));
 const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-trigger");
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
@@ -67,9 +66,8 @@ const radialPosition = (index: number): { x: number; y: number } => {
 
 const buildAccountTimeline = (): gsap.core.Timeline => {
   if (accountTimeline) return accountTimeline;
-  const positions = profileActions.map((_, index) => radialPosition(index));
+  const positions = profileActions.map((action, index) => radialPosition(Number(action.dataset.radialSlot ?? index)));
   gsap.set(profileActions, { x: 0, y: 0, autoAlpha: 0, scale: 0 });
-  gsap.set(accountCard, { autoAlpha: 0, y: -8, scale: .98 });
   accountTimeline = gsap.timeline({
     paused: true,
     onReverseComplete: () => {
@@ -87,9 +85,7 @@ const buildAccountTimeline = (): gsap.core.Timeline => {
       easeReverse: "power3.in"
     }, index * .05);
   });
-  accountTimeline
-    .to(accountCard, { autoAlpha: 1, y: 0, scale: 1, duration: .24, ease: "power3.out", easeReverse: "power2.in" }, .14)
-    .to(".profile-avatar", { scale: 1.08, duration: .32, ease: "back.out(1.7)", easeReverse: true }, 0);
+  accountTimeline.to(".profile-avatar", { scale: 1.08, duration: .32, ease: "back.out(1.7)", easeReverse: true }, 0);
   return accountTimeline;
 };
 
@@ -110,10 +106,9 @@ const openAccountMenu = (): void => {
   accountOpen = true;
   profileTrigger.setAttribute("aria-expanded", "true");
   accountPopover.hidden = false;
-  const positions = profileActions.map((_, index) => radialPosition(index));
+  const positions = profileActions.map((action, index) => radialPosition(Number(action.dataset.radialSlot ?? index)));
   if (reducedMotion.matches) {
     profileActions.forEach((action, index) => gsap.set(action, { ...positions[index], autoAlpha: 1, scale: 1 }));
-    gsap.set(accountCard, { autoAlpha: 1, y: 0 });
     return;
   }
   buildAccountTimeline().timeScale(1).play();

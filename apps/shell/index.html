@@ -13,25 +13,23 @@
         </button>
         <div id="account-popover" class="account-popover" hidden>
           <div id="profile-actions" aria-label="Profile options">
-            <button class="profile-action" type="button" data-stub="Profile" aria-label="Profile (coming soon)">
+            <button class="profile-action" type="button" data-radial-slot="0" data-stub="Profile" aria-label="Profile (coming soon)">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.25"></circle><path d="M5.5 20c.5-4 2.7-6 6.5-6s6 2 6.5 6"></path></svg>
             </button>
-            <button class="profile-action" type="button" data-stub="Preferences" aria-label="Preferences (coming soon)">
+            <button class="profile-action" type="button" data-radial-slot="1" data-stub="Preferences" aria-label="Preferences (coming soon)">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg>
             </button>
-            <button class="profile-action" type="button" data-stub="Help" aria-label="Help (coming soon)">
+            <button class="profile-action" type="button" data-radial-slot="2" data-stub="Help" aria-label="Help (coming soon)">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M9.8 9.4a2.4 2.4 0 0 1 4.6 1c0 2-2.4 2.1-2.4 4M12 17.7v.1"></path></svg>
             </button>
-            <button id="sign-out" class="profile-action" type="button" aria-label="Sign out" hidden>
+            <button id="connect-account" class="profile-action" type="button" data-radial-slot="3" aria-label="Connect Nostr extension" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8M7 4.5h10a2.5 2.5 0 0 1 2.5 2.5v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5Z"></path></svg>
+            </button>
+            <button id="sign-out" class="profile-action" type="button" data-radial-slot="3" aria-label="Sign out" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5.5v14H10M14 8l4 4-4 4M8 12h10"></path></svg>
             </button>
           </div>
-          <div id="account-card">
-            <p id="account-status" role="status" aria-live="polite">No active identity</p>
-            <div id="account-controls">
-              <button id="connect-account" type="button" disabled>Connect Nostr extension</button>
-            </div>
-          </div>
+          <p id="account-status" class="visually-hidden" role="status" aria-live="polite">No active identity</p>
         </div>
       </div>
       <button id="spotlight-trigger" class="menu-button icon-button" type="button" aria-label="Open Napplet Spotlight" aria-expanded="false" aria-controls="spotlight-panel">

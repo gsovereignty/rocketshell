@@ -78,7 +78,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   top: 0;
   left: 0;
   width: min(19rem, calc(100vw - .5rem));
-  height: 17rem;
+  height: 11rem;
   pointer-events: none;
 }
 #profile-actions { position: absolute; top: 1rem; left: 1rem; }
@@ -102,22 +102,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .profile-action:hover { background: var(--accent); color: #182008; }
 .profile-action:focus-visible { z-index: 3; }
 .profile-action svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-#account-card {
-  position: absolute;
-  top: 11.2rem;
-  left: .35rem;
-  width: min(18rem, calc(100vw - 1rem));
-  padding: .75rem;
-  border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: .75rem;
-  background: rgba(42, 42, 39, .97);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, .42);
-  backdrop-filter: blur(20px);
-  pointer-events: auto;
-}
-#account-status { color: #d5d4cc; font-size: .76rem; line-height: 1.35; overflow-wrap: anywhere; }
-#account-controls { display: flex; gap: .5rem; margin-top: .7rem; }
-#account-controls button, #napplet-loader button {
+#napplet-loader button {
   min-height: 2rem;
   padding: 0 .75rem;
   border: 0;
@@ -128,7 +113,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   font-weight: 720;
   cursor: pointer;
 }
-#account-controls button:hover:not(:disabled), #napplet-loader button:hover:not(:disabled) { filter: brightness(1.08); }
+#napplet-loader button:hover:not(:disabled) { filter: brightness(1.08); }
 button:disabled { cursor: wait; opacity: .5; }
 
 #spotlight-panel {
