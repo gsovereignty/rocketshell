@@ -11,7 +11,7 @@ import { PlatformMetadataStore } from "./platform-metadata.js";
 import { requireWiredDomains } from "./domain-environment.js";
 
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
-const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol"] as const;
+const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
 
 declare const __STLSTR_FIXTURE__: { readonly manifest: string; readonly indexHtml: string } | undefined;
 
