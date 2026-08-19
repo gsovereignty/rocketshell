@@ -194,7 +194,7 @@ test("reloads shell and verified Napplet while offline", async ({ page, context,
   await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
 });
 
-test("destroying a Napplet removes its authenticated session", async ({ page }) => {
+test("closing a Napplet removes its window and authenticated session", async ({ page }) => {
   await page.goto("./");
   await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
   const before = await page.evaluate(() => ({
@@ -203,7 +203,7 @@ test("destroying a Napplet removes its authenticated session", async ({ page }) 
   }));
   expect(before.managed).toHaveLength(1);
   expect(before.authenticated).toEqual(before.managed);
-  await page.evaluate((windowId) => window.__platformTest?.destroyWindow(windowId), before.managed[0]!);
+  await page.getByRole("button", { name: "Close Platform Fixture" }).click();
   await expect(page.locator("iframe")).toHaveCount(0);
   expect(await page.evaluate(() => window.__platformTest?.windows.listWindowIds())).toEqual([]);
   expect(await page.evaluate(() => window.__platformTest?.authenticatedWindowIds())).toEqual([]);

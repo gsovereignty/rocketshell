@@ -22,6 +22,7 @@ export interface WindowBridge {
 
 export interface ManagedNappletWindow {
   readonly identity: WindowIdentity;
+  readonly element: HTMLElement;
   readonly iframe: HTMLIFrameElement;
   readonly resources: SubscriptionRegistry;
   readonly ready: Promise<void>;
@@ -59,13 +60,28 @@ export class NappletWindowManager {
   async #create(dTag: string): Promise<ManagedNappletWindow> {
     const installation = await this.store.getActive(dTag);
     if (!installation) throw new Error("No active verified installation");
+    const element = document.createElement("article");
+    element.className = "napplet-window";
+    const toolbar = document.createElement("header");
+    toolbar.className = "napplet-window-toolbar";
+    const title = document.createElement("span");
+    title.className = "napplet-window-title";
+    title.textContent = installation.manifest.title ?? installation.dTag;
+    const closeButton = document.createElement("button");
+    closeButton.className = "napplet-window-close";
+    closeButton.type = "button";
+    closeButton.textContent = "Close";
+    closeButton.setAttribute("aria-label", `Close ${title.textContent}`);
     const iframe = document.createElement("iframe");
     iframe.setAttribute("sandbox", "allow-scripts");
     iframe.title = dTag;
     const windowId = crypto.randomUUID(); const nonce = crypto.randomUUID();
-    this.container.append(iframe);
+    closeButton.addEventListener("click", () => this.destroy(windowId));
+    toolbar.append(title, closeButton);
+    element.append(toolbar, iframe);
+    this.container.append(element);
     const source = iframe.contentWindow;
-    if (!source) { iframe.remove(); throw new Error("Iframe browsing context unavailable"); }
+    if (!source) { element.remove(); throw new Error("Iframe browsing context unavailable"); }
     const identity: WindowIdentity = { windowId, nonce, dTag: installation.dTag, aggregateHash: installation.aggregateHash, requiredDomains: installation.manifest.requires, source };
     try {
       await this.bridge.register(identity);
@@ -93,14 +109,14 @@ export class NappletWindowManager {
           timeout = setTimeout(() => reject(new Error("Napplet readiness timed out")), this.readyTimeoutMs);
         })
       ]).finally(() => { if (timeout !== undefined) clearTimeout(timeout); });
-      const managed = { identity, iframe, resources: new SubscriptionRegistry(), ready };
+      const managed = { identity, element, iframe, resources: new SubscriptionRegistry(), ready };
       this.#windows.set(windowId, managed);
       this.telemetry.record("window.active", 1, { dTag: identity.dTag });
       await ready;
       return managed;
     } catch (error) {
       if (this.#windows.delete(windowId)) this.telemetry.record("window.active", -1, { dTag: installation.dTag });
-      this.bridge.unregister(windowId); iframe.remove(); throw error;
+      this.bridge.unregister(windowId); element.remove(); throw error;
     }
   }
 
@@ -108,7 +124,7 @@ export class NappletWindowManager {
     const managed = this.#windows.get(windowId);
     if (!managed) return;
     this.#windows.delete(windowId);
-    managed.resources.close(); this.bridge.unregister(windowId); managed.iframe.remove();
+    managed.resources.close(); this.bridge.unregister(windowId); managed.element.remove();
     this.telemetry.record("window.active", -1, { dTag: managed.identity.dTag });
     this.telemetry.record("subscription.cleanup", 1, { operation: "window-destroy" });
   }

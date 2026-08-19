@@ -120,8 +120,11 @@ describe("package gateway", () => {
   it("removes a registered window when bridge readiness fails", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const iframe = { setAttribute: vi.fn(), remove: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
-    vi.stubGlobal("document", { createElement: () => iframe });
+    const element = { append: vi.fn(), remove: vi.fn(), className: "" };
+    const node = { append: vi.fn(), className: "", textContent: "" };
+    const button = { ...node, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+    const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
+    vi.stubGlobal("document", { createElement: (tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node });
     const telemetry = createPlatformTelemetry();
     const manager = new NappletWindowManager(store, {
       register: vi.fn(), waitUntilReady: vi.fn(async () => { throw new Error("not ready"); }), unregister: vi.fn()
@@ -134,8 +137,11 @@ describe("package gateway", () => {
   it("shares one cold start across concurrent opens", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const iframe = { setAttribute: vi.fn(), remove: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
-    vi.stubGlobal("document", { createElement: vi.fn(() => iframe) });
+    const element = { append: vi.fn(), remove: vi.fn(), className: "" };
+    const node = { append: vi.fn(), className: "", textContent: "" };
+    const button = { ...node, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+    const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
+    vi.stubGlobal("document", { createElement: vi.fn((tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node) });
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     let ready: (() => void) | undefined;
     const manager = new NappletWindowManager(store, {
@@ -146,14 +152,17 @@ describe("package gateway", () => {
     await vi.waitFor(() => expect(ready).toBeTypeOf("function"));
     ready?.();
     expect(await first).toBe(await second);
-    expect(document.createElement).toHaveBeenCalledTimes(1);
+    expect(document.createElement).toHaveBeenCalledTimes(5);
     manager.close(); vi.unstubAllGlobals();
   });
   it("tears down a cold start that misses readiness timeout", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const iframe = { setAttribute: vi.fn(), remove: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
-    vi.stubGlobal("document", { createElement: () => iframe });
+    const element = { append: vi.fn(), remove: vi.fn(), className: "" };
+    const node = { append: vi.fn(), className: "", textContent: "" };
+    const button = { ...node, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+    const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
+    vi.stubGlobal("document", { createElement: (tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node });
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     const unregister = vi.fn();
     const manager = new NappletWindowManager(store, {
@@ -162,7 +171,7 @@ describe("package gateway", () => {
     await expect(manager.create("hello/world")).rejects.toThrow("readiness timed out");
     expect(manager.listWindowIds()).toEqual([]);
     expect(unregister).toHaveBeenCalledOnce();
-    expect(iframe.remove).toHaveBeenCalledOnce();
+    expect(element.remove).toHaveBeenCalledOnce();
     vi.unstubAllGlobals();
   });
 });
