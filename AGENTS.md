@@ -1,5 +1,10 @@
 # Repository instructions
 
+## UI requirements
+
+- For UI motion, animation, and transitions, always use GSAP whenever
+  technically possible. Prefer GSAP over CSS animations and transitions.
+
 ## Applesauce requirements
 
 - For any task involving Applesauce, always activate and follow the installed
