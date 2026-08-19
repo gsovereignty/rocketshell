@@ -57,8 +57,7 @@ The supported contract is profile `platform-nap-v1`: `@napplet/nap` and
 The host supplies the required NAP domains plus manifest-selected `identity`,
 `outbox`, `relay`, `storage`, `resource`, `config`, `theme`, `intent`, `inc`,
 and `link`. `upload` is available only when `VITE_BLOSSOM_SERVERS` contains at
-least one host-approved server. Optional `notify`, `payments`, `clipboard`,
-`geolocation`, and `camera` domains are deliberately unsupported. A package
+least one host-approved server. A package
 requiring an unavailable domain is refused before application code runs.
 
 `pnpm test:stlstr` runs the built STLstr `stl-preview` package from
