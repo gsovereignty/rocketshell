@@ -1,8 +1,6 @@
 # Kehto + Applesauce host platform
 
-Browser-native static host for verified NIP-5D Napplets. Production files live in `apps/shell/dist` and support arbitrary base paths.
-
-## Commands
+## Build
 
 ```sh
 pnpm install --frozen-lockfile
@@ -13,6 +11,46 @@ pnpm test:browser
 pnpm test:stlstr
 pnpm build
 ```
+
+Production files are written to `apps/shell/dist`. The build supports arbitrary
+Vite base paths.
+
+## Implemented NAP specifications
+
+- **NAP-SHELL** (`shell`): readiness handshake, per-Napplet capability
+  negotiation, synchronous capability discovery, and advertised host services.
+- **NAP-IDENTITY** (`identity`): active public key and change notifications;
+  NIP-65 relay permissions; profile, follows, categorized lists, zaps, mutes,
+  blocked users, and NIP-58 badges. Queries use the shared event cache and
+  fetch missing data from host relays.
+- **NAP-OUTBOX** (`outbox`): outbox-aware queries, subscriptions, publication,
+  relay-list resolution, fallback routing, event verification, and lifecycle
+  cleanup.
+- **NAP-RELAY** (`relay`): mediated subscriptions, queries, publication,
+  signing, encryption, relay-tier selection, EOSE handling, and subscription
+  cleanup.
+- **NAP-STORAGE** (`storage`): persistent key-value storage scoped to the
+  runtime-attested Napplet identity.
+- **NAP-RESOURCE** (`resource`): policy-controlled metadata and byte fetching
+  for HTTPS, approved localhost development URLs, and granted package origins.
+- **NAP-CONFIG** (`config`): scoped configuration reads, writes, schemas, and
+  host-rendered settings editing.
+- **NAP-THEME** (`theme`): current-theme queries and automatic theme-change
+  broadcasts.
+- **NAP-INTENT** (`intent`): installed-handler discovery, defaults, chooser and
+  explicit-handler authorization, archetype dispatch, window reuse or creation,
+  and ready-gated payload delivery.
+- **NAP-INC** (`inc`): exact-match topics, subscriptions, authenticated sender
+  attribution, peer channels, broadcast, listing, closure, and window-lifecycle
+  cleanup.
+- **NAP-LINK** (`link`): confirmed external navigation with protocol and URL
+  policy enforcement.
+- **NAP-UPLOAD** (`upload`): shell-mediated Blossom upload and authorization.
+  Available only when `VITE_BLOSSOM_SERVERS` contains at least one approved
+  server.
+
+Every domain is granted only when declared by the signed NIP-5D manifest. A
+package requiring an unavailable domain is rejected before its code runs.
 
 ## Relay configuration
 
@@ -54,12 +92,6 @@ Exact versions live in `PLATFORM_COMPATIBILITY`, workspace manifests, and `pnpm-
 
 The supported contract is profile `platform-nap-v1`: `@napplet/nap` and
 `@napplet/core` 0.31.1, Kehto runtime 0.22.0, and Kehto shell/services 0.20.0.
-The host supplies the required NAP domains plus manifest-selected `identity`,
-`outbox`, `relay`, `storage`, `resource`, `config`, `theme`, `intent`, `inc`,
-and `link`. `upload` is available only when `VITE_BLOSSOM_SERVERS` contains at
-least one host-approved server. A package
-requiring an unavailable domain is refused before application code runs.
-
 `pnpm test:stlstr` runs the built STLstr `stl-preview` package from
 `../hzrd149/stlstr` by default. Set `STLSTR_ROOT` to validate another checkout.
 
