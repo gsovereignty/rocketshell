@@ -355,6 +355,7 @@ void bootstrap().then((platform) => {
     try {
       const opened = await platform.installAndOpen(coordinate);
       openedCoordinates.set(opened.windowId, coordinate);
+      void renderDock();
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
       if (updateUrl) {
         const url = new URL(location.href);
@@ -374,8 +375,10 @@ void bootstrap().then((platform) => {
     }
   };
 
-  void platform.dockLaunchers().then((launchers) => {
+  const renderDock = async (): Promise<void> => {
     if (!dockItems || !dock || !dockStatus) return;
+    const launchers = await platform.dockLaunchers();
+    dockItems.replaceChildren();
     const buttons = launchers.map((launcher) => {
       const item = document.createElement("li");
       const dockButton = document.createElement("button");
@@ -407,7 +410,9 @@ void bootstrap().then((platform) => {
         y: 0, scale: 1, autoAlpha: 1, duration: .5, stagger: .045, ease: "back.out(1.8)", clearProps: "opacity,visibility"
       });
     }
-  });
+  };
+
+  void renderDock();
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
   if (status) status.textContent = "Platform ready";

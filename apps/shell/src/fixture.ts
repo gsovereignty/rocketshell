@@ -62,15 +62,3 @@ export async function installFixture(store: PackageStore, resourceUrl: string): 
   await new PackageInstaller(store).install(event, inputs, { randomId: () => "built-in-platform-fixture" });
   return "platform-fixture";
 }
-
-export async function installBuiltFixture(store: PackageStore, manifestJson: string, indexHtml: string): Promise<string> {
-  const event = JSON.parse(manifestJson) as SignedManifest;
-  const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-  if (!dTag) throw new TypeError("Built fixture manifest needs a d tag");
-  if (await store.getActive(dTag)) return dTag;
-  const bytes = encoder.encode(indexHtml);
-  await new PackageInstaller(store).install(event, new Map([["index.html", { bytes, mediaType: "text/html" }]]), {
-    randomId: () => `built-fixture-${dTag}`
-  });
-  return dTag;
-}

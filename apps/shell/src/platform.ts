@@ -4,17 +4,15 @@ import { createManifestResolver, createPlatformShellAdapter, createRelayConfigur
 import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import { createPersistentNostrEngine } from "@platform/nostr-engine";
 import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/platform-nap-contract";
-import { installBuiltFixture, installFixture } from "./fixture.js";
+import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
 import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
 import { PlatformMetadataStore } from "./platform-metadata.js";
 import { requireWiredDomains } from "./domain-environment.js";
-import { dockLauncherFromManifest, dockLauncherPointers, type DockLauncher } from "./dock-launchers.js";
+import { dockLauncherFromManifest, type DockLauncher } from "./dock-launchers.js";
 
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
-
-declare const __STLSTR_FIXTURE__: { readonly manifest: string; readonly indexHtml: string } | undefined;
 
 function relayUrls(raw: string | undefined, defaults: readonly string[]): string[] {
   const configured = (raw ?? "").split(",").map((url) => url.trim()).filter(Boolean);
@@ -173,10 +171,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true"
     ? await installFixture(packageStore, fixtureResourceUrl)
     : undefined;
-  const stlstrFixtureDTag = import.meta.env.VITE_INSTALL_STLSTR_FIXTURE === "true" && __STLSTR_FIXTURE__
-    ? await installBuiltFixture(packageStore, __STLSTR_FIXTURE__.manifest, __STLSTR_FIXTURE__.indexHtml)
-    : undefined;
-  for (const installedDTag of [fixtureDTag, stlstrFixtureDTag]) {
+  for (const installedDTag of [fixtureDTag]) {
     if (!installedDTag) continue;
     const fixture = await packageStore.getActive(installedDTag);
     if (fixture) resourcePublishers.set(resourceIdentityKey(fixture.dTag, fixture.aggregateHash), fixture.manifestEvent.pubkey);
@@ -192,14 +187,14 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     location.reload();
     return new Promise<BrowserPlatform>(() => {});
   }
-  let fixturePending = fixtureDTag !== undefined || stlstrFixtureDTag !== undefined;
+  let fixturePending = fixtureDTag !== undefined;
   const updates = coordinateServiceWorkerUpdates(registration, navigator.serviceWorker, {
     activeWindowCount: () => (windows?.listWindowIds().length ?? 0) + (fixturePending ? 1 : 0),
     closeWindows: () => windows?.close(),
     confirmActivation: () => !fixturePending && window.confirm("Platform update ready. Close active Napplet windows and reload now?"),
     reload: () => location.reload()
   });
-  const startupFixtures = [fixtureDTag, stlstrFixtureDTag].filter((dTag): dTag is string => dTag !== undefined);
+  const startupFixtures = [fixtureDTag].filter((dTag): dTag is string => dTag !== undefined);
   if (startupFixtures.length > 0) {
     void Promise.all(startupFixtures.map((dTag) => windows.create(dTag))).finally(() => { fixturePending = false; updates.check(); });
   }
@@ -211,11 +206,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     connectExtension: () => engine.accounts.connectExtension(),
     signOut: () => engine.accounts.signOut(),
     async dockLaunchers() {
-      const settled = await Promise.allSettled(dockLauncherPointers().map(async (pointer) => {
-        const event = await resolveManifest(pointer.coordinate);
-        return dockLauncherFromManifest(pointer, event, allowLocalPlaintext);
-      }));
-      return settled.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
+      return (await packageStore.listActive())
+        .map((record) => dockLauncherFromManifest(record, discoveryRelays, allowLocalPlaintext))
+        .filter((launcher): launcher is DockLauncher => launcher !== undefined);
     },
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);

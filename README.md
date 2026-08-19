@@ -8,7 +8,6 @@ pnpm check
 pnpm test
 pnpm test:conformance
 pnpm test:browser
-pnpm test:stlstr
 pnpm build
 ```
 
@@ -92,7 +91,4 @@ Exact versions live in `PLATFORM_COMPATIBILITY`, workspace manifests, and `pnpm-
 
 The supported contract is profile `platform-nap-v1`: `@napplet/nap` and
 `@napplet/core` 0.31.1, Kehto runtime 0.22.0, and Kehto shell/services 0.20.0.
-`pnpm test:stlstr` runs the built STLstr `stl-preview` package from
-`../hzrd149/stlstr` by default. Set `STLSTR_ROOT` to validate another checkout.
-
 Application guidance lives in [`packages/platform-contract/README.md`](packages/platform-contract/README.md).

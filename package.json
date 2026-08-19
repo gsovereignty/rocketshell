@@ -7,7 +7,6 @@
     "check": "pnpm -r --if-present check",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "test:stlstr": "playwright test --config playwright.stlstr.config.ts",
     "test:conformance": "pnpm --filter @platform/reference-napplet build && napplet-conformance apps/reference-napplet/dist",
     "dev": "pnpm --filter @platform/shell dev"
   },

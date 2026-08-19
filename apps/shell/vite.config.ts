@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
@@ -68,14 +67,8 @@ const testBlossomServer = (): Plugin => ({
 });
 
 export default defineConfig(({ mode }) => {
-  const stlstrFixtureDirectory = process.env.VITE_STLSTR_FIXTURE_DIR;
-  const stlstrFixture = stlstrFixtureDirectory ? {
-    manifest: readFileSync(resolve(stlstrFixtureDirectory, ".nip5a-manifest.json"), "utf8"),
-    indexHtml: readFileSync(resolve(stlstrFixtureDirectory, "index.html"), "utf8")
-  } : undefined;
   return {
     base: mode === "github" ? "/shell/" : process.env.PLATFORM_BASE ?? "/",
-    define: { __STLSTR_FIXTURE__: JSON.stringify(stlstrFixture) },
     plugins: [devServiceWorker(), testBlossomServer()],
     build: {
       sourcemap: true,
