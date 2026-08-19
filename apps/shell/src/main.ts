@@ -263,7 +263,7 @@ const wireDockMotion = (): void => {
   dock.addEventListener("focusin", () => setDockVisible(true));
   dock.addEventListener("focusout", () => scheduleDockHide(700));
   document.addEventListener("mousemove", (event) => {
-    if (event.clientY >= window.innerHeight - 20) setDockVisible(true);
+    if (event.clientY >= window.innerHeight - 40) setDockVisible(true);
     else if (event.clientY < window.innerHeight - 112) scheduleDockHide(280);
   });
   if (coarsePointer.matches) {

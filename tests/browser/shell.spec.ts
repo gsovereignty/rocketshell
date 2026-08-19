@@ -297,7 +297,7 @@ test("dock introduces itself then returns at bottom edge", async ({ page }) => {
   await expect(dock).toHaveCSS("opacity", "1");
   await expect(dock).toHaveAttribute("data-visible", "false", { timeout: 5_000 });
   await page.evaluate(() => document.dispatchEvent(new MouseEvent("mousemove", {
-    bubbles: true, clientX: innerWidth / 2, clientY: innerHeight - 1
+    bubbles: true, clientX: innerWidth / 2, clientY: innerHeight - 30
   })));
   await expect(dock).toHaveAttribute("data-visible", "true");
   await expect(dock).toHaveCSS("opacity", "1");
