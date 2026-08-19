@@ -65,6 +65,9 @@ importers:
       '@project/platform-nap-contract':
         specifier: workspace:*
         version: link:../../packages/platform-contract
+      gsap:
+        specifier: ^3.15.0
+        version: 3.15.0
       nostr-tools:
         specifier: 2.24.0
         version: 2.24.0(typescript@5.9.2)
@@ -1199,6 +1202,10 @@ packages:
     requiresBuild: true
     dev: true
     optional: true
+
+  /gsap@3.15.0:
+    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
+    dev: false
 
   /hash-sum@2.0.0:
     resolution: {integrity: sha512-WdZTbAByD+pHfl/g9QSsBIIwy8IT+EsPiKDs0KNX+zSHhdDLFKdZu0BQHljvO+0QI/BasbMSUa8wYNCZTvhslg==}
