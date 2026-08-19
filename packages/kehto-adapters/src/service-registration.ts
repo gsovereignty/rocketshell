@@ -60,10 +60,15 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
   runtime.registerService("identity", createIdentityService({
     getSigner: () => engine.accounts.manager.active ? {
       getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),
-      getRelays: async () => Object.fromEntries([...new Set([...readRelays, ...writeRelays])].map((url) => [url, { read: readRelays.includes(url), write: writeRelays.includes(url) }]))
+      getRelays: () => identityProviders.getRelays(engine.accounts.publicKey)
     } : null,
     getProfile: (pubkey) => identityProviders.getProfile(pubkey),
-    getFollows: (pubkey) => identityProviders.getFollows(pubkey)
+    getFollows: (pubkey) => identityProviders.getFollows(pubkey),
+    getList: (type, pubkey) => identityProviders.getList(type, pubkey),
+    getZaps: (pubkey) => identityProviders.getZaps(pubkey),
+    getMutes: (pubkey) => identityProviders.getMutes(pubkey),
+    getBlocked: (pubkey) => identityProviders.getBlocked(pubkey),
+    getBadges: (pubkey) => identityProviders.getBadges(pubkey)
   }));
   const relayLists = createRelayListResolver(engine.eventStore, engine.ingress, engine.relayPolicy, discoveryRelays, async (relays, authors) => {
     if (relays.length === 0 || authors.length === 0) return [];

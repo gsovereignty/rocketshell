@@ -159,6 +159,9 @@ importers:
       '@project/platform-nap-contract':
         specifier: workspace:*
         version: link:../platform-contract
+      applesauce-common:
+        specifier: 6.2.0
+        version: 6.2.0(typescript@5.9.2)
       applesauce-core:
         specifier: 6.2.0
         version: 6.2.0(typescript@5.9.2)
@@ -991,6 +994,20 @@ packages:
       - typescript
     dev: false
 
+  /applesauce-common@6.2.0(typescript@5.9.2):
+    resolution: {integrity: sha512-meXbDCdqA1LKy1tr04BW7wMfnBBkHetLv+wlXYjAj5iR4Sji5KMxLFdAjUe6cSvrxrk9LxFcP+0P9BcZQxjpaA==}
+    dependencies:
+      '@scure/base': 2.3.0
+      applesauce-core: 6.2.0(typescript@5.9.2)
+      hash-sum: 2.0.0
+      light-bolt11-decoder: 3.2.0
+      nanoid: 5.1.16
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+    dev: false
+
   /applesauce-core@6.2.0(typescript@5.9.2):
     resolution: {integrity: sha512-O6AlVyzqcuIhTOIuexm6UWmx7mRIa2D98gJP7K7vFGf90YdtvSH78AsKQWZXJ0Pk/K14at+9zkwfCkFr7ghgNw==}
     dependencies:
@@ -1199,6 +1216,12 @@ packages:
   /js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
     dev: true
+
+  /light-bolt11-decoder@3.2.0:
+    resolution: {integrity: sha512-3QEofgiBOP4Ehs9BI+RkZdXZNtSys0nsJ6fyGeSiAGCBsMwHGUDS/JQlY/sTnWs91A2Nh0S9XXfA8Sy9g6QpuQ==}
+    dependencies:
+      '@scure/base': 1.1.1
+    dev: false
 
   /loupe@3.2.1:
     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}

@@ -14,6 +14,7 @@
     "@platform/napplet-gateway": "workspace:*",
     "@platform/nostr-engine": "workspace:*",
     "@project/platform-nap-contract": "workspace:*",
+    "applesauce-common": "6.2.0",
     "applesauce-core": "6.2.0",
     "applesauce-loaders": "6.2.0",
     "applesauce-relay": "6.2.1",
