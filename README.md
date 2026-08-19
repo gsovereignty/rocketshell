@@ -81,6 +81,20 @@ shell resolves the latest signed manifest, downloads artifacts only from signed
 server hints, verifies every artifact and aggregate hash, commits atomically,
 then opens the verified package.
 
+## Built-in Napplets
+
+Workspace packages named `@platform/*-napplet` build before the shell. Mark a
+package as loadable by adding `napplet` metadata to its `package.json` with a
+stable `dTag`, title, required domains, and optional archetype conventions. Its
+build must produce `dist/index.html`.
+
+Development serves discovered artifacts under `/napplets.dev/` and generates
+`/napplets.dev.json`. Production copies each complete `dist/` tree under
+`apps/shell/dist/napplets/` and generates `napplets.json`. At startup, built-ins
+enter the same package store, capability bridge, sandbox, and window manager as
+external Napplets. See [NAPPLET-LOADING-ARCHITECTURE.md](NAPPLET-LOADING-ARCHITECTURE.md)
+for full design and extension checklist.
+
 ## Static deployment
 
 Set Vite base for target path, build, then publish whole `apps/shell/dist` directory. Server must serve `service-worker.js` from same application scope. Do not rewrite `/__napplet__/` virtual package responses through server routes; service worker owns them.

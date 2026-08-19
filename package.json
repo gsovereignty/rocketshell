@@ -3,12 +3,12 @@
   "private": true,
   "packageManager": "pnpm@8.15.5",
   "scripts": {
-    "build": "pnpm -r --if-present build",
+    "build": "pnpm --filter '@platform/*-napplet' build && pnpm -r --filter '!@platform/*-napplet' --if-present build",
     "check": "pnpm -r --if-present check",
     "test": "vitest run",
     "test:browser": "playwright test",
     "test:conformance": "pnpm --filter @platform/reference-napplet build && napplet-conformance apps/reference-napplet/dist",
-    "dev": "pnpm --filter @platform/shell dev"
+    "dev": "pnpm --filter '@platform/*-napplet' build && pnpm --parallel --filter '@platform/*-napplet' --filter @platform/shell dev"
   },
   "devDependencies": {
     "@napplet/conformance": "0.16.1",

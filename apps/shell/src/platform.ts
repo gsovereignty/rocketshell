@@ -10,6 +10,7 @@ import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./s
 import { PlatformMetadataStore } from "./platform-metadata.js";
 import { requireWiredDomains } from "./domain-environment.js";
 import { dockLauncherFromManifest, type DockLauncher } from "./dock-launchers.js";
+import { installBuiltInNapplets } from "./built-in-napplets.js";
 
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
@@ -171,7 +172,8 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true"
     ? await installFixture(packageStore, fixtureResourceUrl)
     : undefined;
-  for (const installedDTag of [fixtureDTag]) {
+  const builtInDTags = await installBuiltInNapplets(packageStore, import.meta.env.BASE_URL);
+  for (const installedDTag of [fixtureDTag, ...builtInDTags]) {
     if (!installedDTag) continue;
     const fixture = await packageStore.getActive(installedDTag);
     if (fixture) resourcePublishers.set(resourceIdentityKey(fixture.dTag, fixture.aggregateHash), fixture.manifestEvent.pubkey);

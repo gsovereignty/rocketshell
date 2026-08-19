@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { verifyEvent } from "nostr-tools/pure";
+import { builtInNapplets } from "./vite.napplets.js";
 
 const devServiceWorker = (): Plugin => ({
   name: "platform-dev-service-worker",
@@ -69,7 +70,7 @@ const testBlossomServer = (): Plugin => ({
 export default defineConfig(({ mode }) => {
   return {
     base: mode === "github" ? "/shell/" : process.env.PLATFORM_BASE ?? "/",
-    plugins: [devServiceWorker(), testBlossomServer()],
+    plugins: [devServiceWorker(), testBlossomServer(), builtInNapplets(resolve(__dirname, "../.."))],
     build: {
       sourcemap: true,
       rollupOptions: {

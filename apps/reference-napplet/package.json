@@ -3,7 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "napplet": {
+    "dTag": "reference-napplet",
+    "title": "Reference Napplet",
+    "requires": ["identity", "outbox", "relay", "storage", "resource", "config", "theme", "intent", "inc", "link"],
+    "archetypes": [{ "slug": "reference", "convention": "napplet:reference/open" }]
+  },
   "scripts": {
+    "dev": "vite build --watch",
     "build": "vite build",
     "check": "tsc --noEmit"
   },
