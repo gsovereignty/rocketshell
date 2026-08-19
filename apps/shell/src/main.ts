@@ -1,4 +1,5 @@
 import { bootstrap } from "./bootstrap.js";
+import { gsap } from "gsap";
 import "./style.css";
 
 const status = document.querySelector<HTMLElement>("#status");
@@ -16,6 +17,10 @@ const profileFallback = document.querySelector<HTMLElement>("#profile-avatar-fal
 const accountPopover = document.querySelector<HTMLElement>("#account-popover");
 const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-trigger");
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
+const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
+const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let loadingTimeline: gsap.core.Timeline | null = null;
 
 profileImage?.addEventListener("error", () => {
   profileImage.hidden = true;
@@ -28,9 +33,31 @@ const setExpanded = (trigger: HTMLButtonElement | null, panel: HTMLElement | nul
   panel.hidden = !open;
 };
 
+const closeSpotlight = (): void => {
+  if (!spotlightTrigger || !spotlightPanel || spotlightPanel.hidden) return;
+  spotlightTrigger.setAttribute("aria-expanded", "false");
+  gsap.killTweensOf(spotlightPanel);
+  if (reducedMotion.matches) {
+    spotlightPanel.hidden = true;
+    return;
+  }
+  gsap.to(spotlightPanel, {
+    autoAlpha: 0,
+    y: -8,
+    scale: .985,
+    filter: "blur(4px)",
+    duration: .14,
+    ease: "power2.in",
+    onComplete: () => {
+      spotlightPanel.hidden = true;
+      gsap.set(spotlightPanel, { clearProps: "opacity,visibility,transform,filter" });
+    }
+  });
+};
+
 const closeMenus = (): void => {
   setExpanded(profileTrigger, accountPopover, false);
-  setExpanded(spotlightTrigger, spotlightPanel, false);
+  closeSpotlight();
 };
 
 profileTrigger?.addEventListener("click", () => {
@@ -41,8 +68,18 @@ profileTrigger?.addEventListener("click", () => {
 
 const openSpotlight = (): void => {
   closeMenus();
-  setExpanded(spotlightTrigger, spotlightPanel, true);
-  input?.focus();
+  if (!spotlightTrigger || !spotlightPanel) return;
+  spotlightTrigger.setAttribute("aria-expanded", "true");
+  spotlightPanel.hidden = false;
+  gsap.killTweensOf(spotlightPanel);
+  if (reducedMotion.matches) {
+    input?.focus();
+    return;
+  }
+  gsap.fromTo(spotlightPanel,
+    { autoAlpha: 0, y: -14, scale: .965, filter: "blur(8px)", transformOrigin: "78% top" },
+    { autoAlpha: 1, y: 0, scale: 1, filter: "blur(0px)", duration: .32, ease: "power4.out", clearProps: "filter", onComplete: () => input?.focus() }
+  );
 };
 
 spotlightTrigger?.addEventListener("click", () => spotlightPanel?.hidden ? openSpotlight() : closeMenus());
@@ -67,6 +104,32 @@ const setLoaderStatus = (message: string, state: "idle" | "busy" | "success" | "
   if (!loaderStatus) return;
   loaderStatus.textContent = message;
   loaderStatus.dataset.state = state;
+};
+
+const animateLoading = (): void => {
+  if (reducedMotion.matches || !loaderProgress) return;
+  loadingTimeline?.kill();
+  loadingTimeline = gsap.timeline();
+  loadingTimeline
+    .set(loaderProgress, { autoAlpha: 1, scaleX: 0, transformOrigin: "left center" })
+    .to(loaderProgress, { scaleX: 1, duration: .9, ease: "power2.inOut", repeat: -1, yoyo: true });
+  if (loaderStatus) gsap.fromTo(loaderStatus, { autoAlpha: .35, y: 4 }, { autoAlpha: 1, y: 0, duration: .22, ease: "power2.out" });
+  if (spotlightIcon) gsap.to(spotlightIcon, { rotation: 10, scale: 1.06, duration: .55, ease: "sine.inOut", repeat: -1, yoyo: true, transformOrigin: "center" });
+};
+
+const settleLoading = (state: "success" | "error"): void => {
+  loadingTimeline?.kill();
+  loadingTimeline = null;
+  gsap.killTweensOf([loaderProgress, spotlightIcon, loaderStatus, form]);
+  if (reducedMotion.matches) return;
+  if (loaderProgress) {
+    gsap.to(loaderProgress, { scaleX: state === "success" ? 1 : 0, autoAlpha: state === "success" ? 1 : 0, duration: .24, ease: "power3.out" });
+  }
+  if (spotlightIcon) gsap.to(spotlightIcon, { rotation: 0, scale: 1, duration: .2, ease: "power2.out" });
+  if (loaderStatus) gsap.fromTo(loaderStatus, { autoAlpha: .2, y: 3 }, { autoAlpha: 1, y: 0, duration: .24, ease: "power3.out" });
+  if (state === "error" && form) {
+    gsap.fromTo(form, { x: -5 }, { x: 0, duration: .36, ease: "elastic.out(1, 0.35)", clearProps: "transform" });
+  }
 };
 
 void bootstrap().then((platform) => {
@@ -124,6 +187,7 @@ void bootstrap().then((platform) => {
     button.textContent = "Opening…";
     input.setAttribute("aria-invalid", "false");
     setLoaderStatus("Resolving signed manifest and verifying package…", "busy");
+    animateLoading();
     try {
       const opened = await platform.installAndOpen(coordinate);
       input.value = "";
@@ -131,10 +195,12 @@ void bootstrap().then((platform) => {
       url.searchParams.set("napplet", coordinate);
       history.replaceState(null, "", url);
       setLoaderStatus(`Opened ${opened.title}.`, "success");
+      settleLoading("success");
       setTimeout(() => closeMenus(), 500);
     } catch (error) {
       input.setAttribute("aria-invalid", "true");
       setLoaderStatus(error instanceof Error ? error.message : "Unable to open Napplet", "error");
+      settleLoading("error");
     } finally {
       button.disabled = false;
       button.textContent = "Open Napplet";

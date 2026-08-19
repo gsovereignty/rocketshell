@@ -109,9 +109,10 @@ button:disabled { cursor: wait; opacity: .5; }
   left: 50%;
   width: min(42rem, calc(100vw - 2rem));
   transform: translateX(-50%);
-  animation: spotlight-in 180ms cubic-bezier(.16, 1, .3, 1);
 }
 #napplet-loader {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -143,11 +144,17 @@ button:disabled { cursor: wait; opacity: .5; }
 #loader-status[data-state="busy"] { color: #fde68a; }
 #loader-status[data-state="success"] { color: var(--accent); }
 #loader-status[data-state="error"] { color: #fda4af; }
-@keyframes spotlight-in {
-  from { opacity: .01; transform: translateX(-50%) translateY(-.65rem) scale(.985); filter: blur(5px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); filter: blur(0); }
+#loader-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 -1px 8px rgba(190, 242, 100, .35);
+  opacity: 0;
 }
-@media (prefers-reduced-motion: reduce) { #spotlight-panel { animation: none; } }
+#napplet-loader:has(#loader-status[data-state="error"]) #loader-progress { background: #fda4af; box-shadow: none; }
 
 main { width: min(76rem, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 4rem; }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-bottom: 2rem; }

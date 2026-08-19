@@ -226,6 +226,27 @@ test("coordinate loader reports malformed input without opening a window", async
   await expect(page.locator("#windows iframe")).toHaveCount(1);
 });
 
+test("coordinate loader animates pending work and settles success", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await page.evaluate(() => {
+    const platform = window.__platformTest as unknown as {
+      installAndOpen(coordinate: string): Promise<{ dTag: string; title: string; windowId: string }>;
+    };
+    platform.installAndOpen = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { dTag: "animated-fixture", title: "Animated Fixture", windowId: "animated-window" };
+    };
+  });
+  await page.getByRole("button", { name: "Open Napplet Spotlight" }).click();
+  await page.locator("#coordinate").fill("35129:fixture:animated");
+  await page.getByRole("button", { name: "Open Napplet", exact: true }).click();
+  await expect(page.locator("#loader-status")).toHaveAttribute("data-state", "busy");
+  await expect(page.locator("#loader-progress")).toHaveCSS("opacity", "1");
+  await expect(page.locator("#loader-status")).toHaveText("Opened Animated Fixture.");
+  await expect(page.locator("#coordinate")).toHaveValue("");
+});
+
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
