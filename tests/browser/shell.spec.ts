@@ -212,11 +212,32 @@ test("destroying a Napplet removes its authenticated session", async ({ page }) 
 test("coordinate loader reports malformed input without opening a window", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
+  const spotlight = page.getByRole("button", { name: "Open Napplet Spotlight" });
+  await spotlight.click();
+  await expect(spotlight).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#coordinate")).toBeVisible();
   await page.locator("#coordinate").fill("not-a-coordinate");
-  const openButton = page.getByRole("button", { name: "Open Napplet" });
+  const openButton = page.getByRole("button", { name: "Open Napplet", exact: true });
   await expect(openButton).toBeEnabled();
   await openButton.click();
   await expect(page.locator("#loader-status")).toHaveAttribute("data-state", "error");
   await expect(page.locator("#loader-status")).toHaveText("Use naddr or kind:pubkey:identifier");
   await expect(page.locator("#windows iframe")).toHaveCount(1);
+});
+
+test("menu bar exposes account and Spotlight controls", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  const profile = page.locator("#profile-menu-trigger");
+  await expect(profile.locator("#profile-avatar-fallback")).toHaveText("K");
+  await profile.click();
+  await expect(page.locator("#account-popover")).toBeVisible();
+  await profile.click();
+  await expect(page.locator("#account-popover")).toBeHidden();
+  const spotlight = page.getByRole("button", { name: "Open Napplet Spotlight" });
+  await spotlight.click();
+  await expect(page.locator("#spotlight-panel")).toBeVisible();
+  await expect(page.locator("#coordinate")).toBeVisible();
+  await spotlight.click();
+  await expect(page.locator("#spotlight-panel")).toBeHidden();
 });

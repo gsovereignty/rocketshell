@@ -52,6 +52,7 @@ class BrowserWindowBridge implements WindowBridge {
 export interface BrowserPlatform {
   readonly windows: NappletWindowManager;
   readonly activeAccountPubkey: string;
+  activeAccountProfile(): Promise<{ readonly name?: string; readonly displayName?: string; readonly picture?: string } | null>;
   connectExtension(): Promise<string>;
   signOut(): void;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
@@ -204,6 +205,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   return {
     windows,
     get activeAccountPubkey() { return engine.accounts.publicKey; },
+    activeAccountProfile: () => coreServices.identity.getProfile(engine.accounts.publicKey),
     connectExtension: () => engine.accounts.connectExtension(),
     signOut: () => engine.accounts.signOut(),
     async installAndOpen(coordinate) {

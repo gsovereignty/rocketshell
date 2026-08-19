@@ -8,10 +8,11 @@ import { DEFAULT_PUBLISH_TIMEOUT_MS, createRelayListResolver, createRelayPublish
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 import { createIdentityProviders } from "./identity-providers.js";
+import type { IdentityProviders } from "./identity-providers.js";
 import { limitServiceSubscriptions } from "./subscription-limit.js";
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
-export interface CoreServiceRegistration { close(): void }
+export interface CoreServiceRegistration { readonly identity: IdentityProviders; close(): void }
 
 export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly string[], writeRelays: readonly string[]) {
   return {
@@ -107,7 +108,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     }
     shell.publishIdentityChanged(engine.accounts.publicKey);
   });
-  return { close() {
+  return { identity: identityProviders, close() {
     if (closed) return;
     closed = true; accountChanges.unsubscribe();
   } };

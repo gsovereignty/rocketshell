@@ -2,25 +2,40 @@
 <html lang="en">
   <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#171717"><link rel="manifest" href="./manifest.webmanifest"><title>Kehto Host</title></head>
   <body>
-    <main id="app">
-      <header>
-        <div>
-          <h1>Kehto Host</h1>
-          <p id="status">Starting platform…</p>
+    <nav id="menu-bar" aria-label="Shell menu">
+      <div class="menu-cluster">
+        <button id="profile-menu-trigger" class="menu-button profile-trigger" type="button" aria-expanded="false" aria-controls="account-popover">
+          <span class="profile-avatar" aria-hidden="true">
+            <img id="profile-avatar-image" alt="" hidden>
+            <span id="profile-avatar-fallback">K</span>
+          </span>
+          <span id="profile-menu-label">Not connected</span>
+        </button>
+        <div id="account-popover" class="menu-popover account-popover" hidden>
+          <p id="account-status" role="status" aria-live="polite">No active identity</p>
           <div id="account-controls">
             <button id="connect-account" type="button" disabled>Connect Nostr extension</button>
             <button id="sign-out" type="button" hidden>Sign out</button>
-            <p id="account-status" role="status" aria-live="polite">No active identity</p>
           </div>
         </div>
-        <form id="napplet-loader">
-          <label for="coordinate">Napplet coordinate</label>
-          <div class="loader-row">
-            <input id="coordinate" name="coordinate" type="text" autocomplete="off" spellcheck="false" placeholder="naddr1… or 35129:pubkey:identifier" required>
-            <button type="submit" disabled>Open Napplet</button>
-          </div>
-          <p id="loader-status" role="status" aria-live="polite">Enter a signed kind 35129 coordinate.</p>
-        </form>
+      </div>
+      <button id="spotlight-trigger" class="menu-button icon-button" type="button" aria-label="Open Napplet Spotlight" aria-expanded="false" aria-controls="spotlight-panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
+      </button>
+    </nav>
+    <div id="spotlight-panel" hidden>
+      <form id="napplet-loader" role="search">
+        <svg class="spotlight-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
+        <label class="visually-hidden" for="coordinate">Napplet coordinate</label>
+        <input id="coordinate" name="coordinate" type="text" autocomplete="off" spellcheck="false" placeholder="Napplet coordinate" required>
+        <button type="submit" disabled>Open Napplet</button>
+        <p id="loader-status" role="status" aria-live="polite">Enter an naddr or kind:pubkey:identifier coordinate.</p>
+      </form>
+    </div>
+    <main id="app">
+      <header>
+        <h1>Kehto Host</h1>
+        <p id="status">Starting platform…</p>
       </header>
       <section id="windows" aria-label="Napplet windows"></section>
     </main>
