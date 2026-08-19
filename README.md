@@ -83,7 +83,9 @@ then opens the verified package.
 
 ## Built-in Napplets
 
-Workspace packages named `@platform/*-napplet` build before the shell. Mark a
+Napplet source, authoring documentation, and examples live only under
+[`napplets/`](napplets/). Workspace packages named `@platform/*-napplet` build
+before the shell. Mark a
 package as loadable by adding `napplet` metadata to its `package.json` with a
 stable `dTag`, title, required domains, and optional archetype conventions. Its
 build must produce `dist/index.html`.
@@ -92,8 +94,8 @@ Development serves discovered artifacts under `/napplets.dev/` and generates
 `/napplets.dev.json`. Production copies each complete `dist/` tree under
 `apps/shell/dist/napplets/` and generates `napplets.json`. At startup, built-ins
 enter the same package store, capability bridge, sandbox, and window manager as
-external Napplets. See [NAPPLET-LOADING-ARCHITECTURE.md](NAPPLET-LOADING-ARCHITECTURE.md)
-for full design and extension checklist.
+external Napplets. See the [authoring spec](napplets/AUTHORING-SPEC.md) and
+[loading architecture](napplets/LOADING-ARCHITECTURE.md).
 
 ## Static deployment
 

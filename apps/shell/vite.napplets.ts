@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
 
 export interface BuiltInNappletMetadata {
@@ -29,9 +29,9 @@ const walk = (root: string, current = root): string[] => readdirSync(current, { 
 });
 
 export function discoverBuiltInNapplets(repositoryRoot: string): BuiltInNapplet[] {
-  const appsRoot = join(repositoryRoot, "apps");
-  return readdirSync(appsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => {
-    const appRoot = join(appsRoot, entry.name);
+  const nappletsRoot = join(repositoryRoot, "napplets");
+  return readdirSync(nappletsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => {
+    const appRoot = join(nappletsRoot, entry.name);
     const packagePath = join(appRoot, "package.json");
     const entrypoint = join(appRoot, "dist", "index.html");
     if (!statExists(packagePath) || !statExists(entrypoint)) return [];
@@ -43,7 +43,7 @@ export function discoverBuiltInNapplets(repositoryRoot: string): BuiltInNapplet[
       const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
       return { path, sha256: createHash("sha256").update(bytes).digest("hex"), mediaType: mediaTypes[extension] ?? "application/octet-stream" };
     });
-    return [{ ...packageJson.napplet, name: packageJson.napplet.dTag || basename(appRoot), dist, files }];
+    return [{ ...packageJson.napplet, name: packageJson.napplet.dTag, dist, files }];
   });
 }
 
