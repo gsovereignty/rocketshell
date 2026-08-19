@@ -21,10 +21,16 @@ const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
 const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
 const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
 const windowsContainer = document.querySelector<HTMLElement>("#windows");
+const dockShell = document.querySelector<HTMLElement>("#dock-shell");
+const dock = document.querySelector<HTMLElement>("#napplet-dock");
+const dockItems = document.querySelector<HTMLUListElement>("#dock-items");
+const dockStatus = document.querySelector<HTMLElement>("#dock-status");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const coarsePointer = window.matchMedia("(hover: none)");
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
+let dockHideTimer: number | undefined;
 
 profileImage?.addEventListener("error", () => {
   profileImage.hidden = true;
@@ -196,7 +202,81 @@ const settleLoading = (state: "success" | "error"): void => {
   }
 };
 
+const clearDockHide = (): void => {
+  if (dockHideTimer !== undefined) window.clearTimeout(dockHideTimer);
+  dockHideTimer = undefined;
+};
+
+const setDockVisible = (visible: boolean, immediate = false): void => {
+  if (!dockShell || coarsePointer.matches) return;
+  clearDockHide();
+  dockShell.dataset.visible = String(visible);
+  dockShell.inert = !visible;
+  gsap.killTweensOf(dockShell);
+  const target = { y: visible ? 0 : 88, autoAlpha: visible ? 1 : 0 };
+  if (immediate || reducedMotion.matches) {
+    gsap.set(dockShell, target);
+    return;
+  }
+  gsap.to(dockShell, { ...target, duration: visible ? .42 : .28, ease: visible ? "power4.out" : "power3.in" });
+};
+
+const scheduleDockHide = (delay = 500): void => {
+  if (coarsePointer.matches || dockShell?.matches(":hover") || dockShell?.contains(document.activeElement)) return;
+  clearDockHide();
+  dockHideTimer = window.setTimeout(() => setDockVisible(false), delay);
+};
+
+const introduceDock = (): void => {
+  if (!dockShell || coarsePointer.matches) return;
+  setDockVisible(true, true);
+  window.setTimeout(() => scheduleDockHide(0), 2_200);
+};
+
+const wireDockMotion = (): void => {
+  if (!dockShell || !dock) return;
+  const resetButtons = (): void => {
+    gsap.to(dock.querySelectorAll(".dock-launcher"), { x: 0, y: 0, scale: 1, duration: .28, ease: "power3.out", overwrite: true });
+  };
+  dock.addEventListener("pointermove", (event) => {
+    if (reducedMotion.matches || event.pointerType !== "mouse") return;
+    const minimum = 52;
+    const maximum = 84;
+    const bound = minimum * Math.PI;
+    dock.querySelectorAll<HTMLButtonElement>(".dock-launcher").forEach((button) => {
+      const rect = button.getBoundingClientRect();
+      const distance = rect.left + rect.width / 2 - event.clientX;
+      let x = 0;
+      let scale = 1;
+      if (-bound < distance && distance < bound) {
+        const radians = distance / minimum * .5;
+        scale = 1 + (maximum / minimum - 1) * Math.cos(radians);
+        x = 2 * (maximum - minimum) * Math.sin(radians);
+      } else {
+        x = (-bound < distance ? 2 : -2) * (maximum - minimum);
+      }
+      gsap.to(button, { x, y: -(scale - 1) * 20, scale, duration: .22, ease: "power3.out", overwrite: true });
+    });
+  });
+  dock.addEventListener("pointerenter", () => { clearDockHide(); setDockVisible(true); });
+  dock.addEventListener("pointerleave", () => { resetButtons(); scheduleDockHide(); });
+  dock.addEventListener("focusin", () => setDockVisible(true));
+  dock.addEventListener("focusout", () => scheduleDockHide(700));
+  document.addEventListener("mousemove", (event) => {
+    if (event.clientY >= window.innerHeight - 20) setDockVisible(true);
+    else if (event.clientY < window.innerHeight - 112) scheduleDockHide(280);
+  });
+  if (coarsePointer.matches) {
+    dockShell.dataset.visible = "true";
+    dockShell.inert = false;
+    gsap.set(dockShell, { y: 0, autoAlpha: 1 });
+  }
+};
+
+wireDockMotion();
+
 void bootstrap().then((platform) => {
+  introduceDock();
   if (import.meta.env.VITE_INSTALL_FIXTURE === "true") {
     Object.defineProperty(window, "__platformTest", { value: platform, configurable: true });
   }
@@ -293,6 +373,41 @@ void bootstrap().then((platform) => {
       button.textContent = "Open Napplet";
     }
   };
+
+  void platform.dockLaunchers().then((launchers) => {
+    if (!dockItems || !dock || !dockStatus) return;
+    const buttons = launchers.map((launcher) => {
+      const item = document.createElement("li");
+      const dockButton = document.createElement("button");
+      const image = document.createElement("img");
+      const label = document.createElement("span");
+      dockButton.type = "button";
+      dockButton.className = "dock-launcher";
+      dockButton.title = launcher.title;
+      dockButton.setAttribute("aria-label", `Open ${launcher.title}`);
+      image.src = launcher.iconUrl;
+      image.alt = "";
+      image.decoding = "async";
+      label.className = "dock-label";
+      label.textContent = launcher.title;
+      dockButton.append(image, label);
+      item.append(dockButton);
+      dockItems.append(item);
+      dockButton.addEventListener("click", () => {
+        dockButton.disabled = true;
+        void openCoordinate(launcher.coordinate).finally(() => { dockButton.disabled = false; });
+      });
+      return dockButton;
+    });
+    dockStatus.hidden = launchers.length > 0;
+    dockStatus.textContent = launchers.length > 0 ? "" : "No napplet manifests provide icons yet.";
+    dock.hidden = launchers.length === 0;
+    if (!reducedMotion.matches && buttons.length > 0) {
+      gsap.fromTo(buttons, { y: 20, scale: .72, autoAlpha: 0 }, {
+        y: 0, scale: 1, autoAlpha: 1, duration: .5, stagger: .045, ease: "back.out(1.8)", clearProps: "opacity,visibility"
+      });
+    }
+  });
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
   if (status) status.textContent = "Platform ready";

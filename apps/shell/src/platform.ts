@@ -9,6 +9,7 @@ import { createReadyRegistry } from "./ready-registry.js";
 import { coordinateServiceWorkerUpdates, recordWorkerProtocolFailure } from "./service-worker-update.js";
 import { PlatformMetadataStore } from "./platform-metadata.js";
 import { requireWiredDomains } from "./domain-environment.js";
+import { dockLauncherFromManifest, dockLauncherPointers, type DockLauncher } from "./dock-launchers.js";
 
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
@@ -55,6 +56,7 @@ export interface BrowserPlatform {
   activeAccountProfile(): Promise<{ readonly name?: string; readonly displayName?: string; readonly picture?: string } | null>;
   connectExtension(): Promise<string>;
   signOut(): void;
+  dockLaunchers(): Promise<readonly DockLauncher[]>;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
   destroyWindow(windowId: string): void;
   authenticatedWindowIds(): readonly string[];
@@ -208,6 +210,13 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     activeAccountProfile: () => coreServices.identity.getProfile(engine.accounts.publicKey),
     connectExtension: () => engine.accounts.connectExtension(),
     signOut: () => engine.accounts.signOut(),
+    async dockLaunchers() {
+      const settled = await Promise.allSettled(dockLauncherPointers().map(async (pointer) => {
+        const event = await resolveManifest(pointer.coordinate);
+        return dockLauncherFromManifest(pointer, event, allowLocalPlaintext);
+      }));
+      return settled.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
+    },
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
       const installation = await installRemotePackage(packageStore, event, { allowHttpLocalhost: allowLocalPlaintext });

@@ -289,3 +289,16 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await spotlight.click();
   await expect(page.locator("#spotlight-panel")).toBeHidden();
 });
+
+test("dock introduces itself then returns at bottom edge", async ({ page }) => {
+  await page.goto("./");
+  const dock = page.locator("#dock-shell");
+  await expect(dock).toHaveAttribute("data-visible", "true");
+  await expect(dock).toHaveCSS("opacity", "1");
+  await expect(dock).toHaveAttribute("data-visible", "false", { timeout: 5_000 });
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent("mousemove", {
+    bubbles: true, clientX: innerWidth / 2, clientY: innerHeight - 1
+  })));
+  await expect(dock).toHaveAttribute("data-visible", "true");
+  await expect(dock).toHaveCSS("opacity", "1");
+});
