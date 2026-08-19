@@ -126,6 +126,7 @@ void bootstrap().then((platform) => {
     setLoaderStatus("Resolving signed manifest and verifying package…", "busy");
     try {
       const opened = await platform.installAndOpen(coordinate);
+      input.value = "";
       const url = new URL(location.href);
       url.searchParams.set("napplet", coordinate);
       history.replaceState(null, "", url);

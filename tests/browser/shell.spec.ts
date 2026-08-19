@@ -222,6 +222,7 @@ test("coordinate loader reports malformed input without opening a window", async
   await openButton.click();
   await expect(page.locator("#loader-status")).toHaveAttribute("data-state", "error");
   await expect(page.locator("#loader-status")).toHaveText("Use naddr or kind:pubkey:identifier");
+  await expect(page.locator("#coordinate")).toHaveValue("not-a-coordinate");
   await expect(page.locator("#windows iframe")).toHaveCount(1);
 });
 
