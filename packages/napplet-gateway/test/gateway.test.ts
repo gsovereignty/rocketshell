@@ -122,7 +122,7 @@ describe("package gateway", () => {
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
     const element = { append: vi.fn(), remove: vi.fn(), className: "" };
     const node = { append: vi.fn(), className: "", textContent: "" };
-    const button = { ...node, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+    const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
     const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
     vi.stubGlobal("document", { createElement: (tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node });
     const telemetry = createPlatformTelemetry();
@@ -139,7 +139,7 @@ describe("package gateway", () => {
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
     const element = { append: vi.fn(), remove: vi.fn(), className: "" };
     const node = { append: vi.fn(), className: "", textContent: "" };
-    const button = { ...node, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+    const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
     const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
     vi.stubGlobal("document", { createElement: vi.fn((tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node) });
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
@@ -160,7 +160,7 @@ describe("package gateway", () => {
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
     const element = { append: vi.fn(), remove: vi.fn(), className: "" };
     const node = { append: vi.fn(), className: "", textContent: "" };
-    const button = { ...node, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+    const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
     const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
     vi.stubGlobal("document", { createElement: (tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node });
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));

@@ -20,6 +20,7 @@ const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-t
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
 const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
 const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
+const windowsContainer = document.querySelector<HTMLElement>("#windows");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
@@ -242,9 +243,29 @@ void bootstrap().then((platform) => {
   });
   signOut?.addEventListener("click", () => { platform.signOut(); void renderAccount(); closeMenus(); });
 
-  const openCoordinate = async (): Promise<void> => {
+  const openedCoordinates = new Map<string, string>();
+  windowsContainer?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const closeButton = target.closest<HTMLButtonElement>(".napplet-window-close");
+    const windowId = closeButton?.dataset.windowId;
+    const coordinate = windowId ? openedCoordinates.get(windowId) : undefined;
+    if (!windowId || !coordinate) return;
+    openedCoordinates.delete(windowId);
+    const url = new URL(location.href);
+    const coordinates = url.searchParams.getAll("napplet");
+    url.searchParams.delete("napplet");
+    let removed = false;
+    for (const value of coordinates) {
+      if (!removed && value === coordinate) { removed = true; continue; }
+      url.searchParams.append("napplet", value);
+    }
+    history.replaceState(null, "", url);
+  });
+
+  const openCoordinate = async (requestedCoordinate?: string, updateUrl = true): Promise<void> => {
     if (!input || !button) return;
-    const coordinate = input.value.trim();
+    const coordinate = (requestedCoordinate ?? input.value).trim();
     if (!coordinate) return;
     button.disabled = true;
     button.textContent = "Opening…";
@@ -253,10 +274,13 @@ void bootstrap().then((platform) => {
     animateLoading();
     try {
       const opened = await platform.installAndOpen(coordinate);
-      input.value = "";
-      const url = new URL(location.href);
-      url.searchParams.set("napplet", coordinate);
-      history.replaceState(null, "", url);
+      openedCoordinates.set(opened.windowId, coordinate);
+      if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
+      if (updateUrl) {
+        const url = new URL(location.href);
+        url.searchParams.append("napplet", coordinate);
+        history.replaceState(null, "", url);
+      }
       setLoaderStatus(`Opened ${opened.title}.`, "success");
       settleLoading("success");
       setTimeout(() => closeMenus(), 500);
@@ -272,8 +296,12 @@ void bootstrap().then((platform) => {
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
   if (status) status.textContent = "Platform ready";
-  const initialCoordinate = new URL(location.href).searchParams.get("napplet");
-  if (initialCoordinate && input) { input.value = initialCoordinate; void openCoordinate(); }
+  const initialCoordinates = new URL(location.href).searchParams.getAll("napplet").filter(Boolean);
+  if (initialCoordinates.length > 0) {
+    void (async () => {
+      for (const coordinate of initialCoordinates) await openCoordinate(coordinate, false);
+    })();
+  }
 }).catch((error: unknown) => {
   if (status) status.textContent = `Startup failed: ${error instanceof Error ? error.message : "unknown error"}`;
 });

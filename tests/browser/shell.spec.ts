@@ -233,9 +233,11 @@ test("coordinate loader animates pending work and settles success", async ({ pag
     const platform = window.__platformTest as unknown as {
       installAndOpen(coordinate: string): Promise<{ dTag: string; title: string; windowId: string }>;
     };
+    let opened = 0;
     platform.installAndOpen = async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
-      return { dTag: "animated-fixture", title: "Animated Fixture", windowId: "animated-window" };
+      opened += 1;
+      return { dTag: "animated-fixture", title: "Animated Fixture", windowId: `animated-window-${opened}` };
     };
   });
   await page.getByRole("button", { name: "Open Napplet Spotlight" }).click();
@@ -245,6 +247,24 @@ test("coordinate loader animates pending work and settles success", async ({ pag
   await expect(page.locator("#loader-progress")).toHaveCSS("opacity", "1");
   await expect(page.locator("#loader-status")).toHaveText("Opened Animated Fixture.");
   await expect(page.locator("#coordinate")).toHaveValue("");
+  await expect(page.locator("#spotlight-panel")).toBeHidden();
+  await page.getByRole("button", { name: "Open Napplet Spotlight" }).click();
+  await page.locator("#coordinate").fill("35129:fixture:second");
+  await page.getByRole("button", { name: "Open Napplet", exact: true }).click();
+  await expect(page.locator("#loader-status")).toHaveText("Opened Animated Fixture.");
+  expect(await page.evaluate(() => new URL(location.href).searchParams.getAll("napplet"))).toEqual([
+    "35129:fixture:animated",
+    "35129:fixture:second"
+  ]);
+  await page.evaluate(() => {
+    const close = document.createElement("button");
+    close.className = "napplet-window-close";
+    close.dataset.windowId = "animated-window-1";
+    document.querySelector("#windows")?.append(close);
+    close.click();
+    close.remove();
+  });
+  expect(await page.evaluate(() => new URL(location.href).searchParams.getAll("napplet"))).toEqual(["35129:fixture:second"]);
 });
 
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {

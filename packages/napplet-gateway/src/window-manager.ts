@@ -76,6 +76,7 @@ export class NappletWindowManager {
     iframe.setAttribute("sandbox", "allow-scripts");
     iframe.title = dTag;
     const windowId = crypto.randomUUID(); const nonce = crypto.randomUUID();
+    closeButton.dataset.windowId = windowId;
     closeButton.addEventListener("click", () => this.destroy(windowId));
     toolbar.append(title, closeButton);
     element.append(toolbar, iframe);
