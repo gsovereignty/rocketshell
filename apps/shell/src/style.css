@@ -137,7 +137,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   font-weight: 720;
   cursor: pointer;
 }
-#account-controls #sign-out { background: #45453f; color: #f5f5f0; }
 #account-controls button:hover:not(:disabled), #napplet-loader button:hover:not(:disabled) { filter: brightness(1.08); }
 button:disabled { cursor: wait; opacity: .5; }
 

@@ -257,7 +257,9 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Profile (coming soon)" })).toBeVisible();
   await page.getByRole("button", { name: "Preferences (coming soon)" }).click();
   await expect(page.locator("#account-status")).toHaveText("Preferences is coming soon.");
-  await profile.click();
+  await page.locator("#sign-out").evaluate((element) => { (element as HTMLButtonElement).hidden = false; });
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.locator("#account-popover")).toBeHidden();
   const spotlight = page.getByRole("button", { name: "Open Napplet Spotlight" });
   await spotlight.click();

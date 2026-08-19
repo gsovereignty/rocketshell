@@ -60,7 +60,7 @@ const closeSpotlight = (): void => {
 };
 
 const radialPosition = (index: number): { x: number; y: number } => {
-  const angle = (12 + index * 34) * Math.PI / 180;
+  const angle = (10 + index * 26) * Math.PI / 180;
   const radius = 112;
   return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
 };
@@ -129,9 +129,8 @@ profileTrigger?.addEventListener("click", () => {
   else closeAccountMenu();
 });
 
-profileActions.forEach((action) => action.addEventListener("click", () => {
-  const label = action.dataset.stub ?? "Option";
-  if (accountStatus) accountStatus.textContent = `${label} is coming soon.`;
+profileActions.filter((action) => action.dataset.stub).forEach((action) => action.addEventListener("click", () => {
+  if (accountStatus) accountStatus.textContent = `${action.dataset.stub} is coming soon.`;
   if (!reducedMotion.matches) gsap.fromTo(action, { scale: .88 }, { scale: 1, duration: .34, ease: "elastic.out(1, 0.45)" });
 }));
 
