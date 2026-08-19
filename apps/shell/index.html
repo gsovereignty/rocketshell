@@ -4,18 +4,34 @@
   <body>
     <nav id="menu-bar" aria-label="Shell menu">
       <div class="menu-cluster">
-        <button id="profile-menu-trigger" class="menu-button profile-trigger" type="button" aria-expanded="false" aria-controls="account-popover">
+        <button id="profile-menu-trigger" class="menu-button profile-trigger" type="button" aria-expanded="false" aria-controls="account-popover" aria-haspopup="true">
           <span class="profile-avatar" aria-hidden="true">
             <img id="profile-avatar-image" alt="" hidden>
             <span id="profile-avatar-fallback">K</span>
           </span>
           <span id="profile-menu-label">Not connected</span>
         </button>
-        <div id="account-popover" class="menu-popover account-popover" hidden>
-          <p id="account-status" role="status" aria-live="polite">No active identity</p>
-          <div id="account-controls">
-            <button id="connect-account" type="button" disabled>Connect Nostr extension</button>
-            <button id="sign-out" type="button" hidden>Sign out</button>
+        <div id="account-popover" class="account-popover" hidden>
+          <div id="profile-actions" aria-label="Profile options">
+            <button class="profile-action" type="button" data-stub="Profile" aria-label="Profile (coming soon)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.25"></circle><path d="M5.5 20c.5-4 2.7-6 6.5-6s6 2 6.5 6"></path></svg>
+              <span>Profile</span>
+            </button>
+            <button class="profile-action" type="button" data-stub="Preferences" aria-label="Preferences (coming soon)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg>
+              <span>Preferences</span>
+            </button>
+            <button class="profile-action" type="button" data-stub="Help" aria-label="Help (coming soon)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M9.8 9.4a2.4 2.4 0 0 1 4.6 1c0 2-2.4 2.1-2.4 4M12 17.7v.1"></path></svg>
+              <span>Help</span>
+            </button>
+          </div>
+          <div id="account-card">
+            <p id="account-status" role="status" aria-live="polite">No active identity</p>
+            <div id="account-controls">
+              <button id="connect-account" type="button" disabled>Connect Nostr extension</button>
+              <button id="sign-out" type="button" hidden>Sign out</button>
+            </div>
           </div>
         </div>
       </div>

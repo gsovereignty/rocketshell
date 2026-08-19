@@ -15,12 +15,16 @@ const profileLabel = document.querySelector<HTMLElement>("#profile-menu-label");
 const profileImage = document.querySelector<HTMLImageElement>("#profile-avatar-image");
 const profileFallback = document.querySelector<HTMLElement>("#profile-avatar-fallback");
 const accountPopover = document.querySelector<HTMLElement>("#account-popover");
+const accountCard = document.querySelector<HTMLElement>("#account-card");
+const profileActions = Array.from(document.querySelectorAll<HTMLButtonElement>(".profile-action"));
 const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-trigger");
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
 const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
 const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let loadingTimeline: gsap.core.Timeline | null = null;
+let accountTimeline: gsap.core.Timeline | null = null;
+let accountOpen = false;
 
 profileImage?.addEventListener("error", () => {
   profileImage.hidden = true;
@@ -55,16 +59,81 @@ const closeSpotlight = (): void => {
   });
 };
 
+const radialPosition = (index: number): { x: number; y: number } => {
+  const angle = (12 + index * 34) * Math.PI / 180;
+  const radius = 112;
+  return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+};
+
+const buildAccountTimeline = (): gsap.core.Timeline => {
+  if (accountTimeline) return accountTimeline;
+  const positions = profileActions.map((_, index) => radialPosition(index));
+  gsap.set(profileActions, { x: 0, y: 0, autoAlpha: 0, scale: 0 });
+  gsap.set(accountCard, { autoAlpha: 0, y: -8, scale: .98 });
+  accountTimeline = gsap.timeline({
+    paused: true,
+    onReverseComplete: () => {
+      if (accountPopover) accountPopover.hidden = true;
+    }
+  });
+  profileActions.forEach((action, index) => {
+    accountTimeline?.to(action, {
+      ...positions[index],
+      autoAlpha: 1,
+      scale: 1,
+      rotation: 0,
+      duration: .6,
+      ease: "elastic.out(1, 0.5)",
+      easeReverse: "power3.in"
+    }, index * .05);
+  });
+  accountTimeline
+    .to(accountCard, { autoAlpha: 1, y: 0, scale: 1, duration: .24, ease: "power3.out", easeReverse: "power2.in" }, .14)
+    .to(".profile-avatar", { scale: 1.08, duration: .32, ease: "back.out(1.7)", easeReverse: true }, 0);
+  return accountTimeline;
+};
+
+const closeAccountMenu = (): void => {
+  if (!profileTrigger || !accountPopover || !accountOpen) return;
+  accountOpen = false;
+  profileTrigger.setAttribute("aria-expanded", "false");
+  if (reducedMotion.matches) {
+    accountPopover.hidden = true;
+    return;
+  }
+  buildAccountTimeline().timeScale(1.8).reverse();
+};
+
+const openAccountMenu = (): void => {
+  if (!profileTrigger || !accountPopover) return;
+  closeSpotlight();
+  accountOpen = true;
+  profileTrigger.setAttribute("aria-expanded", "true");
+  accountPopover.hidden = false;
+  const positions = profileActions.map((_, index) => radialPosition(index));
+  if (reducedMotion.matches) {
+    profileActions.forEach((action, index) => gsap.set(action, { ...positions[index], autoAlpha: 1, scale: 1 }));
+    gsap.set(accountCard, { autoAlpha: 1, y: 0 });
+    return;
+  }
+  buildAccountTimeline().timeScale(1).play();
+};
+
 const closeMenus = (): void => {
-  setExpanded(profileTrigger, accountPopover, false);
+  closeAccountMenu();
   closeSpotlight();
 };
 
 profileTrigger?.addEventListener("click", () => {
-  const open = accountPopover?.hidden ?? true;
-  closeMenus();
-  setExpanded(profileTrigger, accountPopover, open);
+  if (!accountOpen) openAccountMenu();
+  else closeAccountMenu();
 });
+
+profileActions.forEach((action) => action.addEventListener("click", () => {
+  const label = action.dataset.stub ?? "Option";
+  if (accountStatus) accountStatus.textContent = `${label} is coming soon.`;
+  if (!reducedMotion.matches) gsap.fromTo(action, { scale: .88 }, { scale: 1, duration: .34, ease: "elastic.out(1, 0.45)" });
+}));
 
 const openSpotlight = (): void => {
   closeMenus();
