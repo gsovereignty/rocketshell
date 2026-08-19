@@ -5,6 +5,10 @@
 - For UI motion, animation, and transitions, always use GSAP whenever
   technically possible. Prefer GSAP over CSS animations and transitions.
 
+## Configuration requirements
+
+- Do not use environment variables.
+
 ## Applesauce requirements
 
 - For any task involving Applesauce, always activate and follow the installed
