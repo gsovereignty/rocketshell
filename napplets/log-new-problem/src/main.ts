@@ -35,12 +35,12 @@ root.innerHTML = `
         <summary><span>Protocol options</span><span class="summary-note">Optional</span></summary>
         <div class="advanced-grid">
           <div class="field"><label for="status">Initial status</label><select id="status" name="status">
-            <option value="open">Open</option><option value="rfm">Ready for makers</option>
+            <option value="open">Open</option><option value="rfm">Request For Maintainers</option>
             <option value="draft">Draft</option><option value="big">Big</option>
             <option value="children">Needs children</option><option value="closed">Closed</option>
           </select></div>
           <div class="field"><label for="child-status">Default child status</label><select id="child-status" name="childStatus">
-            <option value="">Not specified</option><option value="open">Open</option><option value="rfm">Ready for makers</option>
+            <option value="">Not specified</option><option value="open">Open</option><option value="rfm">Request For Maintainers</option>
           </select></div>
           <div class="field span-2"><label for="maintainers">Maintainers</label><textarea id="maintainers" name="maintainers" rows="2" placeholder="One 64-character hex pubkey per line"></textarea></div>
           <fieldset class="span-2"><legend>Optional context</legend>
