@@ -564,6 +564,7 @@ export const createWidgetGrid = (
       return;
     }
     if (!move || event.pointerId !== move.pointerId) return;
+    gsap.set(move.element, { x: event.clientX - move.startX, y: event.clientY - move.startY });
     const containerRect = container.getBoundingClientRect();
     const styles = getComputedStyle(container);
     const gap = Number.parseFloat(styles.columnGap) || 0;
@@ -572,10 +573,10 @@ export const createWidgetGrid = (
     const column = Math.max(0, Math.min(profile.columns - move.startRect.width,
       Math.round((event.clientX - containerRect.left - move.grabOffsetX) / (cellWidth + gap))));
     const row = Math.max(0, Math.round((event.clientY - containerRect.top - move.grabOffsetY) / (rowHeight + gap)));
+    if (column === move.candidate.column && row === move.candidate.row) return;
     move.candidate = { ...move.startRect, column, row };
     move.placement = placementFor(move.element, move.candidate);
     showPreview(move.element, move.candidate, move.placement);
-    gsap.set(move.element, { x: event.clientX - move.startX, y: event.clientY - move.startY });
   };
 
   const endDrag = (event: PointerEvent): void => {
