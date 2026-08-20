@@ -256,11 +256,11 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 #napplet-loader:has(#loader-status[data-state="error"]) #loader-progress { background: var(--danger); box-shadow: none; }
 
-main { width: min(100rem, calc(100% - 2rem)); margin: 0 auto; padding: .75rem 0 4rem; }
+main { width: calc(100% - 1rem); margin: 0 auto; padding: .5rem 0 4rem; }
 p { margin: 0; }
 #windows {
   --widget-columns: 4;
-  --widget-gap: clamp(.55rem, 1vw, 1rem);
+  --widget-gap: .5rem;
   --widget-row-height: max(14rem, calc((100dvh - var(--bar-height) - 5.5rem - var(--widget-gap)) / 2));
   display: grid;
   grid-template-columns: repeat(var(--widget-columns), minmax(0, 1fr));
@@ -426,7 +426,7 @@ p { margin: 0; }
   #napplet-loader { grid-template-columns: auto minmax(0, 1fr); padding: .65rem .8rem .55rem; }
   #napplet-loader button { grid-column: 1 / -1; min-height: 2.4rem; }
   #loader-status { grid-column: 1 / -1; }
-  main { width: calc(100% - 1.25rem); padding-top: .625rem; }
+  main { width: calc(100% - 1rem); }
   #status { padding: 0 .4rem; font-size: .68rem; }
   #windows { --widget-row-height: max(22rem, calc(100dvh - var(--bar-height) - 5.5rem)); }
   #dock-shell { padding-right: .5rem; padding-left: .5rem; }
