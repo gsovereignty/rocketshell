@@ -11,8 +11,8 @@ pnpm test:browser
 pnpm build
 ```
 
-Production files are written to `apps/shell/dist`. The build supports arbitrary
-Vite base paths.
+Production files are written to `apps/shell/dist`. The default build uses `/`
+as its base path; `pnpm --filter @platform/shell build:github` uses `/shell/`.
 
 ## Implemented NAP specifications
 
@@ -45,22 +45,22 @@ Vite base paths.
 - **NAP-LINK** (`link`): confirmed external navigation with protocol and URL
   policy enforcement.
 - **NAP-UPLOAD** (`upload`): shell-mediated Blossom upload and authorization.
-  Available only when `VITE_BLOSSOM_SERVERS` contains at least one approved
-  server.
+  The active account's BUD-03 server list takes precedence over fallback
+  servers configured in shell preferences.
 
 Every domain is granted only when declared by the signed NIP-5D manifest. A
 package requiring an unavailable domain is rejected before its code runs.
 
 ## Relay configuration
 
-The shell works without environment variables. It defaults to public discovery,
-read, and write relays. Override them with comma-separated build variables:
+The shell uses public relay defaults on first run. Configure backup relays,
+lookup relays, and fallback Blossom servers through **Preferences** in the
+profile menu. Settings persist in browser storage. A connected account's
+published NIP-65 inbox/outbox lists and lookup-relay list take precedence over
+the corresponding fallback settings.
 
-- `VITE_DISCOVERY_RELAYS`
-- `VITE_READ_RELAYS`
-- `VITE_WRITE_RELAYS`
-
-Relay URLs pass host policy at runtime. Production deployment requires HTTPS; localhost development may use HTTP.
+Relay and Blossom URLs pass host policy at runtime. Production deployment
+requires secure URLs; localhost development may use plaintext URLs.
 
 ## Open a Napplet
 
@@ -99,7 +99,10 @@ external Napplets. See the [authoring spec](napplets/AUTHORING-SPEC.md) and
 
 ## Static deployment
 
-Set Vite base for target path, build, then publish whole `apps/shell/dist` directory. Server must serve `service-worker.js` from same application scope. Do not rewrite `/__napplet__/` virtual package responses through server routes; service worker owns them.
+Choose the build script matching the deployment path, then publish the whole
+`apps/shell/dist` directory. Server must serve `service-worker.js` from the same
+application scope. Do not rewrite `/__napplet__/` virtual package responses
+through server routes; service worker owns them.
 
 ## Compatibility
 
