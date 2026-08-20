@@ -117,6 +117,11 @@ test("moves widgets by toolbar drag and keeps resize handles independent", async
   await expect(page.locator("#windows")).toHaveAttribute("data-interacting", "resize");
   await page.mouse.up();
   await expect(page.locator("#windows")).not.toHaveAttribute("data-interacting");
+
+  const persistedFirstColumn = await first.evaluate((element) => element.style.gridColumn);
+  await page.reload();
+  await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
+  await expect.poll(() => page.locator(".napplet-window").first().evaluate((element) => element.style.gridColumn)).toBe(persistedFirstColumn);
 });
 
 test("settles intent result before caller navigation unmounts it", async ({ page }) => {

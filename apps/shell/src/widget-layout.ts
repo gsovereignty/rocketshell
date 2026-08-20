@@ -18,6 +18,14 @@ const MOBILE: GridProfile = { name: "mobile", columns: 1 };
 const TABLET: GridProfile = { name: "tablet", columns: 2 };
 const LAPTOP: GridProfile = { name: "laptop", columns: 4 };
 const WIDE: GridProfile = { name: "wide", columns: 6 };
+const LAYOUT_STORAGE_KEY = "shell.widget-layout.v1";
+
+interface StoredLayouts {
+  readonly version: 1;
+  readonly profiles: Partial<Record<GridProfileName, Record<string, WidgetRect>>>;
+}
+
+type LayoutStorage = Pick<Storage, "getItem" | "setItem">;
 
 export const profileForWidth = (width: number): GridProfile => {
   if (width < 600) return MOBILE;
@@ -149,6 +157,30 @@ export const resolveRelocation = (
 const widgetElements = (container: HTMLElement): HTMLElement[] =>
   Array.from(container.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains("napplet-window"));
 
+const widgetKeys = (elements: readonly HTMLElement[]): ReadonlyMap<HTMLElement, string> => {
+  const occurrences = new Map<string, number>();
+  return new Map(elements.map((element) => {
+    const base = element.querySelector<HTMLIFrameElement>("iframe")?.title.trim() ||
+      element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || "napplet";
+    const occurrence = occurrences.get(base) ?? 0;
+    occurrences.set(base, occurrence + 1);
+    return [element, `${base}#${occurrence}`];
+  }));
+};
+
+const readStoredLayouts = (storage: LayoutStorage): StoredLayouts => {
+  try {
+    const value: unknown = JSON.parse(storage.getItem(LAYOUT_STORAGE_KEY) ?? "null");
+    if (typeof value === "object" && value !== null && "version" in value && value.version === 1 &&
+      "profiles" in value && typeof value.profiles === "object" && value.profiles !== null) {
+      return value as StoredLayouts;
+    }
+  } catch {
+    // Storage may be unavailable or contain stale data. Default layout remains usable.
+  }
+  return { version: 1, profiles: {} };
+};
+
 const applyRect = (element: HTMLElement, rect: WidgetRect): void => {
   element.style.gridColumn = `${rect.column + 1} / span ${rect.width}`;
   element.style.gridRow = `${rect.row + 1} / span ${rect.height}`;
@@ -172,9 +204,11 @@ export interface WidgetGridController {
 
 export const createWidgetGrid = (
   container: HTMLElement,
-  reducedMotion: MediaQueryList = window.matchMedia("(prefers-reduced-motion: reduce)")
+  reducedMotion: MediaQueryList = window.matchMedia("(prefers-reduced-motion: reduce)"),
+  storage: LayoutStorage = window.localStorage
 ): WidgetGridController => {
   let profile = profileForWidth(container.getBoundingClientRect().width);
+  const storedLayouts = readStoredLayouts(storage);
   const rects = new Map<HTMLElement, WidgetRect>();
   let resize: ResizeState | null = null;
   let move: MoveState | null = null;
@@ -220,6 +254,33 @@ export const createWidgetGrid = (
 
   const setRect = (element: HTMLElement, rect: WidgetRect): boolean =>
     commitRects(new Map([[element, rect]]));
+
+  const writeStoredLayouts = (): void => {
+    try {
+      storage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(storedLayouts));
+    } catch {
+      // Storage failure must not break moving, resizing, or opening napplets.
+    }
+  };
+
+  const persistCurrentLayout = (): void => {
+    if (!layoutCustomized) return;
+    const elements = widgetElements(container);
+    const keys = widgetKeys(elements);
+    const saved = { ...(storedLayouts.profiles[profile.name] ?? {}) };
+    for (const element of elements) {
+      const key = keys.get(element);
+      const rect = rects.get(element);
+      if (key && rect) saved[key] = rect;
+    }
+    storedLayouts.profiles[profile.name] = saved;
+    writeStoredLayouts();
+  };
+
+  const clearStoredProfile = (): void => {
+    delete storedLayouts.profiles[profile.name];
+    writeStoredLayouts();
+  };
 
   const placementFor = (element: HTMLElement, candidate: WidgetRect): RelocationResult => {
     const entries = [...rects];
@@ -298,6 +359,7 @@ export const createWidgetGrid = (
     gsap.set(element, { clearProps: "transform" });
     if (!commitRects(updates)) return false;
     layoutCustomized = true;
+    persistCurrentLayout();
     animateCommittedPlacement(updates, before);
     return true;
   };
@@ -334,7 +396,10 @@ export const createWidgetGrid = (
         updates.set(candidate, { ...rect, row: rect.row + appliedHeightDelta, height: rect.height - appliedHeightDelta });
       }
     }
-    if (commitRects(updates) && (appliedWidthDelta !== 0 || appliedHeightDelta !== 0)) layoutCustomized = true;
+    if (commitRects(updates) && (appliedWidthDelta !== 0 || appliedHeightDelta !== 0)) {
+      layoutCustomized = true;
+      persistCurrentLayout();
+    }
   };
 
   const animateLayout = (elements: readonly HTMLElement[]): void => {
@@ -349,8 +414,9 @@ export const createWidgetGrid = (
     });
   };
 
-  const reset = (animate = true): void => {
+  const reset = (animate = true, clearPersistence = false): void => {
     const elements = widgetElements(container);
+    if (clearPersistence) clearStoredProfile();
     layoutCustomized = false;
     rects.clear();
     defaultWidgetRects(elements.length, profile.columns).forEach((rect, index) => {
@@ -381,17 +447,50 @@ export const createWidgetGrid = (
     const added = elements.filter((element) => !rects.has(element));
     for (const element of elements) decorate(element);
     for (const element of [...rects.keys()]) if (!elements.includes(element)) rects.delete(element);
-    if (rects.size === 0 || !layoutCustomized) {
+    if (rects.size === 0) {
+      const saved = storedLayouts.profiles[profile.name];
+      const keys = widgetKeys(elements);
+      let restored = 0;
+      if (saved) {
+        for (const element of elements) {
+          const key = keys.get(element);
+          const rect = key ? saved[key] : undefined;
+          if (rect && canPlaceRect(rect, profile.columns, [...rects.values()]) && setRect(element, rect)) restored += 1;
+        }
+      }
+      if (restored > 0) {
+        layoutCustomized = true;
+        const defaults = defaultWidgetRects(elements.length, profile.columns);
+        for (const element of elements.filter((candidate) => !rects.has(candidate))) {
+          const index = elements.indexOf(element);
+          const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
+          const packed = firstAvailableRect(template, profile.columns, [...rects.values()]);
+          if (packed) setRect(element, packed);
+        }
+        persistCurrentLayout();
+        animateLayout(elements);
+        return;
+      }
+      reset(true);
+      return;
+    }
+    if (!layoutCustomized) {
       reset(true);
       return;
     }
     const defaults = defaultWidgetRects(elements.length, profile.columns);
+    const saved = storedLayouts.profiles[profile.name];
+    const keys = widgetKeys(elements);
     for (const element of added) {
       const index = elements.indexOf(element);
       const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
-      const packed = firstAvailableRect(template, profile.columns, [...rects.values()]);
-      if (packed) setRect(element, packed);
+      const stored = saved?.[keys.get(element) ?? ""];
+      const target = stored && canPlaceRect(stored, profile.columns, [...rects.values()])
+        ? stored
+        : firstAvailableRect(template, profile.columns, [...rects.values()]);
+      if (target) setRect(element, target);
     }
+    persistCurrentLayout();
     animateLayout(added);
   };
 
@@ -553,7 +652,7 @@ export const createWidgetGrid = (
     const edge = handle.dataset.resizeEdge as ResizeEdge;
     if (event.key === "Home") {
       event.preventDefault();
-      reset(true);
+      reset(true, true);
       return;
     }
     const delta = event.shiftKey ? 2 : 1;
@@ -570,10 +669,13 @@ export const createWidgetGrid = (
     if (!entry) return;
     const next = profileForWidth(entry.contentRect.width);
     if (next.name === profile.name) return;
+    persistCurrentLayout();
     profile = next;
     container.dataset.gridProfile = profile.name;
     container.style.setProperty("--widget-columns", String(profile.columns));
-    reset(true);
+    rects.clear();
+    layoutCustomized = false;
+    sync();
   });
   resizeObserver.observe(container);
   container.dataset.gridProfile = profile.name;
@@ -586,7 +688,7 @@ export const createWidgetGrid = (
   sync();
 
   return {
-    reset: () => reset(true),
+    reset: () => reset(true, true),
     destroy: () => {
       mutationObserver.disconnect();
       resizeObserver.disconnect();
