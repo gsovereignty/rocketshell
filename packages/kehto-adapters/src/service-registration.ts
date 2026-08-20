@@ -11,7 +11,7 @@ import { createIdentityProviders } from "./identity-providers.js";
 import type { IdentityProviders } from "./identity-providers.js";
 import { limitServiceSubscriptions } from "./subscription-limit.js";
 
-export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
+export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration; readonly lookupRelays?: string[] }
 export interface CoreServiceRegistration { readonly identity: IdentityProviders; close(): void }
 
 export function createOutboxRelayPool(engine: NostrEngine, readRelays: readonly string[], writeRelays: readonly string[]) {
@@ -57,7 +57,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     isAvailable() { return readRelays.length > 0 || writeRelays.length > 0; }
   }), { subscribe: "relay.subscribe", close: "relay.close", closed: "relay.closed" });
   runtime.registerService("relay", relayService);
-  const identityProviders = createIdentityProviders(engine, readRelays);
+  const identityProviders = createIdentityProviders(engine, readRelays, options.lookupRelays ? { lookupRelays: options.lookupRelays } : {});
   runtime.registerService("identity", createIdentityService({
     getSigner: () => engine.accounts.manager.active ? {
       getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),

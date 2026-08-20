@@ -5,6 +5,8 @@ export interface RelayConfigurationSnapshot { readonly discovery: string[]; read
 export interface PlatformRelayConfiguration {
   add(tier: string, url: string): void;
   remove(tier: string, url: string): void;
+  /** Replaces a whole tier in place, keeping the array identity the live consumers hold. */
+  replace(tier: RelayTier, urls: readonly string[]): void;
   values(tier: RelayTier): string[];
   snapshot(): RelayConfigurationSnapshot;
 }
@@ -24,6 +26,10 @@ export function createRelayConfiguration(policy: RelayPolicy, initial: RelayConf
   return {
     add(tierName, url) {
       const tier = requireTier(tierName); const next = policy.select([...tiers[tier], url], contextFor(tier));
+      tiers[tier].splice(0, tiers[tier].length, ...next);
+    },
+    replace(tier, urls) {
+      const next = policy.select([...urls], contextFor(tier));
       tiers[tier].splice(0, tiers[tier].length, ...next);
     },
     remove(tierName, url) {

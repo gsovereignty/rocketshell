@@ -5,9 +5,10 @@ import {
   getBadgeAwardPointer, getBadgeDescription, getBadgeImage, getBadgeName, getBadgeThumbnails,
   getZapAmount, getZapRequest, getZapSender
 } from "applesauce-common/helpers";
+import { BLOSSOM_SERVER_LIST_KIND, getBlossomServersFromList } from "applesauce-common/helpers/blossom";
 import { createAddressLoader } from "applesauce-loaders/loaders";
 import { Observable, defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
-import type { NostrEngine } from "@platform/nostr-engine";
+import type { NostrEngine, ReplaceableLookup } from "@platform/nostr-engine";
 import { openRelayStream } from "@platform/nostr-engine";
 import type { Badge, ProfileData, RelayPermission, ZapReceipt } from "@napplet/nap/identity";
 
@@ -33,6 +34,19 @@ export interface IdentityProviders {
   getMutes(pubkey: string): Promise<string[]>;
   getBlocked(pubkey: string): Promise<string[]>;
   getBadges(pubkey: string): Promise<Badge[]>;
+  /** BUD-03 (kind 10063) media servers published by the account. */
+  getBlossomServers(pubkey: string): Promise<string[]>;
+  /**
+   * Resolves a replaceable event, reporting whether it is genuinely unpublished or merely
+   * unreachable. Editors of replaceable lists must not treat the two the same.
+   */
+  lookupReplaceable(kind: number, pubkey: string, options?: LookupOptions): Promise<ReplaceableLookup>;
+}
+
+export interface LookupOptions {
+  /** Skip the local event store and always ask the network for the newest version. */
+  readonly refresh?: boolean;
+  readonly hints?: readonly string[];
 }
 
 const toProfile = (event: NostrEvent | undefined): ProfileData | null => {
@@ -59,7 +73,15 @@ const listEntries = (event: NostrEvent | undefined): string[] => event
   ? [...new Set(event.tags.flatMap((tag) => typeof tag[0] === "string" && !LIST_METADATA_TAGS.has(tag[0]) && typeof tag[1] === "string" && tag[1].length > 0 ? [tag[1]] : []))]
   : [];
 
-export function createIdentityProviders(engine: NostrEngine, relayUrls: readonly string[]): IdentityProviders {
+/**
+ * `relayUrls` and `options.lookupRelays` are read on every request rather than copied, so passing the
+ * live tier arrays from {@link createRelayConfiguration} keeps the loader current as settings change.
+ */
+export function createIdentityProviders(
+  engine: NostrEngine,
+  relayUrls: string[],
+  options: { readonly lookupRelays?: string[] } = {}
+): IdentityProviders {
   const request = (relays: string[], filters: Parameters<typeof openRelayStream>[3]) => new Observable<NostrEvent>((observer) => {
     const selected = engine.relayPolicy.select(relays, "read");
     const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, {
@@ -67,7 +89,31 @@ export function createIdentityProviders(engine: NostrEngine, relayUrls: readonly
     }, 15_000, engine.telemetry);
     return () => handle.close();
   });
-  const loader = createAddressLoader(request, { eventStore: engine.eventStore, bufferTime: 0, extraRelays: [...relayUrls] });
+  // Passed through rather than copied: a copy would freeze the relay set at construction time and
+  // silently ignore every later edit made in the settings panel.
+  const loader = createAddressLoader(request, {
+    eventStore: engine.eventStore, bufferTime: 0, extraRelays: relayUrls,
+    ...(options.lookupRelays ? { lookupRelays: options.lookupRelays } : {})
+  });
+
+  const lookupReplaceable = async (kind: number, pubkey: string, lookup: LookupOptions = {}): Promise<ReplaceableLookup> => {
+    const stored = (): NostrEvent | undefined => engine.eventStore.getReplaceable(kind, pubkey);
+    if (!pubkey) return { status: "unavailable", reason: "signed-out" };
+    const cached = stored();
+    if (cached && !lookup.refresh) return { status: "found", event: cached };
+    if (relayUrls.length === 0) return { status: "unavailable", reason: "no-relays-configured" };
+    try {
+      const event = await firstValueFrom(loader({ kind, pubkey, relays: [...(lookup.hints ?? [])] }).pipe(
+        timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
+      ));
+      const resolved = event ?? stored();
+      // Completing without an event means the relays answered EOSE with nothing: genuinely unpublished.
+      return resolved ? { status: "found", event: resolved } : { status: "absent" };
+    } catch {
+      const fallback = stored();
+      return fallback ? { status: "found", event: fallback } : { status: "unavailable", reason: "relay-lookup-failed" };
+    }
+  };
   const resolve = async (kind: number, pubkey: string, identifier?: string, hints: readonly string[] = []): Promise<NostrEvent | undefined> => {
     const cached = engine.eventStore.getReplaceable(kind, pubkey, identifier);
     if (cached || !pubkey || relayUrls.length === 0) return cached;
@@ -94,6 +140,11 @@ export function createIdentityProviders(engine: NostrEngine, relayUrls: readonly
     return engine.eventStore.getByFilters(filter);
   };
   return {
+    lookupReplaceable: (kind, pubkey, lookup) => lookupReplaceable(kind, pubkey, lookup ?? {}),
+    getBlossomServers: async (pubkey) => {
+      const event = await resolve(BLOSSOM_SERVER_LIST_KIND, pubkey);
+      return event ? getBlossomServersFromList(event).map((server) => server.toString()) : [];
+    },
     getRelays: async (pubkey) => {
       const event = await resolve(kinds.RelayList, pubkey);
       if (!event) return {};

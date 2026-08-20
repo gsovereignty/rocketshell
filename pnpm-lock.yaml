@@ -138,6 +138,9 @@ importers:
       applesauce-core:
         specifier: 6.2.0
         version: 6.2.0(typescript@5.9.2)
+      rxjs:
+        specifier: 7.8.2
+        version: 7.8.2
 
   packages/kehto-adapters:
     dependencies:
@@ -204,6 +207,9 @@ importers:
       applesauce-accounts:
         specifier: 6.2.0
         version: 6.2.0(@capacitor/core@7.6.8)(typescript@5.9.2)
+      applesauce-common:
+        specifier: 6.2.0
+        version: 6.2.0(typescript@5.9.2)
       applesauce-core:
         specifier: 6.2.0
         version: 6.2.0(typescript@5.9.2)
