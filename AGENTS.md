@@ -13,6 +13,10 @@
 
 - Treat packaged napplets and the shell as separate products with a strict
   host/application boundary.
+- For any task involving napplets, first check the living NAP specifications at
+  `https://github.com/napplet/naps` for relevant requirements and examples.
+  Base napplet design, implementation, and protocol decisions on those current
+  references rather than memory, local conventions, or invented patterns.
 - Packaged napplet code belongs under `napplets/<napplet>/`. It must remain
   independently buildable and deployable, and may depend only on public
   napplet SDKs and platform contracts. It must not import shell source, host
