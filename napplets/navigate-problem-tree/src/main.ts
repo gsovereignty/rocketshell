@@ -5,7 +5,7 @@
   FORM: Split outline/list, user-pinned composition; no seed assignment.
   FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 */
-import { intent, outbox } from "@napplet/sdk";
+import { intent, outbox, type OutboxSubscription, type RelayEventResult } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
@@ -15,6 +15,7 @@ import {
 import {
   PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION, hasProblemChildComposer
 } from "./problem-child-intent";
+import { mergeProblemEvents } from "./problem-events";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -28,6 +29,9 @@ let activeFilter = "all";
 let noteHandlerAvailable = false;
 let problemChildHandlerAvailable = false;
 let childComposerBusy = false;
+let problemEvents: RelayEventResult[] = [];
+let problemSubscription: OutboxSubscription | undefined;
+let loadGeneration = 0;
 
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
@@ -36,6 +40,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
 const externalIcon = `<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M11 3h6v6M9 11l8-8M16 11v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"/></svg>`;
 
 function showSetup(message = "") {
+  stopProblemSubscription();
   app.innerHTML = `
     <section class="setup" aria-labelledby="setup-title">
       <div class="setup-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -65,6 +70,21 @@ function showSetup(message = "") {
     loadRoot();
   });
   gsap.fromTo(".setup > *", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .07, ease: "expo.out" });
+}
+
+function stopProblemSubscription() {
+  loadGeneration += 1;
+  problemSubscription?.close();
+  problemSubscription = undefined;
+}
+
+function receiveProblemEvents(rootCoordinate: string, incoming: RelayEventResult[]) {
+  const merged = mergeProblemEvents(problemEvents, incoming);
+  problemEvents = merged.events;
+  if (!merged.changed || !dag || dag.rootCoordinate !== rootCoordinate) return;
+  dag = buildProblemDag(rootCoordinate, problemEvents);
+  if (!dag.nodes.has(selected)) selected = rootCoordinate;
+  renderApp();
 }
 
 function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): string {
@@ -215,21 +235,39 @@ async function openProblem(coordinate: string) {
 async function loadDag(value: string) {
   const status = document.querySelector<HTMLOutputElement>("#setup-status");
   const submit = document.querySelector<HTMLButtonElement>("#root-form button");
+  let generation = loadGeneration;
   try {
     const coordinate = assertRootCoordinate(value);
+    stopProblemSubscription();
+    generation = loadGeneration;
+    problemEvents = [];
+    dag = undefined;
     if (status) status.textContent = "Loading problem structure…";
     if (submit) submit.disabled = true;
+    const filters = [{ kinds: [31971], "#A": [coordinate] }];
+    const subscription = outbox.subscribe(filters, { timeoutMs: 8000 });
+    problemSubscription = subscription;
+    subscription.on("event", (result) => {
+      if (problemSubscription === subscription) receiveProblemEvents(coordinate, [result]);
+    });
+    subscription.on("closed", () => {
+      if (problemSubscription === subscription) problemSubscription = undefined;
+    });
     const [{ events }, noteAvailability, childAvailability] = await Promise.all([
-      outbox.query([{ kinds: [31971], "#A": [coordinate] }], { timeoutMs: 8000 }),
+      outbox.query(filters, { timeoutMs: 8000 }),
       intent.available("note").catch(() => undefined),
       intent.available(PROBLEM_CHILD_ARCHETYPE).catch(() => undefined)
     ]);
-    dag = buildProblemDag(coordinate, events);
+    if (generation !== loadGeneration) return;
+    problemEvents = mergeProblemEvents(problemEvents, events).events;
+    dag = buildProblemDag(coordinate, problemEvents);
     selected = coordinate;
     noteHandlerAvailable = noteAvailability?.available === true;
     problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
     renderApp();
   } catch (error) {
+    if (generation !== loadGeneration) return;
+    stopProblemSubscription();
     if (status) status.textContent = error instanceof Error ? error.message : "Problem DAG could not be loaded.";
     if (submit) submit.disabled = false;
   }
