@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { assertRootCoordinate, buildProblemDag, descendantsCount } from "./problem-dag";
+import { ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount } from "./problem-dag";
 
 const hex = (char: string) => char.repeat(64);
 const root = `31971:${hex("a")}:${hex("b")}`;
@@ -16,6 +16,10 @@ const problem = (coordinate: string, id: string, extra: string[][] = [], created
 });
 
 describe("problem DAG", () => {
+  it("uses the configured problem tree root", () => {
+    expect(ROOT_A_TAG).toBe("31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:79358b35c722c94fd9ff49ec0fcc257081efe29bc38902fcf6e85d83c58633e4");
+  });
+
   it("validates full kind 31971 coordinates", () => {
     expect(assertRootCoordinate(` ${root.toUpperCase()} `)).toBe(root);
     expect(() => assertRootCoordinate(hex("a"))).toThrow("Enter root as");
