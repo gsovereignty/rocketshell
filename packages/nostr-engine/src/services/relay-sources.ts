@@ -52,6 +52,9 @@ const preferOwn = (
   shareReplay(HOLD)
 );
 
+/** The signed-in account's profile (kind 0), or undefined while unknown or signed out. */
+export const activeProfile$ = own((user) => user.profile$);
+
 /** The account's own NIP-65 lists, unmixed with any fallback. */
 export const outboxes$ = own<string[]>((user) => user.outboxes$);
 export const inboxes$ = own<string[]>((user) => user.inboxes$);

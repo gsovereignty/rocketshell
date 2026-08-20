@@ -1,3 +1,4 @@
+import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
 import { createShellSettingsStore } from "@platform/host-services";
 import { gsap } from "gsap";
@@ -325,28 +326,19 @@ void bootstrap().then((platform) => {
   }
   if (button) button.disabled = false;
 
-  let accountRender = 0;
-  const renderAccount = async (): Promise<void> => {
-    const renderId = ++accountRender;
-    const pubkey = platform.activeAccountPubkey;
+  const renderIdentity = (pubkey: string | undefined, profile: { name?: string | undefined; displayName?: string | undefined; picture?: string | undefined } | undefined): void => {
     if (accountStatus) accountStatus.textContent = pubkey ? `Active: ${pubkey.slice(0, 12)}…${pubkey.slice(-8)}` : "No active identity";
     if (connectAccount) connectAccount.hidden = Boolean(pubkey);
     if (signOut) signOut.hidden = !pubkey;
-    settingsView?.refresh();
     if (!pubkey) {
       if (profileLabel) profileLabel.textContent = "Not connected";
       if (profileFallback) profileFallback.textContent = "K";
       if (profileImage) { profileImage.hidden = true; profileImage.removeAttribute("src"); }
       return;
     }
-    if (profileLabel) profileLabel.textContent = `${pubkey.slice(0, 8)}…`;
-    if (profileFallback) profileFallback.textContent = pubkey.slice(0, 2).toUpperCase();
-    const profile = await platform.activeAccountProfile();
-    if (renderId !== accountRender || pubkey !== platform.activeAccountPubkey) return;
     const name = profile?.displayName || profile?.name;
     if (profileLabel) profileLabel.textContent = name || `${pubkey.slice(0, 8)}…`;
     if (profileFallback) profileFallback.textContent = (name || pubkey).slice(0, 2).toUpperCase();
-    settingsView?.refresh();
     if (profileImage) {
       const picture = profile?.picture;
       const validPicture = picture && (() => { try { return ["https:", "http:"].includes(new URL(picture).protocol); } catch { return false; } })();
@@ -354,19 +346,22 @@ void bootstrap().then((platform) => {
       else { profileImage.hidden = true; profileImage.removeAttribute("src"); }
     }
   };
-  void renderAccount();
+  // The pubkey and the profile arrive independently, so the pair is combined rather than
+  // sequenced. This replaces a render-token guard that existed only to discard a stale profile.
+  const identitySubscription = combineLatest([platform.activePubkey$, platform.activeProfile$])
+    .subscribe(([pubkey, profile]) => renderIdentity(pubkey, profile));
+  window.addEventListener("pagehide", () => identitySubscription.unsubscribe(), { once: true });
   if (connectAccount) connectAccount.disabled = false;
   connectAccount?.addEventListener("click", () => {
     connectAccount.disabled = true;
     if (accountStatus) accountStatus.textContent = "Waiting for Nostr extension…";
     void platform.connectExtension()
-      .then(() => renderAccount())
       .catch((error: unknown) => {
         if (accountStatus) accountStatus.textContent = error instanceof Error ? error.message : "Unable to connect Nostr extension";
       })
       .finally(() => { connectAccount.disabled = false; });
   });
-  signOut?.addEventListener("click", () => { platform.signOut(); void renderAccount(); closeMenus(); });
+  signOut?.addEventListener("click", () => { platform.signOut(); closeMenus(); });
 
   const openedCoordinates = new Map<string, string>();
   windowsContainer?.addEventListener("click", (event) => {

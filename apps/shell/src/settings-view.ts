@@ -1,3 +1,4 @@
+import { combineLatest, map, type Observable, type Subscription } from "rxjs";
 import { gsap } from "gsap";
 import type { ShellSettings, ShellSettingsStore, ThemePreference } from "@platform/host-services";
 import type { BrowserPlatform } from "./platform.js";
@@ -57,12 +58,11 @@ const errorMessage = (error: unknown): string => {
   return known[error.message] ?? error.message;
 };
 
-export interface SettingsPlatform extends Pick<
+export type SettingsPlatform = Pick<
   BrowserPlatform,
   "settings" | "accountLists" | "relayLimit" | "normalizeRelay" | "normalizeMediaServer" | "publishTheme"
-> {
-  readonly activeAccountPubkey: string;
-}
+  | "activePubkey$" | "accountMailboxes$" | "accountBlossomServers$"
+>;
 
 export interface ThemeController {
   /** Re-resolves the preference and repaints the shell and every open napplet. */
@@ -115,8 +115,6 @@ export interface SettingsView {
   open(): void;
   close(): void;
   isOpen(): boolean;
-  /** Re-renders the active tab, e.g. after the signed-in identity changes. */
-  refresh(): void;
   destroy(): void;
 }
 
@@ -156,6 +154,7 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
   let activeTab: SettingsTab = "appearance";
   let open = false;
   let renderToken = 0;
+  const sectionSubscriptions: Subscription[] = [];
 
   const setStatus = (message: string, state: "idle" | "busy" | "success" | "error" = "idle"): void => {
     status.textContent = message;
@@ -282,34 +281,36 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     readonly hint: string;
     readonly placeholder: string;
     readonly empty: string;
-    readonly load: () => Promise<{ values: readonly string[]; badge?: (url: string) => string | undefined }>;
+    readonly source: Observable<{ values: readonly string[]; badge?: (url: string) => string | undefined } | undefined>;
     readonly normalize: (url: string) => string;
     readonly limit?: number;
     readonly add: (url: string) => Promise<unknown>;
     readonly remove: (url: string) => Promise<unknown>;
   }): HTMLElement => {
     const { root, content } = section(options_.title, options_.hint);
-    if (!platform.activeAccountPubkey) {
-      content.append(element("p", "settings-empty", "Connect an identity to see and edit this list."));
-      return root;
-    }
     content.append(element("p", "settings-empty", "Loading…"));
-    const token = renderToken;
-    void options_.load().then(({ values, badge }) => {
-      if (token !== renderToken) return;
-      content.replaceChildren();
-      content.append(urlList(values, options_.empty, (url) => {
-        void publishing(`Removing ${url}…`, `Removed ${url}.`, () => options_.remove(url));
-      }, badge));
-      content.append(addForm(options_.placeholder, `Add to ${options_.title.toLowerCase()}`, (value, showError) => {
-        const checked = checkUrl(value, options_.normalize, values, options_.limit);
-        if (!checked.ok) { showError(checked.error); return; }
-        void publishing(`Publishing ${checked.url}…`, `Published ${checked.url}.`, () => options_.add(checked.url));
-      }));
-    }).catch((error: unknown) => {
-      if (token !== renderToken) return;
-      content.replaceChildren(element("p", "settings-empty", errorMessage(error)));
-    });
+    // Subscribed rather than fetched once: a list published from another client, or a change of
+    // account, repaints the section on its own. This replaces a render-token staleness guard.
+    sectionSubscriptions.push(combineLatest([platform.activePubkey$, options_.source]).subscribe({
+      next: ([pubkey, list]) => {
+        if (!pubkey) {
+          content.replaceChildren(element("p", "settings-empty", "Connect an identity to see and edit this list."));
+          return;
+        }
+        if (!list) return;
+        const { values, badge } = list;
+        content.replaceChildren();
+        content.append(urlList(values, options_.empty, (url) => {
+          void publishing(`Removing ${url}…`, `Removed ${url}.`, () => options_.remove(url));
+        }, badge));
+        content.append(addForm(options_.placeholder, `Add to ${options_.title.toLowerCase()}`, (value, showError) => {
+          const checked = checkUrl(value, options_.normalize, values, options_.limit);
+          if (!checked.ok) { showError(checked.error); return; }
+          void publishing(`Publishing ${checked.url}…`, `Published ${checked.url}.`, () => options_.add(checked.url));
+        }));
+      },
+      error: (error: unknown) => content.replaceChildren(element("p", "settings-empty", errorMessage(error)))
+    }));
     return root;
   };
 
@@ -320,16 +321,14 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     empty: "You have not published a relay list yet.",
     normalize: platform.normalizeRelay,
     limit: platform.relayLimit,
-    load: async () => {
-      const mailboxes = await platform.accountLists.readMailboxes();
-      const values = [...new Set([...mailboxes.inboxes, ...mailboxes.outboxes])];
-      const badge = (url: string): string | undefined => {
+    source: platform.accountMailboxes$.pipe(map((mailboxes) => mailboxes && {
+      values: [...new Set([...mailboxes.inboxes, ...mailboxes.outboxes])],
+      badge: (url: string): string | undefined => {
         const read = mailboxes.inboxes.includes(url);
         const write = mailboxes.outboxes.includes(url);
         return read && write ? "read/write" : read ? "read" : write ? "write" : undefined;
-      };
-      return { values, badge };
-    },
+      }
+    })),
     add: (url) => platform.accountLists.addMailboxRelay(url),
     remove: (url) => platform.accountLists.removeMailboxRelay(url)
   });
@@ -340,7 +339,7 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     placeholder: "https://blossom.example.com",
     empty: "You have not published a media server list yet.",
     normalize: platform.normalizeMediaServer,
-    load: async () => ({ values: (await platform.accountLists.readBlossomServers()).servers }),
+    source: platform.accountBlossomServers$.pipe(map((servers) => servers && { values: servers })),
     add: (url) => platform.accountLists.addBlossomServer(url),
     remove: (url) => platform.accountLists.removeBlossomServer(url)
   });
@@ -362,8 +361,14 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     }
   };
 
+  const dropSections = (): void => {
+    for (const subscription of sectionSubscriptions) subscription.unsubscribe();
+    sectionSubscriptions.length = 0;
+  };
+
   const render = (): void => {
     renderToken += 1;
+    dropSections();
     renderTabs();
     body.replaceChildren();
     if (activeTab === "appearance") body.append(appearanceSection());
@@ -373,7 +378,6 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
 
   return {
     isOpen: () => open,
-    refresh: () => { if (open) render(); },
     open() {
       if (open) return;
       open = true;
@@ -391,6 +395,7 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
       if (!open) return;
       open = false;
       renderToken += 1;
+      dropSections();
       gsap.killTweensOf(panel);
       if (reducedMotion.matches) { panel.hidden = true; return; }
       gsap.to(panel, {
@@ -403,6 +408,7 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     },
     destroy() {
       renderToken += 1;
+      dropSections();
       gsap.killTweensOf(panel);
       tabs.replaceChildren();
       body.replaceChildren();
