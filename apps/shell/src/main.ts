@@ -5,6 +5,7 @@ import { activePubkey$, activeProfile$ } from "./nostr.js";
 import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
+import { createWidgetGrid } from "./widget-layout.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -45,6 +46,7 @@ const dockItems = document.querySelector<HTMLUListElement>("#dock-items");
 const dockStatus = document.querySelector<HTMLElement>("#dock-status");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(hover: none)");
+const widgetGrid = windowsContainer ? createWidgetGrid(windowsContainer, reducedMotion) : null;
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
@@ -468,3 +470,5 @@ void bootstrap().then((platform) => {
 }).catch((error: unknown) => {
   if (status) status.textContent = `Startup failed: ${error instanceof Error ? error.message : "unknown error"}`;
 });
+
+window.addEventListener("pagehide", () => widgetGrid?.destroy(), { once: true });

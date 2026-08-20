@@ -243,19 +243,74 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 #napplet-loader:has(#loader-status[data-state="error"]) #loader-progress { background: var(--danger); box-shadow: none; }
 
-main { width: min(76rem, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 4rem; }
+main { width: min(100rem, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 4rem; }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-bottom: 2rem; }
 h1 { margin: 0; font-size: 1.3rem; line-height: 1; letter-spacing: -.025em; }
 p { margin: 0; }
 #status { color: var(--accent); font-size: .8rem; }
-#windows { display: grid; gap: 1rem; }
+#windows {
+  --widget-columns: 4;
+  --widget-gap: clamp(.55rem, 1vw, 1rem);
+  --widget-row-height: max(14rem, calc((100dvh - var(--bar-height) - 9rem - var(--widget-gap)) / 2));
+  display: grid;
+  grid-template-columns: repeat(var(--widget-columns), minmax(0, 1fr));
+  grid-auto-rows: var(--widget-row-height);
+  gap: var(--widget-gap);
+  align-items: stretch;
+}
 #windows:empty { display: none; }
-.napplet-window { overflow: hidden; border: 1px solid var(--line); border-radius: .85rem; background: var(--surface); box-shadow: var(--shadow-window); }
+.napplet-window {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: .85rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-window);
+}
 .napplet-window-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.4rem; padding: 0 .45rem 0 .8rem; }
 .napplet-window-title { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: .76rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .napplet-window-close { min-height: 1.7rem; padding: 0 .6rem; border: 0; border-radius: .4rem; background: var(--control); color: var(--text); font-size: .72rem; font-weight: 650; cursor: pointer; }
 .napplet-window-close:hover { background: var(--control-hover); }
-#windows iframe { display: block; width: 100%; min-height: 76vh; border: 0; background: var(--frame-bg); }
+#windows iframe { display: block; width: 100%; height: 100%; min-height: 0; border: 0; background: var(--frame-bg); }
+#windows[data-interacting="true"] { cursor: nwse-resize; user-select: none; }
+#windows[data-interacting="true"] iframe { pointer-events: none; }
+.napplet-resize-handle {
+  position: absolute;
+  z-index: 4;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: transparent;
+  touch-action: none;
+}
+.napplet-resize-inline { top: 2.4rem; right: 0; bottom: 0; width: .7rem; cursor: ew-resize; }
+.napplet-resize-block { right: 0; bottom: 0; left: 0; height: .7rem; cursor: ns-resize; }
+.napplet-resize-both { right: 0; bottom: 0; width: 1.35rem; height: 1.35rem; cursor: nwse-resize; }
+.napplet-resize-both::after {
+  position: absolute;
+  right: .28rem;
+  bottom: .28rem;
+  width: .48rem;
+  height: .48rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  content: "";
+  opacity: .7;
+}
+.napplet-resize-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; background: var(--accent-glow); }
+.napplet-window[data-resizing="true"] { box-shadow: 0 20px 58px rgba(0, 0, 0, .38); }
+
+@media (pointer: coarse) {
+  .napplet-resize-inline { width: 2.75rem; }
+  .napplet-resize-block { height: 2.75rem; }
+  .napplet-resize-both { width: 2.75rem; height: 2.75rem; }
+}
 
 #dock-shell {
   position: fixed;
@@ -335,7 +390,7 @@ p { margin: 0; }
   #loader-status { grid-column: 1 / -1; }
   main { width: calc(100% - 1.25rem); padding-top: 1.5rem; }
   header { align-items: flex-start; flex-direction: column; gap: .4rem; }
-  #windows iframe { min-height: 80vh; }
+  #windows { --widget-row-height: max(22rem, calc(100dvh - var(--bar-height) - 7rem)); }
   #dock-shell { padding-right: .5rem; padding-left: .5rem; }
   #napplet-dock { max-width: 100%; overflow-x: auto; scrollbar-color: var(--accent) transparent; }
   #dock-items { justify-content: flex-start; }
