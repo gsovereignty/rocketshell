@@ -13,7 +13,7 @@ import {
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
 import {
-  PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION, hasProblemChildComposer
+  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION, hasProblemChildComposer
 } from "./problem-child-intent";
 
 const app = (() => {
@@ -177,8 +177,11 @@ async function logChildProblem() {
   button.textContent = "Opening composer…";
   status.textContent = `Opening child composer for ${node.title}…`;
   try {
-    const result = await intent.open(PROBLEM_CHILD_ARCHETYPE, { problemId: node.problemId }, {
+    const result = await intent.invoke({
+      archetype: PROBLEM_CHILD_ARCHETYPE,
+      action: PROBLEM_CHILD_ACTION,
       convention: PROBLEM_CHILD_CONVENTION,
+      payload: { problemId: node.problemId },
       behavior: { focus: true, reuse: true }
     });
     if (!result.ok || !result.handled) throw new Error(result.error ?? "No problem composer accepted this request.");
