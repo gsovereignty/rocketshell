@@ -12,6 +12,9 @@ import {
   ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, statusLabel,
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
+import {
+  PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION, hasProblemChildComposer
+} from "./problem-child-intent";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -23,6 +26,8 @@ let dag: ProblemDag | undefined;
 let selected = "";
 let activeFilter = "all";
 let noteHandlerAvailable = false;
+let problemChildHandlerAvailable = false;
+let childComposerBusy = false;
 
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
@@ -96,8 +101,13 @@ function renderList() {
   const list = document.querySelector<HTMLElement>("#problem-list");
   const filters = document.querySelector<HTMLElement>("#filters");
   const sectionTitle = document.querySelector<HTMLElement>("#section-title");
-  if (!list || !filters || !sectionTitle) return;
+  const logChildButton = document.querySelector<HTMLButtonElement>("#log-child");
+  if (!list || !filters || !sectionTitle || !logChildButton) return;
   sectionTitle.textContent = parent.coordinate === dag.rootCoordinate ? "Ground-level problems" : `Children of ${parent.title}`;
+  logChildButton.disabled = !problemChildHandlerAvailable || childComposerBusy;
+  logChildButton.title = problemChildHandlerAvailable
+    ? `Log a child problem under ${parent.title}`
+    : "No compatible problem composer available";
   filters.innerHTML = filterCounts(children).map(([value, label, count]) => `
     <button data-filter="${value}" aria-pressed="${activeFilter === value}">${label} <span>${count}</span></button>`).join("");
   list.innerHTML = visible.length ? visible.map((node, index) => `
@@ -123,7 +133,10 @@ function renderApp() {
         <nav aria-label="Problem DAG"><ul class="tree-root">${outlineBranch(dag.rootCoordinate, new Set())}</ul></nav>
       </aside>
       <section class="list-pane" aria-labelledby="section-title">
-        <header class="list-header"><h2 id="section-title"></h2><div id="filters" class="filters" aria-label="Filter children"></div></header>
+        <header class="list-header">
+          <div class="list-heading"><h2 id="section-title"></h2><button id="log-child" type="button">Log child problem</button></div>
+          <div id="filters" class="filters" aria-label="Filter children"></div>
+        </header>
         <ol id="problem-list" class="problem-list"></ol>
         <output id="app-status" class="app-status" aria-live="polite"></output>
       </section>
@@ -148,8 +161,36 @@ function bindWorkspace() {
       renderList();
     } else if (openButton?.dataset.open) {
       void openProblem(openButton.dataset.open);
+    } else if (target.closest("#log-child")) {
+      void logChildProblem();
     } else if (target.closest("#change-root")) showSetup();
   };
+}
+
+async function logChildProblem() {
+  const node = dag?.nodes.get(selected);
+  const status = document.querySelector<HTMLOutputElement>("#app-status");
+  const button = document.querySelector<HTMLButtonElement>("#log-child");
+  if (!node || !status || !button || childComposerBusy) return;
+  childComposerBusy = true;
+  button.disabled = true;
+  button.textContent = "Opening composer…";
+  status.textContent = `Opening child composer for ${node.title}…`;
+  try {
+    const result = await intent.open(PROBLEM_CHILD_ARCHETYPE, { problemId: node.problemId }, {
+      convention: PROBLEM_CHILD_CONVENTION,
+      behavior: { focus: true, reuse: true }
+    });
+    if (!result.ok || !result.handled) throw new Error(result.error ?? "No problem composer accepted this request.");
+    status.textContent = `Child composer opened under ${node.title}.`;
+    gsap.fromTo(button, { scale: .97 }, { scale: 1, duration: .2, ease: "expo.out" });
+  } catch (error) {
+    status.textContent = error instanceof Error ? error.message : "Problem composer could not be opened.";
+  } finally {
+    childComposerBusy = false;
+    button.textContent = "Log child problem";
+    button.disabled = !problemChildHandlerAvailable;
+  }
 }
 
 async function openProblem(coordinate: string) {
@@ -175,13 +216,15 @@ async function loadDag(value: string) {
     const coordinate = assertRootCoordinate(value);
     if (status) status.textContent = "Loading problem structure…";
     if (submit) submit.disabled = true;
-    const [{ events }, availability] = await Promise.all([
+    const [{ events }, noteAvailability, childAvailability] = await Promise.all([
       outbox.query([{ kinds: [31971], "#A": [coordinate] }], { timeoutMs: 8000 }),
-      intent.available("note").catch(() => undefined)
+      intent.available("note").catch(() => undefined),
+      intent.available(PROBLEM_CHILD_ARCHETYPE).catch(() => undefined)
     ]);
     dag = buildProblemDag(coordinate, events);
     selected = coordinate;
-    noteHandlerAvailable = availability?.available === true;
+    noteHandlerAvailable = noteAvailability?.available === true;
+    problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
     renderApp();
   } catch (error) {
     if (status) status.textContent = error instanceof Error ? error.message : "Problem DAG could not be loaded.";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { buildProblemTemplate, createProblemId, isChildPayload, resolveParent } from "./problem";
+import { CHILD_CONVENTION, buildProblemTemplate, createProblemId, isChildPayload, resolveParent } from "./problem";
 
 const hex = (char: string) => char.repeat(64);
 const result = (event: Partial<NostrEvent> & Pick<NostrEvent, "id" | "pubkey" | "tags">): RelayEventResult => ({
@@ -9,6 +9,10 @@ const result = (event: Partial<NostrEvent> & Pick<NostrEvent, "id" | "pubkey" | 
 });
 
 describe("problem events", () => {
+  it("uses the advertised problem-child convention", () => {
+    expect(CHILD_CONVENTION).toBe("napplet:composer/problem-child");
+  });
+
   it("generates a lowercase 32-byte id", () => {
     expect(createProblemId(new Uint8Array(32).fill(171))).toBe("ab".repeat(32));
   });
