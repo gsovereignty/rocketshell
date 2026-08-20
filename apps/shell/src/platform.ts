@@ -3,12 +3,11 @@ import { createHostAuditTrail, createIntentPreferenceStore, createShellSettingsS
 import { createManifestResolver, createPlatformShellAdapter, createRelayConfiguration, registerCoreServices, type PlatformRelayConfiguration } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import {
-  MAILBOX_LIST_KIND, accounts, activePubkey$, activeProfile$, blossomServers$, createAccountListEditor,
-  fallbackBlossomServers$, fallbackLookupRelays$, fallbackRelays$, mailboxes$, normalizeMediaServer,
-  ownBlossomServers$, publisher, relayListPublishTargets, relayPolicy, shutdownNostrServices,
-  startNostrPersistence, telemetry, type AccountListEditor
+  MAILBOX_LIST_KIND, accounts, blossomServers$, createAccountListEditor, fallbackBlossomServers$,
+  fallbackLookupRelays$, fallbackRelays$, publisher, relayListPublishTargets, relayPolicy,
+  shutdownNostrServices, startNostrPersistence, telemetry, type AccountListEditor
 } from "@platform/nostr-engine";
-import type { Observable, Subscription } from "rxjs";
+import type { Subscription } from "rxjs";
 import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/platform-nap-contract";
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
@@ -74,24 +73,6 @@ export interface BrowserPlatform {
   readonly relays: PlatformRelayConfiguration;
   /** Reads and publishes the account's own NIP-65 and BUD-03 lists. */
   readonly accountLists: AccountListEditor;
-  /** How many relays a single tier may hold; the panel checks this before offering to save. */
-  readonly relayLimit: number;
-  /** Normalizes a relay URL, throwing a readable message when the platform policy rejects it. */
-  normalizeRelay(url: string): string;
-  /** Normalizes a Blossom server URL, throwing when it is not usable. */
-  normalizeMediaServer(url: string): string;
-  /** The signed-in pubkey as it changes. */
-  readonly activePubkey$: Observable<string | undefined>;
-  /** The signed-in account's profile, or undefined while unknown. */
-  readonly activeProfile$: Observable<{
-    readonly name?: string | undefined;
-    readonly displayName?: string | undefined;
-    readonly picture?: string | undefined;
-  } | undefined>;
-  /** The account's own NIP-65 list, or undefined while unknown. */
-  readonly accountMailboxes$: Observable<{ readonly inboxes: readonly string[]; readonly outboxes: readonly string[] } | undefined>;
-  /** The account's own BUD-03 list, or undefined while unknown. */
-  readonly accountBlossomServers$: Observable<readonly string[] | undefined>;
   /** Broadcasts the resolved theme to open napplets over the NAP bridge. */
   publishTheme(theme: { readonly background: string; readonly text: string; readonly primary: string }): void;
   close(): Promise<void>;
@@ -296,13 +277,6 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     settings,
     relays: relayConfiguration,
     accountLists,
-    relayLimit: relayPolicy.maximumRelays,
-    normalizeRelay: (url) => relayPolicy.normalize(url.trim(), "write"),
-    normalizeMediaServer,
-    activePubkey$,
-    activeProfile$,
-    accountMailboxes$: mailboxes$,
-    accountBlossomServers$: ownBlossomServers$,
     publishTheme: (colors) => hostServices.theme.publishTheme({ colors }),
     async close() {
       if (closed) return; closed = true;

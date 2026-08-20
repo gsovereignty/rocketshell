@@ -1,6 +1,7 @@
 import { combineLatest, map, type Observable, type Subscription } from "rxjs";
 import { gsap } from "gsap";
 import type { ShellSettings, ShellSettingsStore, ThemePreference } from "@platform/host-services";
+import { activePubkey$, mailboxes$, normalizeMediaServer, normalizeRelay, ownBlossomServers$, relayLimit } from "./nostr.js";
 import type { BrowserPlatform } from "./platform.js";
 
 export type ResolvedTheme = "light" | "dark";
@@ -58,11 +59,8 @@ const errorMessage = (error: unknown): string => {
   return known[error.message] ?? error.message;
 };
 
-export type SettingsPlatform = Pick<
-  BrowserPlatform,
-  "settings" | "accountLists" | "relayLimit" | "normalizeRelay" | "normalizeMediaServer" | "publishTheme"
-  | "activePubkey$" | "accountMailboxes$" | "accountBlossomServers$"
->;
+/** Only what the panel cannot reach on its own; the reactive Nostr state is imported directly. */
+export type SettingsPlatform = Pick<BrowserPlatform, "settings" | "accountLists" | "publishTheme">;
 
 export interface ThemeController {
   /** Re-resolves the preference and repaints the shell and every open napplet. */
@@ -246,8 +244,8 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     const config = LOCAL_LISTS[key];
     const { root, content } = section(config.title, config.hint);
     const values = platform.settings.get()[key];
-    const normalize = config.kind === "relay" ? platform.normalizeRelay : platform.normalizeMediaServer;
-    const limit = config.kind === "relay" ? platform.relayLimit : undefined;
+    const normalize = config.kind === "relay" ? normalizeRelay : normalizeMediaServer;
+    const limit = config.kind === "relay" ? relayLimit : undefined;
 
     content.append(urlList(values, "Nothing configured yet.", (url) => {
       platform.settings.update({ [key]: values.filter((entry) => entry !== url) });
@@ -291,7 +289,7 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     content.append(element("p", "settings-empty", "Loading…"));
     // Subscribed rather than fetched once: a list published from another client, or a change of
     // account, repaints the section on its own. This replaces a render-token staleness guard.
-    sectionSubscriptions.push(combineLatest([platform.activePubkey$, options_.source]).subscribe({
+    sectionSubscriptions.push(combineLatest([activePubkey$, options_.source]).subscribe({
       next: ([pubkey, list]) => {
         if (!pubkey) {
           content.replaceChildren(element("p", "settings-empty", "Connect an identity to see and edit this list."));
@@ -319,9 +317,9 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     hint: "Your published NIP-65 list. Editing it signs and publishes a new kind 10002 event.",
     placeholder: "wss://relay.example.com",
     empty: "You have not published a relay list yet.",
-    normalize: platform.normalizeRelay,
-    limit: platform.relayLimit,
-    source: platform.accountMailboxes$.pipe(map((mailboxes) => mailboxes && {
+    normalize: normalizeRelay,
+    limit: relayLimit,
+    source: mailboxes$.pipe(map((mailboxes) => mailboxes && {
       values: [...new Set([...mailboxes.inboxes, ...mailboxes.outboxes])],
       badge: (url: string): string | undefined => {
         const read = mailboxes.inboxes.includes(url);
@@ -338,8 +336,8 @@ export function createSettingsView(options: SettingsViewOptions): SettingsView {
     hint: "Your published BUD-03 list. Editing it signs and publishes a new kind 10063 event.",
     placeholder: "https://blossom.example.com",
     empty: "You have not published a media server list yet.",
-    normalize: platform.normalizeMediaServer,
-    source: platform.accountBlossomServers$.pipe(map((servers) => servers && { values: servers })),
+    normalize: normalizeMediaServer,
+    source: ownBlossomServers$.pipe(map((servers) => servers && { values: servers })),
     add: (url) => platform.accountLists.addBlossomServer(url),
     remove: (url) => platform.accountLists.removeBlossomServer(url)
   });

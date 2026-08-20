@@ -1,6 +1,7 @@
 import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
 import { createShellSettingsStore } from "@platform/host-services";
+import { activePubkey$, activeProfile$ } from "./nostr.js";
 import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
@@ -348,7 +349,7 @@ void bootstrap().then((platform) => {
   };
   // The pubkey and the profile arrive independently, so the pair is combined rather than
   // sequenced. This replaces a render-token guard that existed only to discard a stale profile.
-  const identitySubscription = combineLatest([platform.activePubkey$, platform.activeProfile$])
+  const identitySubscription = combineLatest([activePubkey$, activeProfile$])
     .subscribe(([pubkey, profile]) => renderIdentity(pubkey, profile));
   window.addEventListener("pagehide", () => identitySubscription.unsubscribe(), { once: true });
   if (connectAccount) connectAccount.disabled = false;
