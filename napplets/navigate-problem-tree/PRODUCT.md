@@ -45,7 +45,13 @@ hardcoded before release; until then, users provide it at startup.
 
 - `NIP-1971_ Problem Tracking.md` supplies event and DAG rules.
 - User-provided screenshot supplies approved split outline/list composition.
+- User-provided rocket PNG is the confirmed napplet icon at `src/icon.png`.
 - Living `napplet/naps` repository supplies shell, outbox, intent, and archetype contracts.
+
+## Brand Commitments
+
+Use the supplied red-and-turquoise rocket artwork as the napplet icon without
+redrawing or replacing it.
 
 ## Product Principles
 
