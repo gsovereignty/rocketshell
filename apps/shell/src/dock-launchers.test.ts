@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nip19 } from "nostr-tools";
-import type { InstallationRecord, SignedManifest } from "@platform/napplet-gateway";
+import type { InstallationRecord, SignedManifest, StoredArtifact } from "@platform/napplet-gateway";
 import { dockLauncherFromManifest } from "./dock-launchers.js";
 
 const event = (tags: string[][]): SignedManifest => ({
@@ -13,7 +13,14 @@ const event = (tags: string[][]): SignedManifest => ({
   sig: "c".repeat(128)
 });
 
-const installation = (tags: string[][]): InstallationRecord => ({
+const favicon = (path = "favicon.svg", mediaType = "image/svg+xml"): StoredArtifact => ({
+  path,
+  mediaType,
+  sha256: "e".repeat(64),
+  bytes: new Uint8Array()
+});
+
+const installation = (tags: string[][], artifacts: StoredArtifact[] = [favicon()]): InstallationRecord => ({
   installationId: "installation",
   dTag: "example-napplet",
   aggregateHash: "d".repeat(64),
@@ -24,10 +31,10 @@ const installation = (tags: string[][]): InstallationRecord => ({
     aggregateHash: "d".repeat(64),
     entrypoint: "index.html",
     requires: [],
-    artifacts: []
+    artifacts
   },
   namespacePrelude: "",
-  artifacts: [],
+  artifacts,
   committedAt: 1
 });
 
@@ -35,9 +42,7 @@ const relays = ["wss://relay.example"];
 
 describe("dock launcher manifest metadata", () => {
   it("builds launcher coordinate from installed signed manifest", () => {
-    const launcher = dockLauncherFromManifest(installation([
-      ["icon", "https://cdn.example/icon.png"]
-    ]), relays)!;
+    const launcher = dockLauncherFromManifest(installation([]), relays, "/shell/")!;
     const decoded = nip19.decode(launcher.coordinate);
     expect(decoded.type).toBe("naddr");
     if (decoded.type !== "naddr") return;
@@ -49,26 +54,23 @@ describe("dock launcher manifest metadata", () => {
     });
   });
 
-  it("uses title and icon only from signed manifest metadata", () => {
+  it("uses signed title and verified packaged favicon", () => {
     expect(dockLauncherFromManifest(installation([
-      ["title", "Discover prints"],
-      ["icon", "https://cdn.example/discover.png"]
-    ]), relays)).toMatchObject({
+      ["title", "Discover prints"]
+    ]), relays, "/shell/")).toMatchObject({
       dTag: "example-napplet",
       title: "Discover prints",
-      iconUrl: "https://cdn.example/discover.png"
+      iconUrl: `/shell/__napplet__/example-napplet/${"d".repeat(64)}/favicon.svg`
     });
   });
 
-  it("rejects missing, malformed, and plaintext remote icons", () => {
-    expect(dockLauncherFromManifest(installation([]), relays)).toBeUndefined();
-    expect(dockLauncherFromManifest(installation([["icon", "not a url"]]), relays)).toBeUndefined();
-    expect(dockLauncherFromManifest(installation([["icon", "http://cdn.example/icon.png"]]), relays, true)).toBeUndefined();
+  it("omits launcher when no favicon is packaged", () => {
+    expect(dockLauncherFromManifest(installation([], []), relays, "/")).toBeUndefined();
   });
 
-  it("allows plaintext localhost icons only in local development", () => {
-    const manifest = installation([["icon", "http://localhost:4173/icon.png"]]);
-    expect(dockLauncherFromManifest(manifest, relays)).toBeUndefined();
-    expect(dockLauncherFromManifest(manifest, relays, true)?.iconUrl).toBe("http://localhost:4173/icon.png");
+  it("accepts only packaged image favicon artifacts", () => {
+    expect(dockLauncherFromManifest(installation([], [favicon("favicon.txt", "text/plain")]), relays, "/")).toBeUndefined();
+    expect(dockLauncherFromManifest(installation([], [favicon("favicon.ico", "image/x-icon")]), relays, "/")?.iconUrl)
+      .toContain("/favicon.ico");
   });
 });

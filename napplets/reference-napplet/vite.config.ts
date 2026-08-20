@@ -8,7 +8,7 @@ export default defineConfig({
     title: "Reference Napplet",
     description: "Minimal built-in napplet and host compatibility reference.",
     requires: ["identity"],
-    artifactMode: "single-file"
+    artifactMode: "external-assets"
   })],
   build: { modulePreload: false }
 });
