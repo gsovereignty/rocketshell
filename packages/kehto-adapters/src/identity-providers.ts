@@ -1,14 +1,12 @@
-import {
-  getInboxes, getOutboxes, getProfileContent, getPublicContacts, kinds, type NostrEvent
-} from "applesauce-core/helpers";
+import { kinds, type NostrEvent } from "applesauce-core/helpers";
 import {
   getBadgeAwardPointer, getBadgeDescription, getBadgeImage, getBadgeName, getBadgeThumbnails,
   getZapAmount, getZapRequest, getZapSender
 } from "applesauce-common/helpers";
-import { BLOSSOM_SERVER_LIST_KIND, getBlossomServersFromList } from "applesauce-common/helpers/blossom";
-import { defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
+import { castUser, type Profile } from "applesauce-common/casts";
+import { EMPTY, catchError, defaultIfEmpty, firstValueFrom, lastValueFrom, timeout } from "rxjs";
 import type { ReplaceableLookup } from "@platform/nostr-engine";
-import { eventLoader, eventStore, ingress, openRelayStream, relayPolicy, relayPool, telemetry } from "@platform/nostr-engine";
+import { eventLoader, eventStore, relayPolicy, relayPool } from "@platform/nostr-engine";
 import type { Badge, ProfileData, RelayPermission, ZapReceipt } from "@napplet/nap/identity";
 
 const LOAD_TIMEOUT_MS = 16_000;
@@ -33,8 +31,6 @@ export interface IdentityProviders {
   getMutes(pubkey: string): Promise<string[]>;
   getBlocked(pubkey: string): Promise<string[]>;
   getBadges(pubkey: string): Promise<Badge[]>;
-  /** BUD-03 (kind 10063) media servers published by the account. */
-  getBlossomServers(pubkey: string): Promise<string[]>;
   /**
    * Resolves a replaceable event, reporting whether it is genuinely unpublished or merely
    * unreachable. Editors of replaceable lists must not treat the two the same.
@@ -48,17 +44,15 @@ export interface LookupOptions {
   readonly hints?: readonly string[];
 }
 
-const toProfile = (event: NostrEvent | undefined): ProfileData | null => {
-  if (!event) return null;
-  const profile = getProfileContent(event);
+const toProfile = (profile: Profile | undefined): ProfileData | null => {
   if (!profile) return null;
   return {
     ...(profile.name ? { name: profile.name } : {}),
-    ...(profile.display_name || profile.displayName ? { displayName: profile.display_name ?? profile.displayName } : {}),
+    ...(profile.displayName ? { displayName: profile.displayName } : {}),
     ...(profile.about ? { about: profile.about } : {}),
     ...(profile.picture ? { picture: profile.picture } : {}),
     ...(profile.banner ? { banner: profile.banner } : {}),
-    ...(profile.nip05 ? { nip05: profile.nip05 } : {}),
+    ...(profile.dnsIdentity ? { nip05: profile.dnsIdentity } : {}),
     ...(profile.lud16 ? { lud16: profile.lud16 } : {}),
     ...(profile.website ? { website: profile.website } : {})
   };
@@ -115,35 +109,32 @@ export function createIdentityProviders(relayUrls: string[]): IdentityProviders 
   const query = async (filter: Parameters<typeof eventStore.getByFilters>[0]): Promise<NostrEvent[]> => {
     const cached = eventStore.getByFilters(filter);
     if (cached.length > 0 || relayUrls.length === 0) return cached;
-    if (relayUrls.length > 0) {
-      await new Promise<void>((complete) => {
-        let handle: ReturnType<typeof openRelayStream> | undefined;
-        handle = openRelayStream(relayPool, ingress, relayUrls, filter, {
-          event() {}, eose: () => { handle?.close(); complete(); }
-        }, 15_000, telemetry);
-      });
-    }
+    // The request completes on EOSE and writes through the store's verifier on the way.
+    await lastValueFrom(relayPool.request(relayPolicy.select(relayUrls, "read"), filter, {
+      eventStore, timeout: LOAD_TIMEOUT_MS
+    }).pipe(catchError(() => EMPTY), defaultIfEmpty(undefined)));
     return eventStore.getByFilters(filter);
   };
+
+  /** Casts read straight from the shared store and resolve missing events through its loader. */
+  const user = (pubkey: string) => castUser(pubkey, eventStore);
   return {
     lookupReplaceable: (kind, pubkey, lookup) => lookupReplaceable(kind, pubkey, lookup ?? {}),
-    getBlossomServers: async (pubkey) => {
-      const event = await resolve(BLOSSOM_SERVER_LIST_KIND, pubkey);
-      return event ? getBlossomServersFromList(event).map((server) => server.toString()) : [];
-    },
     getRelays: async (pubkey) => {
-      const event = await resolve(kinds.RelayList, pubkey);
-      if (!event) return {};
-      const inboxes = new Set(getInboxes(event));
-      const outboxes = new Set(getOutboxes(event));
+      if (!pubkey) return {};
+      const mailboxes = await user(pubkey).mailboxes$.$first(LOAD_TIMEOUT_MS, undefined);
+      if (!mailboxes) return {};
+      const inboxes = new Set(mailboxes.inboxes);
+      const outboxes = new Set(mailboxes.outboxes);
       return Object.fromEntries([...new Set([...inboxes, ...outboxes])].map((url) => [url, {
         read: inboxes.has(url), write: outboxes.has(url)
       }]));
     },
-    getProfile: async (pubkey) => toProfile(await resolve(kinds.Metadata, pubkey)),
+    getProfile: async (pubkey) => pubkey ? toProfile(await user(pubkey).profile$.$first(LOAD_TIMEOUT_MS, undefined)) : null,
     getFollows: async (pubkey) => {
-      const contacts = await resolve(kinds.Contacts, pubkey);
-      return contacts ? [...new Set(getPublicContacts(contacts).map((contact) => contact.pubkey))] : [];
+      if (!pubkey) return [];
+      const contacts = await user(pubkey).contacts$.$first(LOAD_TIMEOUT_MS, []);
+      return [...new Set(contacts.map((contact) => contact.pubkey))];
     },
     getList: async (type, pubkey) => {
       const normalized = type.trim().toLowerCase();
@@ -164,7 +155,11 @@ export function createIdentityProviders(relayUrls: string[]): IdentityProviders 
         return [{ eventId: event.id, sender, amount, ...(content ? { content } : {}) }];
       }).sort((a, b) => a.eventId.localeCompare(b.eventId));
     },
-    getMutes: async (pubkey) => publicPubkeys(await resolve(kinds.Mutelist, pubkey)),
+    getMutes: async (pubkey) => {
+      if (!pubkey) return [];
+      const mutes = await user(pubkey).mutes$.$first(LOAD_TIMEOUT_MS, undefined);
+      return mutes ? [...mutes.pubkeys] : [];
+    },
     getBlocked: async (pubkey) => publicPubkeys(await resolve(BLOCK_LIST_KIND, pubkey, BLOCK_LIST_IDENTIFIER)),
     getBadges: async (pubkey) => {
       const awards = await query({ kinds: [kinds.BadgeAward], "#p": [pubkey] });
