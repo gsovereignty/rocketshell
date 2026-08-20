@@ -341,7 +341,7 @@ export const createWidgetGrid = (
         x: 0,
         y: 0,
         scale: 1,
-        duration: .24,
+        duration: .12,
         ease: "power4.out",
         clearProps: "transform"
       });
