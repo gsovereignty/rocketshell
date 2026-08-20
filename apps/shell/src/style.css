@@ -377,22 +377,22 @@ p { margin: 0; }
   color: var(--muted);
   font-size: .75rem;
 }
-#napplet-dock { border-radius: 1rem; }
+#napplet-dock { border-radius: .9rem; }
 #dock-items {
   display: flex;
   align-items: flex-end;
-  min-height: 4.15rem;
+  min-height: 3.65rem;
   margin: 0;
-  padding: .55rem .7rem;
+  padding: .3rem .38rem .42rem;
   list-style: none;
 }
-#dock-items li { width: 3.25rem; height: 3.25rem; flex: 0 0 3.25rem; }
+#dock-items li { width: 3.05rem; height: 3.05rem; flex: 0 0 3.05rem; }
 .dock-launcher {
   position: relative;
   display: grid;
   width: 2.75rem;
   height: 2.75rem;
-  margin: .25rem;
+  margin: .15rem;
   padding: 0;
   border: 0;
   border-radius: .8rem;
@@ -471,6 +471,7 @@ p { margin: 0; }
   cursor: pointer;
 }
 .dock-context-menu button:hover, .dock-context-menu button:focus-visible { background: var(--hover); }
+.dock-context-menu button:disabled { color: var(--muted); cursor: default; }
 
 @media (max-width: 36rem) {
   #profile-menu-label { display: none; }

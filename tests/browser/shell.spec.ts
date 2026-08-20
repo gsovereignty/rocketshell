@@ -17,6 +17,7 @@ declare global {
 
 test("starts under repository subpath and gains service-worker control", async ({ page }) => {
   await page.goto("./");
+  await expect(page).toHaveTitle("Rocketshell");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   expect(await page.evaluate(async () => Boolean(await navigator.serviceWorker.getRegistration("/shell/")))).toBe(true);
   await page.reload();
@@ -401,7 +402,7 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   const profile = page.locator("#profile-menu-trigger");
-  await expect(profile.locator("#profile-avatar-fallback")).toHaveText("K");
+  await expect(profile.locator("#profile-avatar-fallback")).toHaveText("R");
   await profile.click();
   await expect(page.locator("#account-popover")).toBeVisible();
   await expect(page.getByRole("button", { name: "Profile (coming soon)" })).toBeVisible();
@@ -474,6 +475,15 @@ test("dock opens an active Napplet without relay discovery", async ({ page }) =>
   await launcher.click();
   await expect(page.locator('iframe[title="platform-fixture"]')).toHaveCount(2);
   await expect(page.locator("#loader-status")).toHaveText("Opened Platform Fixture.");
+});
+
+test("dock always includes built-in Napplets", async ({ page }) => {
+  await page.goto("./");
+  const launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  await expect(launcher).toBeVisible();
+  await expect(page.locator('iframe[title="reference-napplet"]')).toHaveCount(0);
+  await launcher.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Reference Napplet is built in to Rocketshell" })).toBeDisabled();
 });
 
 test("dock context menu pins an open Napplet and removes it after close", async ({ page }) => {

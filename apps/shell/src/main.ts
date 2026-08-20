@@ -338,7 +338,7 @@ void bootstrap().then((platform) => {
     if (signOut) signOut.hidden = !pubkey;
     if (!pubkey) {
       if (profileLabel) profileLabel.textContent = "Not connected";
-      if (profileFallback) profileFallback.textContent = "K";
+      if (profileFallback) profileFallback.textContent = "R";
       if (profileImage) { profileImage.hidden = true; profileImage.removeAttribute("src"); }
       return;
     }
@@ -400,8 +400,11 @@ void bootstrap().then((platform) => {
     dockMenuAnchor = anchor;
     anchor.dataset.contextOpen = "true";
     const pinned = dockStore.has(launcher.coordinate);
-    dockMenuAction.textContent = pinned ? "Remove from Dock" : "Keep in Dock";
-    dockMenuAction.setAttribute("aria-label", `${pinned ? "Remove" : "Keep"} ${launcher.title} ${pinned ? "from" : "in"} Dock`);
+    dockMenuAction.disabled = launcher.builtIn === true;
+    dockMenuAction.textContent = launcher.builtIn ? "Built in to Rocketshell" : pinned ? "Remove from Dock" : "Keep in Dock";
+    dockMenuAction.setAttribute("aria-label", launcher.builtIn
+      ? `${launcher.title} is built in to Rocketshell`
+      : `${pinned ? "Remove" : "Keep"} ${launcher.title} ${pinned ? "from" : "in"} Dock`);
     dockMenu.hidden = false;
     const anchorRect = anchor.getBoundingClientRect();
     const menuRect = dockMenu.getBoundingClientRect();
@@ -416,7 +419,7 @@ void bootstrap().then((platform) => {
 
   dockMenuAction.addEventListener("click", () => {
     const launcher = dockMenuLauncher;
-    if (!launcher) return;
+    if (!launcher || launcher.builtIn) return;
     if (dockStore.has(launcher.coordinate)) dockStore.unpin(launcher.coordinate);
     else dockStore.pin(launcher.coordinate);
     closeDockMenu(true);
@@ -480,12 +483,16 @@ void bootstrap().then((platform) => {
       return managed ? [managed.identity.dTag] : [];
     }));
     const launcherByCoordinate = new Map(available.map((launcher) => [launcher.coordinate, launcher]));
+    const builtInCoordinates = new Set(available.filter((launcher) => launcher.builtIn).map((launcher) => launcher.coordinate));
     const launchers = [
+      ...available.filter((launcher) => launcher.builtIn),
       ...pinned.flatMap((coordinate) => {
         const launcher = launcherByCoordinate.get(coordinate);
-        return launcher ? [launcher] : [];
+        return launcher && !launcher.builtIn ? [launcher] : [];
       }),
-      ...available.filter((launcher) => openDTags.has(launcher.dTag) && !pinned.includes(launcher.coordinate))
+      ...available.filter((launcher) => openDTags.has(launcher.dTag)
+        && !builtInCoordinates.has(launcher.coordinate)
+        && !pinned.includes(launcher.coordinate))
     ];
     dockItems.replaceChildren();
     const buttons = launchers.map((launcher) => {

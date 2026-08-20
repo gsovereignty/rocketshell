@@ -7,6 +7,7 @@ export interface DockLauncher {
   readonly title: string;
   readonly iconUrl?: string;
   readonly initial: string;
+  readonly builtIn?: boolean;
 }
 
 const tagValue = (record: InstallationRecord, name: string): string | undefined =>

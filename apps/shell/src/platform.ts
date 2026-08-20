@@ -261,7 +261,10 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     signOut: () => accounts.signOut(),
     async dockLaunchers() {
       return (await packageStore.listActive())
-        .map((record) => dockLauncherFromManifest(record, discoveryRelays, import.meta.env.BASE_URL));
+        .map((record) => ({
+          ...dockLauncherFromManifest(record, discoveryRelays, import.meta.env.BASE_URL),
+          builtIn: builtInDTags.includes(record.dTag)
+        }));
     },
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
