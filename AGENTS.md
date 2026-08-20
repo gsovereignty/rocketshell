@@ -17,6 +17,11 @@
   `https://github.com/napplet/naps` for relevant requirements and examples.
   Base napplet design, implementation, and protocol decisions on those current
   references rather than memory, local conventions, or invented patterns.
+- Never invent or present new Napplet, Nostr, NIP, NAP, manifest, event-tag, or
+  wire-format conventions as standards. Every protocol field and tag shape must
+  have a cited authoritative specification. If no standard exists, say so and
+  use an existing standards-aligned mechanism; do not create an ad hoc field
+  such as `["icon", "https://example.com/icon.png"]`.
 - Packaged napplet code belongs under `napplets/<napplet>/`. It must remain
   independently buildable and deployable, and may depend only on public
   napplet SDKs and platform contracts. It must not import shell source, host
