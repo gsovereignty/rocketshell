@@ -10,10 +10,10 @@ export interface RelayRequestSource {
   req(relays: string[], filters: Filter | Filter[]): Observable<GroupReqMessage>;
 }
 
-export interface AggregateEose { readonly partial: boolean; readonly pendingRelays: readonly string[] }
 export interface RelayStreamCallbacks {
   readonly event: (event: NostrEvent) => void;
-  readonly eose: (result: AggregateEose) => void;
+  /** Fired once, when every relay has answered or the timeout elapses. */
+  readonly eose: () => void;
   readonly error?: (relay: string, error: unknown) => void;
 }
 export interface RelayStreamHandle { readonly closed: boolean; close(): void }
@@ -30,7 +30,7 @@ export function openRelayStream(source: RelayRequestSource, ingress: EventIngres
     const elapsed = Date.now() - startedAt;
     telemetry.record("query.eose", elapsed, { partial });
     telemetry.record("query.completed", elapsed, { partial });
-    callbacks.eose({ partial, pendingRelays: selected.filter((relay) => !barriers.has(relay)) });
+    callbacks.eose();
   };
   if (selected.length === 0) {
     emitEose(false);

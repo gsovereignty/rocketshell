@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers";
+import { getBlossomServersFromList } from "applesauce-common/helpers/blossom";
 import type { EventTemplate, NostrEvent } from "applesauce-core/helpers/event";
 import {
   BLOSSOM_SERVER_LIST_KIND, MAILBOX_LIST_KIND, createAccountListEditor,
@@ -120,30 +121,23 @@ describe("account list editor", () => {
     expect(published).toHaveLength(0);
   });
 
-  it("reads and edits the BUD-03 server list", async () => {
-    // The lookup reflects each published edit, so the two calls chain like they would against a relay.
+  it("edits the BUD-03 server list", async () => {
+    // The lookup reflects each published edit, so the calls chain like they would against a relay.
     let stored = serverListEvent(["https://keep.example/"]);
     const { editor, published } = harness(() => ({ status: "found", event: stored }));
-
-    expect((await editor.readBlossomServers()).servers).toEqual(["https://keep.example/"]);
+    const servers = (event: NostrEvent): string[] => getBlossomServersFromList(event).map((server) => server.toString());
 
     stored = await editor.addBlossomServer("https://cdn.example");
     expect(published[0]!.event.kind).toBe(BLOSSOM_SERVER_LIST_KIND);
-    expect((await editor.readBlossomServers()).servers).toEqual(expect.arrayContaining(["https://cdn.example/", "https://keep.example/"]));
+    expect(servers(stored)).toEqual(expect.arrayContaining(["https://cdn.example/", "https://keep.example/"]));
 
     stored = await editor.removeBlossomServer("https://keep.example");
-    expect((await editor.readBlossomServers()).servers).toEqual(["https://cdn.example/"]);
-  });
-
-  it("reports an empty list rather than throwing when nothing is published", async () => {
-    const { editor } = harness(() => ({ status: "absent" }));
-    expect(await editor.readMailboxes()).toEqual({ inboxes: [], outboxes: [] });
-    expect(await editor.readBlossomServers()).toEqual({ servers: [] });
+    expect(servers(stored)).toEqual(["https://cdn.example/"]);
   });
 
   it("requires an active account", async () => {
     const { editor } = harness(() => ({ status: "absent" }), { publicKey: "" });
-    await expect(editor.readMailboxes()).rejects.toThrow("signed-out");
+    await expect(editor.addBlossomServer("https://cdn.example")).rejects.toThrow("signed-out");
     await expect(editor.addMailboxRelay("wss://a.test")).rejects.toThrow("signed-out");
   });
 });

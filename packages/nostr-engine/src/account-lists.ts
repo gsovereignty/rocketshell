@@ -34,16 +34,9 @@ export interface Mailboxes {
   readonly event?: NostrEvent;
 }
 
-export interface BlossomServerList {
-  readonly servers: readonly string[];
-  readonly event?: NostrEvent;
-}
-
 export interface AccountListEditor {
-  readMailboxes(pubkey?: string): Promise<Mailboxes>;
   addMailboxRelay(url: string, side?: MailboxSide): Promise<NostrEvent>;
   removeMailboxRelay(url: string, side?: MailboxSide): Promise<NostrEvent>;
-  readBlossomServers(pubkey?: string): Promise<BlossomServerList>;
   addBlossomServer(url: string): Promise<NostrEvent>;
   removeBlossomServer(url: string): Promise<NostrEvent>;
 }
@@ -110,18 +103,6 @@ export function createAccountListEditor(engine: AccountListEngine, options: Acco
   const normalizeRelay = (url: string): string => engine.relayPolicy.normalize(url.trim(), "write");
   const normalizeServer = (url: string): string => normalizeBlossomServer(url.trim()).toString();
 
-  const readMailboxes = async (pubkey?: string): Promise<Mailboxes> => {
-    const result = await options.lookup(MAILBOX_LIST_KIND, pubkey ?? requirePubkey());
-    if (result.status !== "found") return { inboxes: [], outboxes: [] };
-    return { inboxes: getInboxes(result.event), outboxes: getOutboxes(result.event), event: result.event };
-  };
-
-  const readBlossomServers = async (pubkey?: string): Promise<BlossomServerList> => {
-    const result = await options.lookup(BLOSSOM_SERVER_LIST_KIND, pubkey ?? requirePubkey());
-    if (result.status !== "found") return { servers: [] };
-    return { servers: getBlossomServersFromList(result.event).map((server) => server.toString()), event: result.event };
-  };
-
   /** Rejects an addition that would push the account past the relay budget the platform will connect to. */
   const guardRelayBudget = (existing: Mailboxes, added: string): void => {
     engine.relayPolicy.select([...existing.inboxes, ...existing.outboxes, added], "write");
@@ -137,9 +118,6 @@ export function createAccountListEditor(engine: AccountListEngine, options: Acco
   };
 
   return {
-    readMailboxes,
-    readBlossomServers,
-
     async addMailboxRelay(url, side = "both") {
       const normalized = normalizeRelay(url);
       const existing = await current(MAILBOX_LIST_KIND, true);
