@@ -324,30 +324,6 @@ export const createWidgetGrid = (
     preview.replaceChildren();
   };
 
-  const animateCommittedPlacement = (
-    updates: ReadonlyMap<HTMLElement, WidgetRect>,
-    before: ReadonlyMap<HTMLElement, DOMRect>
-  ): void => {
-    if (reducedMotion.matches) return;
-    for (const element of updates.keys()) {
-      const oldBounds = before.get(element);
-      if (!oldBounds) continue;
-      const nextBounds = element.getBoundingClientRect();
-      gsap.fromTo(element, {
-        x: oldBounds.left - nextBounds.left,
-        y: oldBounds.top - nextBounds.top,
-        scale: element === move?.element ? 1.015 : 1
-      }, {
-        x: 0,
-        y: 0,
-        scale: 1,
-        duration: 0,
-        ease: "power4.out",
-        clearProps: "transform"
-      });
-    }
-  };
-
   const commitPlacement = (element: HTMLElement, placement: RelocationResult): boolean => {
     if (placement.kind === "reject") return false;
     const entries = [...rects];
@@ -356,12 +332,10 @@ export const createWidgetGrid = (
       const target = entries[index]?.[0];
       if (target) updates.set(target, rect);
     }
-    const before = new Map([...updates.keys()].map((target) => [target, target.getBoundingClientRect()]));
     gsap.set(element, { clearProps: "transform" });
     if (!commitRects(updates)) return false;
     layoutCustomized = true;
-    persistCurrentLayout();
-    animateCommittedPlacement(updates, before);
+    window.setTimeout(persistCurrentLayout, 0);
     return true;
   };
 
