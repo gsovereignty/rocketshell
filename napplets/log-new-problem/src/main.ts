@@ -6,6 +6,7 @@ import {
   CHILD_CONVENTION, HEX_64, buildProblemTemplate, createProblemId, isChildPayload,
   resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
 } from "./problem";
+import { publishSuccessMessage } from "./publish-result";
 
 const root = document.querySelector<HTMLElement>("#app");
 if (!root) throw new Error("Application root is missing.");
@@ -155,8 +156,7 @@ async function publishProblem() {
     const template = buildProblemTemplate(pubkey, createProblemId(random), draft, Math.floor(Date.now() / 1000), parent);
     const recipients = parent ? Array.from(new Set([parent.owner, parent.rootOwner])) : [];
     const result = await outbox.publish(template, recipients.length ? { toInboxes: recipients } : undefined);
-    if (!result.ok || !result.event) throw new Error(result.error ?? "Shell could not publish the problem.");
-    setStatus(`Published · ${result.event.id.slice(0, 12)}…`, "success");
+    setStatus(publishSuccessMessage(result), "success");
     form.reset();
     count.value = "0";
     animate(statusLine, {});
