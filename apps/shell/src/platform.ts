@@ -125,8 +125,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   });
   const shell = createShellBridge(adapter);
   const coreServices = registerCoreServices(shell, {
-    discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays, relayConfiguration,
-    lookupRelays: discoveryRelays
+    discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays, relayConfiguration
   });
   const hostServices = registerCoreHostServices(shell.runtime, {
     openSettings: (_windowId, section, context) => {

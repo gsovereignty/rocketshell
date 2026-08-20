@@ -14,7 +14,7 @@ import { limitServiceSubscriptions } from "./subscription-limit.js";
 /** How long to wait for another user's NIP-65 list before routing without it. */
 const RELAY_LIST_TIMEOUT_MS = 4_000;
 
-export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration; readonly lookupRelays?: string[] }
+export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
 export interface CoreServiceRegistration { readonly identity: IdentityProviders; close(): void }
 
 export function createOutboxRelayPool(readRelays: readonly string[], writeRelays: readonly string[]) {
