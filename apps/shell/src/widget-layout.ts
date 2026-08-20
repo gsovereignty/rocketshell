@@ -180,7 +180,7 @@ export const createWidgetGrid = (
   let move: MoveState | null = null;
   let keyboardMove: { element: HTMLElement; startRect: WidgetRect; candidate: WidgetRect; placement: RelocationResult } | null = null;
   const preview = document.createElement("div");
-  preview.className = "napplet-drop-preview";
+  preview.className = "napplet-pack-preview-layer";
   preview.setAttribute("aria-hidden", "true");
   container.append(preview);
 
@@ -226,15 +226,39 @@ export const createWidgetGrid = (
     return resolveRelocation(movingIndex, candidate, entries.map(([, rect]) => rect), profile.columns);
   };
 
-  const showPreview = (candidate: WidgetRect, placement: RelocationResult): void => {
-    applyRect(preview, candidate);
-    preview.dataset.placement = placement.kind;
-    preview.hidden = false;
+  const previewCard = (element: HTMLElement, rect: WidgetRect, placement: RelocationResult["kind"]): HTMLElement => {
+    const card = document.createElement("article");
+    const toolbar = document.createElement("header");
+    const title = document.createElement("span");
+    const content = document.createElement("div");
+    card.className = "napplet-pack-preview";
+    card.dataset.placement = placement;
+    toolbar.className = "napplet-pack-preview-toolbar";
+    title.className = "napplet-pack-preview-title";
+    title.textContent = element.querySelector<HTMLElement>(".napplet-window-title")?.textContent ?? "Napplet";
+    content.className = "napplet-pack-preview-content";
+    toolbar.append(title);
+    card.append(toolbar, content);
+    applyRect(card, rect);
+    return card;
+  };
+
+  const showPreview = (element: HTMLElement, candidate: WidgetRect, placement: RelocationResult): void => {
+    const entries = [...rects];
+    const cards: HTMLElement[] = [];
+    if (placement.kind === "reject") {
+      cards.push(previewCard(element, candidate, placement.kind));
+    } else {
+      for (const [index, rect] of placement.updates) {
+        const target = entries[index]?.[0];
+        if (target) cards.push(previewCard(target, rect, placement.kind));
+      }
+    }
+    preview.replaceChildren(...cards);
   };
 
   const hidePreview = (): void => {
-    preview.hidden = true;
-    delete preview.dataset.placement;
+    preview.replaceChildren();
   };
 
   const animateCommittedPlacement = (
@@ -399,7 +423,7 @@ export const createWidgetGrid = (
     container.dataset.interacting = "move";
     movingElement.dataset.dragging = "true";
     toolbar.setAttribute("aria-grabbed", "true");
-    showPreview(movingRect, placement);
+    showPreview(movingElement, movingRect, placement);
     if (!reducedMotion.matches) gsap.to(movingElement, { scale: 1.015, duration: .14, ease: "power3.out" });
   };
 
@@ -426,7 +450,7 @@ export const createWidgetGrid = (
     const row = Math.max(0, Math.round((event.clientY - containerRect.top - move.grabOffsetY) / (rowHeight + gap)));
     move.candidate = { ...move.startRect, column, row };
     move.placement = placementFor(move.element, move.candidate);
-    showPreview(move.candidate, move.placement);
+    showPreview(move.element, move.candidate, move.placement);
     gsap.set(move.element, { x: event.clientX - move.startX, y: event.clientY - move.startY });
   };
 
@@ -474,7 +498,7 @@ export const createWidgetGrid = (
         container.dataset.interacting = "move";
         movingElement.dataset.dragging = "true";
         toolbar.setAttribute("aria-grabbed", "true");
-        showPreview(current, keyboardMove.placement);
+        showPreview(movingElement, current, keyboardMove.placement);
         return;
       }
       if (!keyboardMove || keyboardMove.element !== movingElement) return;
@@ -508,7 +532,7 @@ export const createWidgetGrid = (
       };
       keyboardMove.candidate = candidate;
       keyboardMove.placement = placementFor(movingElement, candidate);
-      showPreview(candidate, keyboardMove.placement);
+      showPreview(movingElement, candidate, keyboardMove.placement);
       return;
     }
     const edge = handle.dataset.resizeEdge as ResizeEdge;

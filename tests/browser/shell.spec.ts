@@ -86,8 +86,12 @@ test("moves widgets by toolbar drag and keeps resize handles independent", async
   await expect(page.locator("#windows")).toHaveAttribute("data-interacting", "move");
   await expect(page.locator("#windows iframe")).toHaveCSS("pointer-events", "none");
   await page.mouse.move(to!.x + 20, to!.y + to!.height / 2, { steps: 4 });
-  await expect(page.locator(".napplet-drop-preview")).toHaveAttribute("data-placement", "swap");
+  const previews = page.locator(".napplet-pack-preview");
+  await expect(previews).toHaveCount(2);
+  await expect(previews.filter({ hasText: "Drag fixture" })).toHaveAttribute("data-placement", "swap");
+  await expect(previews.filter({ hasText: "Platform Fixture" })).toHaveAttribute("data-placement", "swap");
   await page.mouse.up();
+  await expect(previews).toHaveCount(0);
   await expect.poll(() => first.evaluate((element) => (element as HTMLElement).style.gridColumn)).toBe(secondColumn);
   await expect.poll(() => second.evaluate((element) => (element as HTMLElement).style.gridColumn)).toBe(firstColumn);
 
