@@ -20,12 +20,39 @@ const packagedFavicon = (record: InstallationRecord): StoredArtifact | undefined
     .map((path) => record.artifacts.find((artifact) => artifact.path === path && artifact.mediaType.startsWith("image/")))
     .find((artifact) => artifact !== undefined);
 
+const linkAttribute = (tag: string, name: string): string | undefined => {
+  const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  return match?.[2];
+};
+
+const documentFavicon = (record: InstallationRecord, applicationBase: string): string | undefined => {
+  const entrypoint = record.artifacts.find((artifact) => artifact.path === record.manifest.entrypoint && artifact.mediaType === "text/html");
+  if (!entrypoint) return undefined;
+  const document = new TextDecoder().decode(entrypoint.bytes);
+  for (const match of document.matchAll(/<link\b[^>]*>/gi)) {
+    const rel = linkAttribute(match[0], "rel")?.toLowerCase().split(/\s+/);
+    const href = linkAttribute(match[0], "href")?.trim();
+    if (!rel?.includes("icon") || !href) continue;
+    if (/^data:image\//i.test(href)) return href;
+    const base = new URL(record.manifest.entrypoint, "https://napplet.invalid/");
+    const resolved = new URL(href, base);
+    if (resolved.origin !== base.origin) continue;
+    const path = decodeURIComponent(resolved.pathname).replace(/^\//, "");
+    const artifact = record.artifacts.find((candidate) => candidate.path === path && candidate.mediaType.startsWith("image/"));
+    if (artifact) return virtualNappletUrl(applicationBase, record.dTag, record.aggregateHash, artifact.path);
+  }
+  return undefined;
+};
+
 export const dockLauncherFromManifest = (
   record: InstallationRecord,
   relays: readonly string[],
   applicationBase: string
 ): DockLauncher => {
   const favicon = packagedFavicon(record);
+  const iconUrl = favicon
+    ? virtualNappletUrl(applicationBase, record.dTag, record.aggregateHash, favicon.path)
+    : documentFavicon(record, applicationBase);
   const title = tagValue(record, "title") ?? record.manifest.title ?? record.dTag;
   return {
     dTag: record.dTag,
@@ -36,7 +63,7 @@ export const dockLauncherFromManifest = (
       relays: [...relays]
     }),
     title,
-    ...(favicon ? { iconUrl: virtualNappletUrl(applicationBase, record.dTag, record.aggregateHash, favicon.path) } : {}),
+    ...(iconUrl ? { iconUrl } : {}),
     initial: Array.from(title.trim())[0]?.toLocaleUpperCase() ?? "?"
   };
 };

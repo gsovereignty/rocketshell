@@ -481,6 +481,9 @@ test("dock always includes built-in Napplets", async ({ page }) => {
   await page.goto("./");
   const launcher = page.getByRole("button", { name: "Open Reference Napplet" });
   await expect(launcher).toBeVisible();
+  await expect(launcher.locator("img")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Log New Problem" }).locator("img")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Navigate Problem Tree" }).locator("img")).toBeVisible();
   await expect(page.locator('iframe[title="reference-napplet"]')).toHaveCount(0);
   await launcher.click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Reference Napplet is built in to Rocketshell" })).toBeDisabled();

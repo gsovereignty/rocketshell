@@ -20,6 +20,13 @@ const favicon = (path = "favicon.svg", mediaType = "image/svg+xml"): StoredArtif
   bytes: new Uint8Array()
 });
 
+const html = (content: string, path = "index.html"): StoredArtifact => ({
+  path,
+  mediaType: "text/html",
+  sha256: "f".repeat(64),
+  bytes: new TextEncoder().encode(content)
+});
+
 const installation = (tags: string[][], artifacts: StoredArtifact[] = [favicon()]): InstallationRecord => ({
   installationId: "installation",
   dTag: "example-napplet",
@@ -76,5 +83,25 @@ describe("dock launcher manifest metadata", () => {
       .not.toHaveProperty("iconUrl");
     expect(dockLauncherFromManifest(installation([], [favicon("favicon.ico", "image/x-icon")]), relays, "/")?.iconUrl)
       .toContain("/favicon.ico");
+  });
+
+  it("uses an embedded favicon from the verified entrypoint", () => {
+    const icon = "data:image/svg+xml,%3Csvg%3E%3C/svg%3E";
+    const launcher = dockLauncherFromManifest(installation([], [
+      html(`<html><head><link href="${icon}" rel="shortcut icon"></head></html>`)
+    ]), relays, "/shell/");
+    expect(launcher.iconUrl).toBe(icon);
+  });
+
+  it("resolves an entrypoint favicon only when it is a packaged image", () => {
+    const launcher = dockLauncherFromManifest(installation([], [
+      html('<link rel="icon" href="./assets/app.png?v=1">'),
+      favicon("assets/app.png", "image/png")
+    ]), relays, "/shell/");
+    expect(launcher.iconUrl).toBe(`/shell/__napplet__/example-napplet/${"d".repeat(64)}/assets/app.png`);
+
+    expect(dockLauncherFromManifest(installation([], [
+      html('<link rel="icon" href="https://outside.example/icon.png">')
+    ]), relays, "/shell/")).not.toHaveProperty("iconUrl");
   });
 });
