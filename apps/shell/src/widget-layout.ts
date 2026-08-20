@@ -88,7 +88,24 @@ interface MoveState {
 export type RelocationResult =
   | { readonly kind: "move"; readonly updates: ReadonlyMap<number, WidgetRect> }
   | { readonly kind: "swap"; readonly updates: ReadonlyMap<number, WidgetRect> }
+  | { readonly kind: "pack"; readonly updates: ReadonlyMap<number, WidgetRect> }
   | { readonly kind: "reject"; readonly updates: ReadonlyMap<number, WidgetRect> };
+
+const firstAvailableRect = (
+  widget: WidgetRect,
+  columns: number,
+  occupied: readonly WidgetRect[]
+): WidgetRect | undefined => {
+  if (widget.width > columns) return undefined;
+  const lastOccupiedRow = occupied.reduce((last, rect) => Math.max(last, rect.row + rect.height), 0);
+  for (let row = 0; row <= lastOccupiedRow; row += 1) {
+    for (let column = 0; column <= columns - widget.width; column += 1) {
+      const candidate = { ...widget, column, row };
+      if (canPlaceRect(candidate, columns, occupied)) return candidate;
+    }
+  }
+  return undefined;
+};
 
 export const resolveRelocation = (
   movingIndex: number,
@@ -104,15 +121,29 @@ export const resolveRelocation = (
     .map((rect, index) => ({ rect, index }))
     .filter(({ rect, index }) => index !== movingIndex && rectsOverlap(candidate, rect));
   if (collisions.length === 0) return { kind: "move", updates: new Map([[movingIndex, candidate]]) };
-  if (collisions.length !== 1) return { kind: "reject", updates: new Map() };
-  const collision = collisions[0]!;
-  const sameSize = collision.rect.width === candidate.width && collision.rect.height === candidate.height;
-  const exactTarget = collision.rect.column === candidate.column && collision.rect.row === candidate.row;
-  if (!sameSize || !exactTarget) return { kind: "reject", updates: new Map() };
-  return {
-    kind: "swap",
-    updates: new Map([[movingIndex, candidate], [collision.index, start]])
-  };
+  if (collisions.length === 1) {
+    const collision = collisions[0]!;
+    const sameSize = collision.rect.width === candidate.width && collision.rect.height === candidate.height;
+    const exactTarget = collision.rect.column === candidate.column && collision.rect.row === candidate.row;
+    if (sameSize && exactTarget) {
+      return {
+        kind: "swap",
+        updates: new Map([[movingIndex, candidate], [collision.index, start]])
+      };
+    }
+  }
+
+  const displaced = new Set(collisions.map(({ index }) => index));
+  const occupied = rects.filter((_rect, index) => index !== movingIndex && !displaced.has(index));
+  occupied.push(candidate);
+  const updates = new Map<number, WidgetRect>([[movingIndex, candidate]]);
+  for (const collision of collisions) {
+    const packed = firstAvailableRect(collision.rect, columns, occupied);
+    if (!packed) return { kind: "reject", updates: new Map() };
+    updates.set(collision.index, packed);
+    occupied.push(packed);
+  }
+  return { kind: "pack", updates };
 };
 
 const widgetElements = (container: HTMLElement): HTMLElement[] =>

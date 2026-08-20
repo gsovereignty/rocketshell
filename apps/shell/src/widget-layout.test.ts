@@ -69,11 +69,37 @@ describe("widget collision checks", () => {
     expect(result.updates.get(1)).toEqual(left);
   });
 
-  it("rejects partial and incompatible collisions", () => {
+  it("packs incompatible collisions into earliest available cells", () => {
     const moving = { column: 0, row: 0, width: 2, height: 1 };
     const tall = { column: 2, row: 0, width: 2, height: 2 };
-    expect(resolveRelocation(0, { ...moving, column: 2 }, [moving, tall], 4).kind).toBe("reject");
-    expect(resolveRelocation(0, { ...moving, column: 1 }, [moving, tall], 4).kind).toBe("reject");
+    const result = resolveRelocation(0, { ...moving, column: 2 }, [moving, tall], 4);
+    expect(result.kind).toBe("pack");
+    expect(result.updates.get(0)).toEqual({ ...moving, column: 2 });
+    expect(result.updates.get(1)).toEqual({ column: 0, row: 0, width: 2, height: 2 });
+  });
+
+  it("packs every widget displaced by a larger target", () => {
+    const moving = { column: 0, row: 2, width: 2, height: 2 };
+    const cells = [
+      { column: 0, row: 0, width: 1, height: 1 },
+      { column: 1, row: 0, width: 1, height: 1 },
+      { column: 0, row: 1, width: 1, height: 1 },
+      { column: 1, row: 1, width: 1, height: 1 }
+    ];
+    const result = resolveRelocation(0, { ...moving, row: 0 }, [moving, ...cells], 4);
+    expect(result.kind).toBe("pack");
+    expect([...result.updates.values()]).toEqual([
+      { column: 0, row: 0, width: 2, height: 2 },
+      { column: 2, row: 0, width: 1, height: 1 },
+      { column: 3, row: 0, width: 1, height: 1 },
+      { column: 2, row: 1, width: 1, height: 1 },
+      { column: 3, row: 1, width: 1, height: 1 }
+    ]);
+  });
+
+  it("rejects targets outside the grid", () => {
+    const moving = { column: 0, row: 0, width: 2, height: 1 };
+    const tall = { column: 2, row: 0, width: 2, height: 2 };
     expect(resolveRelocation(0, { ...moving, column: 3 }, [moving, tall], 4).kind).toBe("reject");
   });
 });
