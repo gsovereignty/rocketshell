@@ -3,10 +3,10 @@ import { sha256 } from "./hashing.js";
 import { parseManifest, type EventVerifier } from "./manifest-verifier.js";
 import type { ArtifactInput, InstallationRecord, PackageStore, SignedManifest } from "./types.js";
 
-export const MAX_REMOTE_ARTIFACT_BYTES = 10 * 1024 * 1024;
-export const MAX_REMOTE_PACKAGE_BYTES = 25 * 1024 * 1024;
+export const MAX_REMOTE_ARTIFACT_BYTES = 100 * 1024 * 1024;
+export const MAX_REMOTE_PACKAGE_BYTES = 250 * 1024 * 1024;
 const MAX_MANIFEST_SERVERS = 8;
-const FETCH_TIMEOUT_MS = 20_000;
+const FETCH_TIMEOUT_MS = 120_000;
 
 export interface RemotePackageOptions {
   readonly fetch?: typeof fetch;

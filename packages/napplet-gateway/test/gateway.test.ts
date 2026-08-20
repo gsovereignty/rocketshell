@@ -58,6 +58,21 @@ describe("package gateway", () => {
     expect(fetcher).toHaveBeenCalledWith(new URL(`https://cdn.example/base/${hash}`), expect.objectContaining({ credentials: "omit", redirect: "manual" }));
     expect((await store.getActive("remote"))?.aggregateHash).toBe(installed.aggregateHash);
   });
+  it("allows large game artifacts declared below the remote limit", async () => {
+    const bytes = new TextEncoder().encode("<h1>Large game</h1>");
+    const hash = await sha256(bytes);
+    const aggregate = await aggregateHash([{ path: "index.html", sha256: hash }]);
+    const event: SignedManifest = {
+      id: "0".repeat(64), pubkey: "1".repeat(64), created_at: 1, kind: 35129, content: "", sig: "2".repeat(128),
+      tags: [["d", "large-game"], ["path", "/index.html", hash], ["x", aggregate, "aggregate"], ["server", "https://cdn.example/"]]
+    };
+    const fetcher = vi.fn(async () => new Response(bytes, { headers: { "content-length": "82953403" } }));
+    const store = new MemoryPackageStore();
+
+    await installRemotePackage(store, event, { fetch: fetcher as typeof fetch, verifyEvent: () => true });
+
+    expect(await store.getActive("large-game")).toBeDefined();
+  });
   it("rejects unsafe artifact servers before network work", async () => {
     const input = await fixture();
     const event = { ...input.event, tags: [...input.event.tags, ["server", "http://example.com/"]] };
