@@ -89,6 +89,12 @@ interface MoveState {
   readonly startRect: WidgetRect;
   readonly grabOffsetX: number;
   readonly grabOffsetY: number;
+  readonly containerLeft: number;
+  readonly containerTop: number;
+  readonly columnStride: number;
+  readonly rowStride: number;
+  readonly setX: (value: number) => void;
+  readonly setY: (value: number) => void;
   candidate: WidgetRect;
   placement: RelocationResult;
 }
@@ -526,6 +532,11 @@ export const createWidgetGrid = (
     event.preventDefault();
     toolbar.setPointerCapture(event.pointerId);
     const bounds = movingElement.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const styles = getComputedStyle(container);
+    const gap = Number.parseFloat(styles.columnGap) || 0;
+    const cellWidth = (containerRect.width - gap * (profile.columns - 1)) / profile.columns;
+    const rowHeight = Number.parseFloat(styles.gridAutoRows) || 220;
     const placement = placementFor(movingElement, movingRect);
     move = {
       element: movingElement,
@@ -536,6 +547,12 @@ export const createWidgetGrid = (
       startRect: movingRect,
       grabOffsetX: event.clientX - bounds.left,
       grabOffsetY: event.clientY - bounds.top,
+      containerLeft: containerRect.left,
+      containerTop: containerRect.top,
+      columnStride: cellWidth + gap,
+      rowStride: rowHeight + gap,
+      setX: gsap.quickSetter(movingElement, "x", "px") as (value: number) => void,
+      setY: gsap.quickSetter(movingElement, "y", "px") as (value: number) => void,
       candidate: movingRect,
       placement
     };
@@ -564,15 +581,11 @@ export const createWidgetGrid = (
       return;
     }
     if (!move || event.pointerId !== move.pointerId) return;
-    gsap.set(move.element, { x: event.clientX - move.startX, y: event.clientY - move.startY });
-    const containerRect = container.getBoundingClientRect();
-    const styles = getComputedStyle(container);
-    const gap = Number.parseFloat(styles.columnGap) || 0;
-    const cellWidth = (containerRect.width - gap * (profile.columns - 1)) / profile.columns;
-    const rowHeight = Number.parseFloat(styles.gridAutoRows) || 220;
+    move.setX(event.clientX - move.startX);
+    move.setY(event.clientY - move.startY);
     const column = Math.max(0, Math.min(profile.columns - move.startRect.width,
-      Math.round((event.clientX - containerRect.left - move.grabOffsetX) / (cellWidth + gap))));
-    const row = Math.max(0, Math.round((event.clientY - containerRect.top - move.grabOffsetY) / (rowHeight + gap)));
+      Math.round((event.clientX - move.containerLeft - move.grabOffsetX) / move.columnStride)));
+    const row = Math.max(0, Math.round((event.clientY - move.containerTop - move.grabOffsetY) / move.rowStride));
     if (column === move.candidate.column && row === move.candidate.row) return;
     move.candidate = { ...move.startRect, column, row };
     move.placement = placementFor(move.element, move.candidate);
