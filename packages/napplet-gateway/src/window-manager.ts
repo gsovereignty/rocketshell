@@ -70,7 +70,7 @@ export class NappletWindowManager {
     const closeButton = document.createElement("button");
     closeButton.className = "napplet-window-close";
     closeButton.type = "button";
-    closeButton.textContent = "Close";
+    closeButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>';
     closeButton.setAttribute("aria-label", `Close ${title.textContent}`);
     const iframe = document.createElement("iframe");
     iframe.setAttribute("sandbox", "allow-scripts");
