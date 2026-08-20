@@ -10,6 +10,7 @@
     "applesauce-accounts": "6.2.0",
     "applesauce-common": "6.2.0",
     "applesauce-core": "6.2.0",
+    "applesauce-loaders": "6.2.0",
     "applesauce-relay": "6.2.1",
     "applesauce-signers": "6.2.2",
     "nostr-tools": "2.24.0",

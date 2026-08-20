@@ -2,7 +2,12 @@ import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shel
 import { createHostAuditTrail, createIntentPreferenceStore, createShellSettingsStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, registerUploadService, resourceGrantKey, type ShellSettings, type ShellSettingsStore } from "@platform/host-services";
 import { createManifestResolver, createPlatformShellAdapter, createRelayConfiguration, registerCoreServices, type PlatformRelayConfiguration } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
-import { MAILBOX_LIST_KIND, createAccountListEditor, createPersistentNostrEngine, createRelayPublisher, normalizeMediaServer, relayListPublishTargets, type AccountListEditor } from "@platform/nostr-engine";
+import {
+  MAILBOX_LIST_KIND, accounts, blossomServers$, createAccountListEditor, fallbackBlossomServers$,
+  fallbackLookupRelays$, fallbackRelays$, normalizeMediaServer, publisher, relayListPublishTargets,
+  relayPolicy, shutdownNostrServices, startNostrPersistence, telemetry, type AccountListEditor
+} from "@platform/nostr-engine";
+import type { Subscription } from "rxjs";
 import { PLATFORM_REQUIRED_DOMAINS, type PlatformMetricRecord } from "@project/platform-nap-contract";
 import { installFixture } from "./fixture.js";
 import { createReadyRegistry } from "./ready-registry.js";
@@ -87,9 +92,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const settings = createShellSettingsStore(localStorage, DEFAULT_SHELL_SETTINGS);
   const metadataStore = await PlatformMetadataStore.open();
   const packageStore = await IndexedDbPackageStore.open();
-  const engine = await createPersistentNostrEngine({ relayPolicy: { allowInsecureLocalhost: import.meta.env.DEV } });
+  const persistence = await startNostrPersistence();
   const initial = settings.get();
-  const relayConfiguration = createRelayConfiguration(engine.relayPolicy, {
+  const relayConfiguration = createRelayConfiguration(relayPolicy, {
     discovery: [...initial.lookupRelays], super: [...initial.backupRelays], outbox: [...initial.backupRelays]
   });
   // Live references into the configuration: consumers below re-read them as the settings panel edits.
@@ -97,9 +102,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const readRelays = relayConfiguration.values("super");
   const writeRelays = relayConfiguration.values("outbox");
   let windows: NappletWindowManager | undefined;
-  const audit = createHostAuditTrail({ telemetry: engine.telemetry });
+  const audit = createHostAuditTrail({ telemetry: telemetry });
   const adapter = createPlatformShellAdapter({
-    engine, discoveryRelays, readRelays, writeRelays, relayConfiguration,
+    discoveryRelays, readRelays, writeRelays, relayConfiguration,
     createWindow: () => null,
     intentAvailable: () => windows !== undefined,
     linkAvailable: () => true,
@@ -108,7 +113,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     onUnroutedMessage: (info) => audit.recordUnrouted(info)
   });
   const shell = createShellBridge(adapter);
-  const coreServices = registerCoreServices(shell, engine, {
+  const coreServices = registerCoreServices(shell, {
     discoveryRelays, directReadRelays: readRelays, directWriteRelays: writeRelays, relayConfiguration,
     lookupRelays: discoveryRelays
   });
@@ -129,7 +134,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     resolveConfigScope: (windowId) => {
       const identity = windows?.findByWindowId(windowId)?.identity;
       if (!identity) return undefined;
-      return `${engine.accounts.publicKey || "signed-out"}:${identity.dTag}:${identity.aggregateHash}`;
+      return `${accounts.publicKey || "signed-out"}:${identity.dTag}:${identity.aggregateHash}`;
     }
   });
   const resourceGrants = new Map<string, readonly string[]>();
@@ -139,7 +144,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     grants: resourceGrants,
     resolvePublisher: (dTag, hash) => resourcePublishers.get(resourceIdentityKey(dTag, hash)),
     allowHttpLocalhost: allowLocalPlaintext,
-    telemetry: engine.telemetry
+    telemetry: telemetry
   });
   registerLinkService(shell.runtime, {
     allowHttpLocalhost: allowLocalPlaintext,
@@ -152,11 +157,11 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   // napplets opened before the first edit permanently without upload access.
   const uploads = registerUploadService(shell.runtime, {
     blossomServers: [...initial.backupBlossomServers],
-    signEvent: (template) => engine.accounts.sign(template)
+    signEvent: (template) => accounts.sign(template)
   });
   wiredDomains.add("upload"); wiredServices.add("upload");
   const windowBridge = new BrowserWindowBridge(shell, wiredDomains, wiredServices);
-  windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL, engine.telemetry);
+  windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL, telemetry);
   shell.registerConsentHandler((request) => {
     const identity = windows?.findByWindowId(request.windowId)?.identity;
     const operation = request.type === "undeclared-service"
@@ -171,17 +176,25 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     request.resolve(allowed);
   });
   const applySettings = (next: ShellSettings): void => {
-    // A list that the policy rejects (bad scheme, over the relay budget) must not take down the shell;
-    // the panel validates before saving, so this is the belt for a hand-edited localStorage value.
+    // These are only the fallbacks. What the account itself publishes wins; see `relay-sources`.
+    fallbackRelays$.next([...next.backupRelays]);
+    fallbackLookupRelays$.next([...next.lookupRelays]);
+    fallbackBlossomServers$.next([...next.backupBlossomServers]);
+    // The napplet-facing `relayConfig` domain still reads these tiers. A list the policy rejects
+    // (bad scheme, over the relay budget) must not take down the shell; the panel validates before
+    // saving, so this is the belt for a hand-edited localStorage value.
     try { relayConfiguration.replace("discovery", next.lookupRelays); } catch { /* keep the last good tier */ }
     try { relayConfiguration.replace("super", next.backupRelays); } catch { /* keep the last good tier */ }
     try { relayConfiguration.replace("outbox", next.backupRelays); } catch { /* keep the last good tier */ }
-    try { uploads.update(next.backupBlossomServers); } catch { /* keep the last good server list */ }
   };
+  applySettings(initial);
   const unsubscribeSettings = settings.subscribe(applySettings);
+  // Follows the account's own BUD-03 list, falling back to the settings value while it is unknown.
+  const serverSubscription: Subscription = blossomServers$.subscribe((servers) => {
+    try { uploads.update(servers); } catch { /* keep the last good server list */ }
+  });
 
-  const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress, 1, engine.telemetry);
-  const accountLists = createAccountListEditor(engine, {
+  const accountLists = createAccountListEditor({ accounts, relayPolicy }, {
     publisher,
     // `refresh` forces a network read: editing a stale cached list would republish it and drop
     // whatever the user changed from another client.
@@ -192,9 +205,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   });
 
   const intentPreferences = createIntentPreferenceStore(localStorage);
-  const activeAccount = (): string => engine.accounts.publicKey || "signed-out";
+  const activeAccount = (): string => accounts.publicKey || "signed-out";
   const intentResolver = registerIntentService(shell.runtime, packageStore, windows, {
-    telemetry: engine.telemetry,
+    telemetry: telemetry,
     getDefaultHandler: (archetype) => intentPreferences.get(activeAccount(), archetype),
     chooseHandler: (archetype, candidates, sender) => {
       const choices = candidates.map((candidate, index) => `${index + 1}. ${candidate.title ?? candidate.dTag}`).join("\n");
@@ -207,12 +220,12 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     },
     authorizeExplicitHandler: (sender, handler) => window.confirm(`${sender} wants to open ${handler}. Allow?`)
   });
-  const resolveManifest = createManifestResolver(engine, discoveryRelays);
+  const resolveManifest = createManifestResolver(discoveryRelays);
   const onMessage = (event: MessageEvent): void => {
     shell.handleMessage(event);
     windowBridge.accept(event);
     if (event.data?.type === "shell.ready" && event.source && originRegistry.getWindowId(event.source as Window)) {
-      shell.publishIdentityChanged(engine.accounts.publicKey);
+      shell.publishIdentityChanged(accounts.publicKey);
       hostServices.theme.publishTheme(hostServices.theme.getCurrentTheme());
     }
   };
@@ -231,7 +244,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
   const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, { scope: import.meta.env.BASE_URL, type: "module" });
-  const onWorkerMessage = (event: MessageEvent): void => { recordWorkerProtocolFailure(event.data, engine.telemetry); };
+  const onWorkerMessage = (event: MessageEvent): void => { recordWorkerProtocolFailure(event.data, telemetry); };
   navigator.serviceWorker.addEventListener("message", onWorkerMessage);
   await navigator.serviceWorker.ready;
   if (!controlledAtStartup) {
@@ -252,10 +265,10 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   let closed = false;
   return {
     windows,
-    get activeAccountPubkey() { return engine.accounts.publicKey; },
-    activeAccountProfile: () => coreServices.identity.getProfile(engine.accounts.publicKey),
-    connectExtension: () => engine.accounts.connectExtension(),
-    signOut: () => engine.accounts.signOut(),
+    get activeAccountPubkey() { return accounts.publicKey; },
+    activeAccountProfile: () => coreServices.identity.getProfile(accounts.publicKey),
+    connectExtension: () => accounts.connectExtension(),
+    signOut: () => accounts.signOut(),
     async dockLaunchers() {
       return (await packageStore.listActive())
         .map((record) => dockLauncherFromManifest(record, discoveryRelays, allowLocalPlaintext))
@@ -271,20 +284,20 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     },
     destroyWindow: (windowId) => windows?.destroy(windowId),
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),
-    telemetrySnapshot: () => engine.telemetry.snapshot(),
+    telemetrySnapshot: () => telemetry.snapshot(),
     settings,
     relays: relayConfiguration,
     accountLists,
-    relayLimit: engine.relayPolicy.maximumRelays,
-    normalizeRelay: (url) => engine.relayPolicy.normalize(url.trim(), "write"),
+    relayLimit: relayPolicy.maximumRelays,
+    normalizeRelay: (url) => relayPolicy.normalize(url.trim(), "write"),
     normalizeMediaServer,
     publishTheme: (colors) => hostServices.theme.publishTheme({ colors }),
     async close() {
       if (closed) return; closed = true;
-      unsubscribeSettings();
+      unsubscribeSettings(); serverSubscription.unsubscribe();
       updates.close(); windows?.close(); window.removeEventListener("message", onMessage); navigator.serviceWorker.removeEventListener("message", onWorkerMessage); coreServices.close(); shell.destroy(); adapter.close(); hostServices.close(); audit.clear();
-      try { await engine.close(); }
-      finally { packageStore.close(); metadataStore.close(); }
+      try { await persistence.close(); }
+      finally { shutdownNostrServices(); packageStore.close(); metadataStore.close(); }
       void registration;
     }
   };

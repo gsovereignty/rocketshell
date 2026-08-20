@@ -1,4 +1,5 @@
-import { ReadonlyAccount } from "applesauce-accounts/accounts";
+import { AccountManager } from "applesauce-accounts";
+import { ReadonlyAccount, registerCommonAccountTypes } from "applesauce-accounts/accounts";
 import { describe, expect, it, vi } from "vitest";
 import { createPersistentAccountManager, PRIVATE_ACCOUNT_DATABASE_NAME, type AccountSnapshot, type AccountSnapshotStore } from "../src/index.js";
 
@@ -16,7 +17,10 @@ describe("private account persistence", () => {
       save: vi.fn(async (snapshot) => { snapshots.push(structuredClone(snapshot)); }),
       close: vi.fn()
     };
-    const persistent = await createPersistentAccountManager(store);
+    // Type registration is the caller's job now, so the shared manager is not registered twice.
+    const manager = new AccountManager();
+    registerCommonAccountTypes(manager);
+    const persistent = await createPersistentAccountManager(store, manager);
     expect(persistent.manager.active?.id).toBe(first.id);
     const second = ReadonlyAccount.fromPubkey("22".repeat(32));
     persistent.manager.addAccount(second as never); persistent.manager.setActive(second.id);

@@ -6,10 +6,9 @@ import {
   getZapAmount, getZapRequest, getZapSender
 } from "applesauce-common/helpers";
 import { BLOSSOM_SERVER_LIST_KIND, getBlossomServersFromList } from "applesauce-common/helpers/blossom";
-import { createAddressLoader } from "applesauce-loaders/loaders";
-import { Observable, defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
-import type { NostrEngine, ReplaceableLookup } from "@platform/nostr-engine";
-import { openRelayStream } from "@platform/nostr-engine";
+import { defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
+import type { ReplaceableLookup } from "@platform/nostr-engine";
+import { eventLoader, eventStore, ingress, openRelayStream, relayPolicy, relayPool, telemetry } from "@platform/nostr-engine";
 import type { Badge, ProfileData, RelayPermission, ZapReceipt } from "@napplet/nap/identity";
 
 const LOAD_TIMEOUT_MS = 16_000;
@@ -74,36 +73,23 @@ const listEntries = (event: NostrEvent | undefined): string[] => event
   : [];
 
 /**
- * `relayUrls` and `options.lookupRelays` are read on every request rather than copied, so passing the
- * live tier arrays from {@link createRelayConfiguration} keeps the loader current as settings change.
+ * `relayUrls` is read on every request rather than copied, so passing the live tier arrays from
+ * {@link createRelayConfiguration} keeps the direct queries current as settings change.
+ *
+ * Replaceable lookups go through the shared {@link eventLoader}, whose relays are observables and
+ * therefore already follow both the account's own lists and the settings panel.
  */
-export function createIdentityProviders(
-  engine: NostrEngine,
-  relayUrls: string[],
-  options: { readonly lookupRelays?: string[] } = {}
-): IdentityProviders {
-  const request = (relays: string[], filters: Parameters<typeof openRelayStream>[3]) => new Observable<NostrEvent>((observer) => {
-    const selected = engine.relayPolicy.select(relays, "read");
-    const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, {
-      event: (event) => observer.next(event), eose: () => observer.complete()
-    }, 15_000, engine.telemetry);
-    return () => handle.close();
-  });
-  // Passed through rather than copied: a copy would freeze the relay set at construction time and
-  // silently ignore every later edit made in the settings panel.
-  const loader = createAddressLoader(request, {
-    eventStore: engine.eventStore, bufferTime: 0, extraRelays: relayUrls,
-    ...(options.lookupRelays ? { lookupRelays: options.lookupRelays } : {})
-  });
+export function createIdentityProviders(relayUrls: string[]): IdentityProviders {
+
 
   const lookupReplaceable = async (kind: number, pubkey: string, lookup: LookupOptions = {}): Promise<ReplaceableLookup> => {
-    const stored = (): NostrEvent | undefined => engine.eventStore.getReplaceable(kind, pubkey);
+    const stored = (): NostrEvent | undefined => eventStore.getReplaceable(kind, pubkey);
     if (!pubkey) return { status: "unavailable", reason: "signed-out" };
     const cached = stored();
     if (cached && !lookup.refresh) return { status: "found", event: cached };
     if (relayUrls.length === 0) return { status: "unavailable", reason: "no-relays-configured" };
     try {
-      const event = await firstValueFrom(loader({ kind, pubkey, relays: [...(lookup.hints ?? [])] }).pipe(
+      const event = await firstValueFrom(eventLoader({ kind, pubkey, relays: [...(lookup.hints ?? [])] }).pipe(
         timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
       ));
       const resolved = event ?? stored();
@@ -115,29 +101,29 @@ export function createIdentityProviders(
     }
   };
   const resolve = async (kind: number, pubkey: string, identifier?: string, hints: readonly string[] = []): Promise<NostrEvent | undefined> => {
-    const cached = engine.eventStore.getReplaceable(kind, pubkey, identifier);
+    const cached = eventStore.getReplaceable(kind, pubkey, identifier);
     if (cached || !pubkey || relayUrls.length === 0) return cached;
     try {
-      const event = await firstValueFrom(loader({ kind, pubkey, ...(identifier ? { identifier } : {}), relays: [...hints] }).pipe(
+      const event = await firstValueFrom(eventLoader({ kind, pubkey, ...(identifier ? { identifier } : {}), relays: [...hints] }).pipe(
         timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
       ));
-      return event ?? engine.eventStore.getReplaceable(kind, pubkey, identifier);
+      return event ?? eventStore.getReplaceable(kind, pubkey, identifier);
     } catch {
-      return engine.eventStore.getReplaceable(kind, pubkey, identifier);
+      return eventStore.getReplaceable(kind, pubkey, identifier);
     }
   };
-  const query = async (filter: Parameters<typeof engine.eventStore.getByFilters>[0]): Promise<NostrEvent[]> => {
-    const cached = engine.eventStore.getByFilters(filter);
+  const query = async (filter: Parameters<typeof eventStore.getByFilters>[0]): Promise<NostrEvent[]> => {
+    const cached = eventStore.getByFilters(filter);
     if (cached.length > 0 || relayUrls.length === 0) return cached;
     if (relayUrls.length > 0) {
       await new Promise<void>((complete) => {
         let handle: ReturnType<typeof openRelayStream> | undefined;
-        handle = openRelayStream(engine.relayPool, engine.ingress, relayUrls, filter, {
+        handle = openRelayStream(relayPool, ingress, relayUrls, filter, {
           event() {}, eose: () => { handle?.close(); complete(); }
-        }, 15_000, engine.telemetry);
+        }, 15_000, telemetry);
       });
     }
-    return engine.eventStore.getByFilters(filter);
+    return eventStore.getByFilters(filter);
   };
   return {
     lookupReplaceable: (kind, pubkey, lookup) => lookupReplaceable(kind, pubkey, lookup ?? {}),

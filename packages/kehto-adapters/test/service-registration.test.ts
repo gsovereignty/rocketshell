@@ -1,7 +1,6 @@
 import type { Runtime, ServiceHandler } from "@kehto/runtime";
-import { createNostrEngine } from "@platform/nostr-engine";
 import { describe, expect, it, vi } from "vitest";
-import { createOutboxRelayPool, createRelayConfiguration, registerCoreServices } from "../src/index.js";
+import { freshAdapters } from "./fresh.js";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("core service lifecycle", () => {
@@ -13,8 +12,8 @@ describe("core service lifecycle", () => {
       sessionRegistry: { getAllEntries: () => [{ windowId: "window-1" }, { windowId: "window-2" }] },
       injectEvent: vi.fn()
     } as unknown as Runtime;
-    const engine = createNostrEngine();
-    const registration = registerCoreServices({ runtime, publishIdentityChanged }, engine, { directReadRelays: [], directWriteRelays: [] });
+    const { engine, adapters } = await freshAdapters();
+    const registration = adapters.registerCoreServices({ runtime, publishIdentityChanged }, { directReadRelays: [], directWriteRelays: [] });
     const relayCleanup = vi.fn(); const outboxCleanup = vi.fn();
     handlers.get("relay")!.onWindowDestroyed = relayCleanup;
     handlers.get("outbox")!.onWindowDestroyed = outboxCleanup;
@@ -22,15 +21,15 @@ describe("core service lifecycle", () => {
     expect(relayCleanup.mock.calls).toEqual([["window-1"], ["window-2"]]);
     expect(outboxCleanup.mock.calls).toEqual([["window-1"], ["window-2"]]);
     expect(publishIdentityChanged).toHaveBeenCalledWith("");
-    registration.close(); await engine.close();
+    registration.close(); engine.shutdownNostrServices();
   });
   it("maps each Applesauce publish outcome to its relay", async () => {
-    const engine = createNostrEngine();
+    const { engine, adapters } = await freshAdapters();
     const publish = vi.spyOn(engine.relayPool, "publish").mockResolvedValue([
       { from: "wss://one.example/", ok: true, message: "saved" },
       { from: "wss://two.example/", ok: false, message: "blocked" }
     ]);
-    const pool = createOutboxRelayPool(engine, [], ["wss://one.example/", "wss://two.example/"]);
+    const pool = adapters.createOutboxRelayPool([], ["wss://one.example/", "wss://two.example/"]);
     const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
     await expect(pool.publish(event, ["wss://one.example/", "wss://two.example/"])).resolves.toEqual({
       "wss://one.example/": true, "wss://two.example/": false
@@ -40,19 +39,19 @@ describe("core service lifecycle", () => {
     const invalid = { ...event, content: "tampered" };
     await expect(pool.publish(invalid, ["wss://one.example/"])).rejects.toThrow("invalid-event");
     expect(publish).toHaveBeenCalledOnce();
-    await engine.close();
+    engine.shutdownNostrServices();
   });
   it("rejects excessive outbox filters before opening relay work", async () => {
-    const engine = createNostrEngine(); const req = vi.spyOn(engine.relayPool, "req");
-    const pool = createOutboxRelayPool(engine, ["wss://relay.example/"], []);
+    const { engine, adapters } = await freshAdapters(); const req = vi.spyOn(engine.relayPool, "req");
+    const pool = adapters.createOutboxRelayPool(["wss://relay.example/"], []);
     expect(() => pool.subscribe(Array.from({ length: 9 }, () => ({})), ["wss://relay.example/"], vi.fn())).toThrow("invalid-filter");
     expect(req).not.toHaveBeenCalled();
-    await engine.close();
+    engine.shutdownNostrServices();
   });
   it("keeps service relay tiers synchronized with shell mutations", async () => {
-    const engine = createNostrEngine();
-    const configuration = createRelayConfiguration(engine.relayPolicy, { discovery: [], super: [], outbox: [] });
-    const pool = createOutboxRelayPool(engine, configuration.values("super"), configuration.values("outbox"));
+    const { engine, adapters } = await freshAdapters();
+    const configuration = adapters.createRelayConfiguration(engine.relayPolicy, { discovery: [], super: [], outbox: [] });
+    const pool = adapters.createOutboxRelayPool(configuration.values("super"), configuration.values("outbox"));
     expect(pool.isAvailable()).toBe(false);
     const liveReadRelays = configuration.values("super");
     configuration.add("super", "wss://read.example");
@@ -60,7 +59,7 @@ describe("core service lifecycle", () => {
     expect(pool.isAvailable()).toBe(true);
     expect(liveReadRelays).toEqual(["wss://read.example/"]);
     expect(configuration.snapshot().outbox).toEqual(["wss://relay.example/"]);
-    await engine.close();
+    engine.shutdownNostrServices();
   });
   it("serves current profile and follows from the shared EventStore", async () => {
     const handlers = new Map<string, ServiceHandler>();
@@ -68,7 +67,7 @@ describe("core service lifecycle", () => {
       registerService: (name: string, handler: ServiceHandler) => handlers.set(name, handler),
       sessionRegistry: { getAllEntries: () => [] }
     } as unknown as Runtime;
-    const engine = createNostrEngine();
+    const { engine, adapters } = await freshAdapters();
     const secret = generateSecretKey();
     const profile = finalizeEvent({ kind: 0, created_at: 2, content: JSON.stringify({ name: "alice", display_name: "Alice" }), tags: [] }, secret);
     const contacts = finalizeEvent({ kind: 3, created_at: 2, content: "", tags: [["p", "11".repeat(32)], ["p", "22".repeat(32)]] }, secret);
@@ -78,7 +77,7 @@ describe("core service lifecycle", () => {
       getPublicKey: async () => profile.pubkey, signEvent: vi.fn(), toJSON: () => ({})
     };
     account.signer = account as never; engine.accounts.manager.addAccount(account as never); engine.accounts.manager.setActive(account as never);
-    const registration = registerCoreServices({ runtime, publishIdentityChanged: vi.fn() }, engine, { directReadRelays: [], directWriteRelays: [] });
+    const registration = adapters.registerCoreServices({ runtime, publishIdentityChanged: vi.fn() }, { directReadRelays: [], directWriteRelays: [] });
     const identity = handlers.get("identity")!;
     const profileSend = vi.fn(); const followsSend = vi.fn();
     identity.handleMessage("window-1", { type: "identity.getProfile", id: "profile" } as never, profileSend);
@@ -87,6 +86,6 @@ describe("core service lifecycle", () => {
     await vi.waitFor(() => expect(followsSend).toHaveBeenCalledOnce());
     expect(profileSend).toHaveBeenCalledWith({ type: "identity.getProfile.result", id: "profile", profile: { name: "alice", displayName: "Alice" } });
     expect(followsSend).toHaveBeenCalledWith({ type: "identity.getFollows.result", id: "follows", pubkeys: ["11".repeat(32), "22".repeat(32)] });
-    registration.close(); await engine.close();
+    registration.close(); engine.shutdownNostrServices();
   });
 });
