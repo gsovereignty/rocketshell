@@ -1,6 +1,7 @@
 import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
 import { createShellSettingsStore } from "@platform/host-services";
+import { connectedRelayCount$ } from "@platform/nostr-engine";
 import { activePubkey$, activeProfile$ } from "./nostr.js";
 import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
@@ -20,6 +21,7 @@ document.documentElement.setAttribute("data-theme", resolveTheme(
 ));
 
 const status = document.querySelector<HTMLElement>("#status");
+const relayStatus = document.querySelector<HTMLElement>("#relay-status");
 const form = document.querySelector<HTMLFormElement>("#napplet-loader");
 const input = document.querySelector<HTMLInputElement>("#coordinate");
 const button = form?.querySelector<HTMLButtonElement>("button[type=submit]");
@@ -56,6 +58,15 @@ let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
 let settingsView: SettingsView | null = null;
 let dockHideTimer: number | undefined;
+
+const relayCountSubscription = connectedRelayCount$.subscribe((count) => {
+  const label = `${count} ${count === 1 ? "relay" : "relays"} connected`;
+  relayStatus?.querySelector("span")?.replaceChildren(String(count));
+  relayStatus?.setAttribute("aria-label", label);
+  relayStatus?.setAttribute("title", label);
+  if (relayStatus) relayStatus.dataset.connected = String(count > 0);
+});
+window.addEventListener("pagehide", () => relayCountSubscription.unsubscribe(), { once: true });
 
 profileImage?.addEventListener("error", () => {
   profileImage.hidden = true;

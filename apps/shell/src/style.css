@@ -106,7 +106,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   backdrop-filter: saturate(145%) blur(18px);
 }
 .menu-cluster { position: relative; display: flex; align-items: center; height: 100%; }
-#menu-bar > .icon-button { justify-self: end; }
+.menu-tools { display: flex; align-items: center; justify-self: end; gap: .25rem; }
+#relay-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  margin: 0;
+  padding: .25rem .4rem;
+  color: var(--muted);
+  font-size: .7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+#relay-status svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+#relay-status[data-connected="true"] { color: var(--accent); }
 #status {
   min-width: 0;
   overflow: hidden;
