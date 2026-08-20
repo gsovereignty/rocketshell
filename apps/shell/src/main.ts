@@ -6,6 +6,7 @@ import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
 import { createWidgetGrid } from "./widget-layout.js";
+import { createOpenNappletsStore } from "./open-napplets-store.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -367,6 +368,7 @@ void bootstrap().then((platform) => {
   signOut?.addEventListener("click", () => { platform.signOut(); closeMenus(); });
 
   const openedCoordinates = new Map<string, string>();
+  const openNapplets = createOpenNappletsStore(localStorage);
   windowsContainer?.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -375,18 +377,10 @@ void bootstrap().then((platform) => {
     const coordinate = windowId ? openedCoordinates.get(windowId) : undefined;
     if (!windowId || !coordinate) return;
     openedCoordinates.delete(windowId);
-    const url = new URL(location.href);
-    const coordinates = url.searchParams.getAll("napplet");
-    url.searchParams.delete("napplet");
-    let removed = false;
-    for (const value of coordinates) {
-      if (!removed && value === coordinate) { removed = true; continue; }
-      url.searchParams.append("napplet", value);
-    }
-    history.replaceState(null, "", url);
+    openNapplets.remove(coordinate);
   });
 
-  const openCoordinate = async (requestedCoordinate?: string, updateUrl = true, installedDTag?: string): Promise<void> => {
+  const openCoordinate = async (requestedCoordinate?: string, remember = true, installedDTag?: string): Promise<void> => {
     if (!input || !button) return;
     const coordinate = (requestedCoordinate ?? input.value).trim();
     if (!coordinate) return;
@@ -402,11 +396,7 @@ void bootstrap().then((platform) => {
       openedCoordinates.set(opened.windowId, coordinate);
       void renderDock();
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
-      if (updateUrl) {
-        const url = new URL(location.href);
-        url.searchParams.append("napplet", coordinate);
-        history.replaceState(null, "", url);
-      }
+      if (remember) openNapplets.add(coordinate);
       setLoaderStatus(`Opened ${opened.title}.`, "success");
       settleLoading("success");
       setTimeout(() => closeMenus(), 500);
@@ -461,7 +451,7 @@ void bootstrap().then((platform) => {
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
   if (status) status.textContent = "Platform ready";
-  const initialCoordinates = new URL(location.href).searchParams.getAll("napplet").filter(Boolean);
+  const initialCoordinates = openNapplets.get();
   if (initialCoordinates.length > 0) {
     void (async () => {
       for (const coordinate of initialCoordinates) await openCoordinate(coordinate, false);
