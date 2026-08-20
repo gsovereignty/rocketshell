@@ -324,6 +324,21 @@ export const createWidgetGrid = (
     preview.replaceChildren();
   };
 
+  const animateDropConfirmation = (elements: readonly HTMLElement[]): void => {
+    if (reducedMotion.matches) return;
+    gsap.fromTo(elements, {
+      scale: .99,
+      filter: "brightness(1.06)"
+    }, {
+      scale: 1,
+      filter: "brightness(1)",
+      duration: .16,
+      ease: "power3.out",
+      clearProps: "transform,filter",
+      overwrite: "auto"
+    });
+  };
+
   const commitPlacement = (element: HTMLElement, placement: RelocationResult): boolean => {
     if (placement.kind === "reject") return false;
     const entries = [...rects];
@@ -335,6 +350,7 @@ export const createWidgetGrid = (
     gsap.set(element, { clearProps: "transform" });
     if (!commitRects(updates)) return false;
     layoutCustomized = true;
+    animateDropConfirmation([...updates.keys()]);
     window.setTimeout(persistCurrentLayout, 0);
     return true;
   };
