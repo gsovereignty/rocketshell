@@ -341,3 +341,13 @@ test("dock introduces itself then returns at bottom edge", async ({ page }) => {
   await expect(dock).toHaveAttribute("data-visible", "true");
   await expect(dock).toHaveCSS("opacity", "1");
 });
+
+test("dock opens an installed Napplet without relay discovery", async ({ page }) => {
+  await page.goto("./");
+  const launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  const frame = page.frameLocator('iframe[title="reference-napplet"]');
+  await expect(frame.locator("#status")).toHaveText("ready:signed-out");
+  await expect(page.locator("#loader-status")).toHaveText("Opened Reference Napplet.");
+});

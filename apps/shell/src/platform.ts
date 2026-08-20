@@ -64,6 +64,7 @@ export interface BrowserPlatform {
   signOut(): void;
   dockLaunchers(): Promise<readonly DockLauncher[]>;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
+  openInstalled(dTag: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
   destroyWindow(windowId: string): void;
   authenticatedWindowIds(): readonly string[];
   telemetrySnapshot(): readonly PlatformMetricRecord[];
@@ -270,6 +271,12 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
       for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
       const managed = await windows.create(installation.dTag);
       return { dTag: installation.dTag, title: installation.manifest.title ?? installation.dTag, windowId: managed.identity.windowId };
+    },
+    async openInstalled(dTag) {
+      const installation = await packageStore.getActive(dTag);
+      if (!installation) throw new Error("No active verified installation");
+      const managed = await windows.create(dTag);
+      return { dTag, title: installation.manifest.title ?? dTag, windowId: managed.identity.windowId };
     },
     destroyWindow: (windowId) => windows?.destroy(windowId),
     authenticatedWindowIds: () => shell.runtime.sessionRegistry.getAllEntries().map((entry) => entry.windowId),

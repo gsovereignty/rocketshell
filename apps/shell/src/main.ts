@@ -384,17 +384,19 @@ void bootstrap().then((platform) => {
     history.replaceState(null, "", url);
   });
 
-  const openCoordinate = async (requestedCoordinate?: string, updateUrl = true): Promise<void> => {
+  const openCoordinate = async (requestedCoordinate?: string, updateUrl = true, installedDTag?: string): Promise<void> => {
     if (!input || !button) return;
     const coordinate = (requestedCoordinate ?? input.value).trim();
     if (!coordinate) return;
     button.disabled = true;
     button.textContent = "Opening…";
     input.setAttribute("aria-invalid", "false");
-    setLoaderStatus("Resolving signed manifest and verifying package…", "busy");
+    setLoaderStatus(installedDTag ? "Opening verified package…" : "Resolving signed manifest and verifying package…", "busy");
     animateLoading();
     try {
-      const opened = await platform.installAndOpen(coordinate);
+      const opened = installedDTag
+        ? await platform.openInstalled(installedDTag)
+        : await platform.installAndOpen(coordinate);
       openedCoordinates.set(opened.windowId, coordinate);
       void renderDock();
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
@@ -439,7 +441,7 @@ void bootstrap().then((platform) => {
       dockItems.append(item);
       dockButton.addEventListener("click", () => {
         dockButton.disabled = true;
-        void openCoordinate(launcher.coordinate).finally(() => { dockButton.disabled = false; });
+        void openCoordinate(launcher.coordinate, true, launcher.dTag).finally(() => { dockButton.disabled = false; });
       });
       return dockButton;
     });
