@@ -254,6 +254,24 @@ const settleLoading = (state: "success" | "error"): void => {
   }
 };
 
+const animateDockOpening = (button: HTMLButtonElement): (() => void) => {
+  const icon = button.firstElementChild;
+  button.setAttribute("aria-busy", "true");
+  if (!(icon instanceof HTMLElement) || reducedMotion.matches) {
+    return () => button.removeAttribute("aria-busy");
+  }
+  const timeline = gsap.timeline({ repeat: -1, repeatDelay: .08 });
+  timeline
+    .to(icon, { y: -18, scaleX: .94, scaleY: 1.06, duration: .2, ease: "power2.out" })
+    .to(icon, { y: 0, scaleX: 1.05, scaleY: .95, duration: .24, ease: "power2.in" })
+    .to(icon, { scaleX: 1, scaleY: 1, duration: .12, ease: "power2.out" });
+  return () => {
+    timeline.kill();
+    gsap.set(icon, { clearProps: "transform" });
+    button.removeAttribute("aria-busy");
+  };
+};
+
 const clearDockHide = (): void => {
   if (dockHideTimer !== undefined) window.clearTimeout(dockHideTimer);
   dockHideTimer = undefined;
@@ -731,7 +749,11 @@ void bootstrap().then(async (platform) => {
       dockButton.addEventListener("click", () => {
         if (longPressed) { longPressed = false; return; }
         dockButton.disabled = true;
-        void openCoordinate(launcher.coordinate, true, launcher.dTag).finally(() => { dockButton.disabled = false; });
+        const stopOpeningAnimation = animateDockOpening(dockButton);
+        void openCoordinate(launcher.coordinate, true, launcher.dTag).finally(() => {
+          stopOpeningAnimation();
+          dockButton.disabled = false;
+        });
       });
       return dockButton;
     });
