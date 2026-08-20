@@ -13,6 +13,10 @@ import { limitServiceSubscriptions } from "./subscription-limit.js";
 
 /** How long to wait for another user's NIP-65 list before routing without it. */
 const RELAY_LIST_TIMEOUT_MS = 4_000;
+const NIP_65_RELAYS_PER_CATEGORY = 4;
+
+export const limitNip65RelayList = (relays: readonly string[]): string[] =>
+  [...new Set(relays)].slice(0, NIP_65_RELAYS_PER_CATEGORY);
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration }
 export interface CoreServiceRegistration { readonly identity: IdentityProviders; close(): void }
@@ -85,7 +89,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
           user.inboxes$.$first<string[]>(RELAY_LIST_TIMEOUT_MS, []),
           user.outboxes$.$first<string[]>(RELAY_LIST_TIMEOUT_MS, [])
         ]);
-        return [pubkey, { read: [...read], write: [...write] }];
+        return [pubkey, { read: limitNip65RelayList(read), write: limitNip65RelayList(write) }];
       }));
       return new Map(entries.filter(([, list]) => list.read.length > 0 || list.write.length > 0));
     },

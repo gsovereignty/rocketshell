@@ -4,6 +4,12 @@ import { freshAdapters } from "./fresh.js";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 
 describe("core service lifecycle", () => {
+  it("bounds oversized NIP-65 relay categories", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const relays = Array.from({ length: 12 }, (_, index) => `wss://relay-${index}.example`);
+    expect(adapters.limitNip65RelayList([...relays, relays[0]!])).toEqual(relays.slice(0, 4));
+    engine.shutdownNostrServices();
+  });
   it("notifies account-sensitive services for every live window on account change", async () => {
     const handlers = new Map<string, ServiceHandler>();
     const publishIdentityChanged = vi.fn();
