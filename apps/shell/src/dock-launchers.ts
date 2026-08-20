@@ -5,7 +5,8 @@ export interface DockLauncher {
   readonly dTag: string;
   readonly coordinate: string;
   readonly title: string;
-  readonly iconUrl: string;
+  readonly iconUrl?: string;
+  readonly initial: string;
 }
 
 const tagValue = (record: InstallationRecord, name: string): string | undefined =>
@@ -22,9 +23,9 @@ export const dockLauncherFromManifest = (
   record: InstallationRecord,
   relays: readonly string[],
   applicationBase: string
-): DockLauncher | undefined => {
+): DockLauncher => {
   const favicon = packagedFavicon(record);
-  if (!favicon) return undefined;
+  const title = tagValue(record, "title") ?? record.manifest.title ?? record.dTag;
   return {
     dTag: record.dTag,
     coordinate: nip19.naddrEncode({
@@ -33,7 +34,8 @@ export const dockLauncherFromManifest = (
       identifier: record.dTag,
       relays: [...relays]
     }),
-    title: tagValue(record, "title") ?? record.manifest.title ?? record.dTag,
-    iconUrl: virtualNappletUrl(applicationBase, record.dTag, record.aggregateHash, favicon.path)
+    title,
+    ...(favicon ? { iconUrl: virtualNappletUrl(applicationBase, record.dTag, record.aggregateHash, favicon.path) } : {}),
+    initial: Array.from(title.trim())[0]?.toLocaleUpperCase() ?? "?"
   };
 };

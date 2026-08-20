@@ -402,6 +402,28 @@ p { margin: 0; }
   transform-origin: 50% 100%;
 }
 .dock-launcher img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.dock-initial {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border-radius: inherit;
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 760;
+  letter-spacing: -.03em;
+  text-transform: uppercase;
+}
+.dock-running-indicator {
+  position: absolute;
+  top: calc(100% + .26rem);
+  left: 50%;
+  width: .28rem;
+  height: .28rem;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
 .dock-launcher:hover:not(:disabled) { box-shadow: var(--shadow-launcher-hover); }
 .dock-label {
   position: absolute;
@@ -421,6 +443,34 @@ p { margin: 0; }
   transform: translate(-50%, .25rem);
 }
 .dock-launcher:hover .dock-label, .dock-launcher:focus-visible .dock-label { opacity: 1; transform: translate(-50%, 0); }
+.dock-launcher[data-context-open="true"] .dock-label { opacity: 0; }
+
+.dock-context-menu {
+  position: fixed;
+  z-index: 220;
+  min-width: 10.5rem;
+  padding: .3rem;
+  border: 1px solid var(--hairline);
+  border-radius: .7rem;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+.dock-context-menu button {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: .55rem .7rem;
+  border: 0;
+  border-radius: .48rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 650;
+  text-align: start;
+  cursor: pointer;
+}
+.dock-context-menu button:hover, .dock-context-menu button:focus-visible { background: var(--hover); }
 
 @media (max-width: 36rem) {
   #profile-menu-label { display: none; }

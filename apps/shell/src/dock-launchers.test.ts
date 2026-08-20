@@ -60,16 +60,20 @@ describe("dock launcher manifest metadata", () => {
     ]), relays, "/shell/")).toMatchObject({
       dTag: "example-napplet",
       title: "Discover prints",
-      iconUrl: `/shell/__napplet__/example-napplet/${"d".repeat(64)}/favicon.svg`
+      iconUrl: `/shell/__napplet__/example-napplet/${"d".repeat(64)}/favicon.svg`,
+      initial: "D"
     });
   });
 
-  it("omits launcher when no favicon is packaged", () => {
-    expect(dockLauncherFromManifest(installation([], []), relays, "/")).toBeUndefined();
+  it("uses first title letter when no favicon is packaged", () => {
+    const launcher = dockLauncherFromManifest(installation([], []), relays, "/");
+    expect(launcher).toMatchObject({ initial: "M" });
+    expect(launcher).not.toHaveProperty("iconUrl");
   });
 
   it("accepts only packaged image favicon artifacts", () => {
-    expect(dockLauncherFromManifest(installation([], [favicon("favicon.txt", "text/plain")]), relays, "/")).toBeUndefined();
+    expect(dockLauncherFromManifest(installation([], [favicon("favicon.txt", "text/plain")]), relays, "/"))
+      .not.toHaveProperty("iconUrl");
     expect(dockLauncherFromManifest(installation([], [favicon("favicon.ico", "image/x-icon")]), relays, "/")?.iconUrl)
       .toContain("/favicon.ico");
   });

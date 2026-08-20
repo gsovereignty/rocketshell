@@ -31,6 +31,7 @@ export interface ManagedNappletWindow {
 export class NappletWindowManager {
   readonly #windows = new Map<string, ManagedNappletWindow>();
   readonly #creating = new Map<string, Promise<ManagedNappletWindow>>();
+  readonly #changeListeners = new Set<() => void>();
   #closed = false;
 
   constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string, private readonly telemetry: PlatformTelemetry = NOOP_TELEMETRY, private readonly readyTimeoutMs = 10_000) {}
@@ -45,6 +46,15 @@ export class NappletWindowManager {
 
   listWindowIds(): readonly string[] {
     return Object.freeze([...this.#windows.keys()]);
+  }
+
+  onWindowsChanged(listener: () => void): () => void {
+    this.#changeListeners.add(listener);
+    return () => this.#changeListeners.delete(listener);
+  }
+
+  #notifyWindowsChanged(): void {
+    for (const listener of this.#changeListeners) listener();
   }
 
   async create(dTag: string, reusePending = true): Promise<ManagedNappletWindow> {
@@ -112,11 +122,15 @@ export class NappletWindowManager {
       ]).finally(() => { if (timeout !== undefined) clearTimeout(timeout); });
       const managed = { identity, element, iframe, resources: new SubscriptionRegistry(), ready };
       this.#windows.set(windowId, managed);
+      this.#notifyWindowsChanged();
       this.telemetry.record("window.active", 1, { dTag: identity.dTag });
       await ready;
       return managed;
     } catch (error) {
-      if (this.#windows.delete(windowId)) this.telemetry.record("window.active", -1, { dTag: installation.dTag });
+      if (this.#windows.delete(windowId)) {
+        this.#notifyWindowsChanged();
+        this.telemetry.record("window.active", -1, { dTag: installation.dTag });
+      }
       this.bridge.unregister(windowId); element.remove(); throw error;
     }
   }
@@ -125,6 +139,7 @@ export class NappletWindowManager {
     const managed = this.#windows.get(windowId);
     if (!managed) return;
     this.#windows.delete(windowId);
+    this.#notifyWindowsChanged();
     managed.resources.close(); this.bridge.unregister(windowId); managed.element.remove();
     this.telemetry.record("window.active", -1, { dTag: managed.identity.dTag });
     this.telemetry.record("subscription.cleanup", 1, { operation: "window-destroy" });
@@ -134,5 +149,6 @@ export class NappletWindowManager {
     if (this.#closed) return;
     this.#closed = true;
     for (const windowId of [...this.#windows.keys()]) this.destroy(windowId);
+    this.#changeListeners.clear();
   }
 }

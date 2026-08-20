@@ -8,6 +8,7 @@ declare global {
       destroyWindow(windowId: string): void;
       authenticatedWindowIds(): readonly string[];
       telemetrySnapshot(): readonly { name: string; value: number }[];
+      dockLaunchers(): Promise<readonly { coordinate: string; dTag: string }[]>;
       connectExtension(): Promise<string>;
       signOut(): void;
     };
@@ -360,8 +361,10 @@ test("coordinate loader animates pending work and stores open napplets", async (
 test("refresh restores open installed napplets", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
-  await expect(page.locator(".dock-launcher")).toHaveCount(1);
-  await page.locator(".dock-launcher").click();
+  const coordinate = await page.evaluate(async () => (await window.__platformTest?.dockLaunchers())?.find((launcher) => launcher.dTag === "reference-napplet")?.coordinate);
+  await page.evaluate((value) => localStorage.setItem("shell.pinned-napplets", JSON.stringify([value])), coordinate);
+  await page.reload();
+  await page.getByRole("button", { name: "Open Reference Napplet" }).click();
   await expect(page.locator(".napplet-window")).toHaveCount(2);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("shell.open-napplets"))).not.toBeNull();
 
@@ -373,7 +376,10 @@ test("refresh restores open installed napplets", async ({ page }) => {
 test("refresh migrates legacy dock state without relay discovery", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
-  const coordinate = await page.locator(".dock-launcher").evaluate((button) => {
+  const coordinate = await page.evaluate(async () => (await window.__platformTest?.dockLaunchers())?.find((launcher) => launcher.dTag === "reference-napplet")?.coordinate);
+  await page.evaluate((value) => localStorage.setItem("shell.pinned-napplets", JSON.stringify([value])), coordinate);
+  await page.reload();
+  await page.getByRole("button", { name: "Open Reference Napplet" }).evaluate((button) => {
     button.click();
     return new Promise<string>((resolve) => {
       const poll = (): void => {
@@ -461,12 +467,32 @@ test("dock introduces itself then returns at bottom edge", async ({ page }) => {
   await expect(dock).toHaveCSS("opacity", "1");
 });
 
-test("dock opens an installed Napplet without relay discovery", async ({ page }) => {
+test("dock opens an active Napplet without relay discovery", async ({ page }) => {
   await page.goto("./");
-  const launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  const launcher = page.getByRole("button", { name: "Open Platform Fixture" });
   await expect(launcher).toBeVisible();
   await launcher.click();
-  const frame = page.frameLocator('iframe[title="reference-napplet"]');
-  await expect(frame.locator("#status")).toHaveText("ready:signed-out");
-  await expect(page.locator("#loader-status")).toHaveText("Opened Reference Napplet.");
+  await expect(page.locator('iframe[title="platform-fixture"]')).toHaveCount(2);
+  await expect(page.locator("#loader-status")).toHaveText("Opened Platform Fixture.");
+});
+
+test("dock context menu pins an open Napplet and removes it after close", async ({ page }) => {
+  await page.goto("./");
+  const launcher = page.getByRole("button", { name: "Open Platform Fixture" });
+  await expect(launcher.locator(".dock-initial")).toHaveText("P");
+
+  await launcher.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Keep Platform Fixture in Dock" }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.pinned-napplets") ?? "[]").length)).toBe(1);
+
+  await page.locator(".napplet-window-close").click();
+  await expect(launcher).toBeVisible();
+  await expect(launcher.locator(".dock-running-indicator")).toBeHidden();
+
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent("mousemove", {
+    bubbles: true, clientX: innerWidth / 2, clientY: innerHeight - 20
+  })));
+  await launcher.dispatchEvent("contextmenu", { clientX: 200, clientY: 700 });
+  await page.getByRole("menuitem", { name: "Remove Platform Fixture from Dock" }).click();
+  await expect(launcher).toBeHidden();
 });

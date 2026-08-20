@@ -7,6 +7,8 @@ import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
 import { createWidgetGrid } from "./widget-layout.js";
 import { createOpenNappletsStore } from "./open-napplets-store.js";
+import { createDockStore } from "./dock-store.js";
+import type { DockLauncher } from "./dock-launchers.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -367,17 +369,76 @@ void bootstrap().then((platform) => {
   });
   signOut?.addEventListener("click", () => { platform.signOut(); closeMenus(); });
 
-  const openedCoordinates = new Map<string, string>();
+  const openedCoordinates = new Map<string, { coordinate: string; dTag: string }>();
   const openNapplets = createOpenNappletsStore(localStorage);
+  const dockStore = createDockStore(localStorage);
+  const dockMenu = document.createElement("div");
+  const dockMenuAction = document.createElement("button");
+  let dockMenuLauncher: DockLauncher | undefined;
+  let dockMenuAnchor: HTMLButtonElement | undefined;
+  dockMenu.className = "dock-context-menu";
+  dockMenu.hidden = true;
+  dockMenu.setAttribute("role", "menu");
+  dockMenuAction.type = "button";
+  dockMenuAction.setAttribute("role", "menuitem");
+  dockMenu.append(dockMenuAction);
+  document.body.append(dockMenu);
+
+  const closeDockMenu = (restoreFocus = false): void => {
+    if (dockMenu.hidden) return;
+    gsap.killTweensOf(dockMenu);
+    dockMenu.hidden = true;
+    dockMenuLauncher = undefined;
+    if (dockMenuAnchor) delete dockMenuAnchor.dataset.contextOpen;
+    if (restoreFocus) dockMenuAnchor?.focus();
+    dockMenuAnchor = undefined;
+  };
+
+  const openDockMenu = (launcher: DockLauncher, anchor: HTMLButtonElement, clientX?: number, clientY?: number): void => {
+    if (dockMenuAnchor && dockMenuAnchor !== anchor) delete dockMenuAnchor.dataset.contextOpen;
+    dockMenuLauncher = launcher;
+    dockMenuAnchor = anchor;
+    anchor.dataset.contextOpen = "true";
+    const pinned = dockStore.has(launcher.coordinate);
+    dockMenuAction.textContent = pinned ? "Remove from Dock" : "Keep in Dock";
+    dockMenuAction.setAttribute("aria-label", `${pinned ? "Remove" : "Keep"} ${launcher.title} ${pinned ? "from" : "in"} Dock`);
+    dockMenu.hidden = false;
+    const anchorRect = anchor.getBoundingClientRect();
+    const menuRect = dockMenu.getBoundingClientRect();
+    const preferredX = clientX && clientX > 0 ? clientX : anchorRect.left + anchorRect.width / 2;
+    const preferredY = clientY && clientY > 0 ? clientY : anchorRect.top;
+    dockMenu.style.left = `${Math.min(window.innerWidth - menuRect.width - 8, Math.max(8, preferredX - menuRect.width / 2))}px`;
+    dockMenu.style.top = `${Math.max(8, preferredY - menuRect.height - 10)}px`;
+    if (reducedMotion.matches) gsap.set(dockMenu, { autoAlpha: 1, scale: 1, y: 0 });
+    else gsap.fromTo(dockMenu, { autoAlpha: 0, scale: .94, y: 6 }, { autoAlpha: 1, scale: 1, y: 0, duration: .22, ease: "expo.out" });
+    dockMenuAction.focus();
+  };
+
+  dockMenuAction.addEventListener("click", () => {
+    const launcher = dockMenuLauncher;
+    if (!launcher) return;
+    if (dockStore.has(launcher.coordinate)) dockStore.unpin(launcher.coordinate);
+    else dockStore.pin(launcher.coordinate);
+    closeDockMenu(true);
+    void renderDock();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!dockMenu.hidden && !dockMenu.contains(event.target as Node) && !dockMenuAnchor?.contains(event.target as Node)) closeDockMenu();
+  });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !dockMenu.hidden) { event.preventDefault(); closeDockMenu(true); } });
+  window.addEventListener("resize", () => closeDockMenu());
+  window.addEventListener("scroll", () => closeDockMenu(), true);
+
   windowsContainer?.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
     const closeButton = target.closest<HTMLButtonElement>(".napplet-window-close");
     const windowId = closeButton?.dataset.windowId;
-    const coordinate = windowId ? openedCoordinates.get(windowId) : undefined;
-    if (!windowId || !coordinate) return;
+    const opened = windowId ? openedCoordinates.get(windowId) : undefined;
+    if (!windowId) return;
     openedCoordinates.delete(windowId);
-    openNapplets.remove(coordinate);
+    if (opened) openNapplets.remove(opened.coordinate);
+    void renderDock();
   });
 
   const openCoordinate = async (requestedCoordinate?: string, remember = true, installedDTag?: string): Promise<void> => {
@@ -393,7 +454,7 @@ void bootstrap().then((platform) => {
       const opened = installedDTag
         ? await platform.openInstalled(installedDTag)
         : await platform.installAndOpen(coordinate);
-      openedCoordinates.set(opened.windowId, coordinate);
+      openedCoordinates.set(opened.windowId, { coordinate, dTag: opened.dTag });
       void renderDock();
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
       if (remember) openNapplets.add(coordinate, opened.dTag);
@@ -412,33 +473,79 @@ void bootstrap().then((platform) => {
 
   const renderDock = async (): Promise<void> => {
     if (!dockItems || !dock || !dockStatus) return;
-    const launchers = await platform.dockLaunchers();
+    const available = await platform.dockLaunchers();
+    const pinned = dockStore.get();
+    const openDTags = new Set(platform.windows.listWindowIds().flatMap((windowId) => {
+      const managed = platform.windows.findByWindowId(windowId);
+      return managed ? [managed.identity.dTag] : [];
+    }));
+    const launcherByCoordinate = new Map(available.map((launcher) => [launcher.coordinate, launcher]));
+    const launchers = [
+      ...pinned.flatMap((coordinate) => {
+        const launcher = launcherByCoordinate.get(coordinate);
+        return launcher ? [launcher] : [];
+      }),
+      ...available.filter((launcher) => openDTags.has(launcher.dTag) && !pinned.includes(launcher.coordinate))
+    ];
     dockItems.replaceChildren();
     const buttons = launchers.map((launcher) => {
       const item = document.createElement("li");
       const dockButton = document.createElement("button");
-      const image = document.createElement("img");
+      const icon = launcher.iconUrl ? document.createElement("img") : document.createElement("span");
       const label = document.createElement("span");
+      const running = document.createElement("span");
       dockButton.type = "button";
       dockButton.className = "dock-launcher";
       dockButton.title = launcher.title;
       dockButton.setAttribute("aria-label", `Open ${launcher.title}`);
-      image.src = launcher.iconUrl;
-      image.alt = "";
-      image.decoding = "async";
+      if (icon instanceof HTMLImageElement) {
+        icon.src = launcher.iconUrl!;
+        icon.alt = "";
+        icon.decoding = "async";
+      } else {
+        icon.className = "dock-initial";
+        icon.textContent = launcher.initial;
+        icon.setAttribute("aria-hidden", "true");
+      }
       label.className = "dock-label";
       label.textContent = launcher.title;
-      dockButton.append(image, label);
+      running.className = "dock-running-indicator";
+      running.hidden = !openDTags.has(launcher.dTag);
+      running.setAttribute("aria-hidden", "true");
+      dockButton.append(icon, label, running);
       item.append(dockButton);
       dockItems.append(item);
+      let longPressed = false;
+      let longPressTimer: number | undefined;
+      const cancelLongPress = (): void => {
+        if (longPressTimer !== undefined) window.clearTimeout(longPressTimer);
+        longPressTimer = undefined;
+      };
+      dockButton.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse") return;
+        cancelLongPress();
+        longPressTimer = window.setTimeout(() => {
+          longPressed = true;
+          openDockMenu(launcher, dockButton, event.clientX, event.clientY);
+        }, 550);
+      });
+      dockButton.addEventListener("pointerup", cancelLongPress);
+      dockButton.addEventListener("pointercancel", cancelLongPress);
+      dockButton.addEventListener("pointermove", cancelLongPress);
+      dockButton.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        cancelLongPress();
+        openDockMenu(launcher, dockButton, event.clientX, event.clientY);
+      });
       dockButton.addEventListener("click", () => {
+        if (longPressed) { longPressed = false; return; }
         dockButton.disabled = true;
         void openCoordinate(launcher.coordinate, true, launcher.dTag).finally(() => { dockButton.disabled = false; });
       });
       return dockButton;
     });
     dockStatus.hidden = launchers.length > 0;
-    dockStatus.textContent = launchers.length > 0 ? "" : "No napplet manifests provide icons yet.";
+    dockStatus.textContent = launchers.length > 0 ? "" : "Open a napplet to add it to the Dock.";
     dock.hidden = launchers.length === 0;
     if (!reducedMotion.matches && buttons.length > 0) {
       gsap.fromTo(buttons, { y: 20, scale: .72, autoAlpha: 0 }, {
@@ -447,6 +554,8 @@ void bootstrap().then((platform) => {
     }
   };
 
+  const unsubscribeDock = platform.windows.onWindowsChanged(() => { void renderDock(); });
+  window.addEventListener("pagehide", unsubscribeDock, { once: true });
   void renderDock();
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });

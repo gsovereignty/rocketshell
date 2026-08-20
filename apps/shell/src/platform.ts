@@ -261,8 +261,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     signOut: () => accounts.signOut(),
     async dockLaunchers() {
       return (await packageStore.listActive())
-        .map((record) => dockLauncherFromManifest(record, discoveryRelays, import.meta.env.BASE_URL))
-        .filter((launcher): launcher is DockLauncher => launcher !== undefined);
+        .map((record) => dockLauncherFromManifest(record, discoveryRelays, import.meta.env.BASE_URL));
     },
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
