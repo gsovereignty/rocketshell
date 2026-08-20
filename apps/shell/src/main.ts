@@ -1,6 +1,18 @@
+import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
+import { createShellSettingsStore } from "@platform/host-services";
+import { activePubkey$, activeProfile$ } from "./nostr.js";
 import { gsap } from "gsap";
+import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
+import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
 import "./style.css";
+
+// Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
+// flash of the dark palette while IndexedDB and the service worker come up.
+document.documentElement.setAttribute("data-theme", resolveTheme(
+  createShellSettingsStore(localStorage, DEFAULT_SHELL_SETTINGS).get().theme,
+  window.matchMedia("(prefers-color-scheme: dark)").matches
+));
 
 const status = document.querySelector<HTMLElement>("#status");
 const form = document.querySelector<HTMLFormElement>("#napplet-loader");
@@ -20,6 +32,12 @@ const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-t
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
 const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
 const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
+const settingsTrigger = document.querySelector<HTMLButtonElement>("#settings-trigger");
+const settingsPanel = document.querySelector<HTMLElement>("#settings-panel");
+const settingsTabs = document.querySelector<HTMLElement>("#settings-tabs");
+const settingsBody = document.querySelector<HTMLElement>("#settings-body");
+const settingsStatus = document.querySelector<HTMLElement>("#settings-status");
+const settingsClose = document.querySelector<HTMLButtonElement>("#settings-close");
 const windowsContainer = document.querySelector<HTMLElement>("#windows");
 const dockShell = document.querySelector<HTMLElement>("#dock-shell");
 const dock = document.querySelector<HTMLElement>("#napplet-dock");
@@ -30,6 +48,7 @@ const coarsePointer = window.matchMedia("(hover: none)");
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
+let settingsView: SettingsView | null = null;
 let dockHideTimer: number | undefined;
 
 profileImage?.addEventListener("error", () => {
@@ -121,9 +140,24 @@ const openAccountMenu = (): void => {
   buildAccountTimeline().timeScale(1).play();
 };
 
+const closeSettings = (): void => {
+  if (!settingsView?.isOpen()) return;
+  settingsView.close();
+  settingsTrigger?.setAttribute("aria-expanded", "false");
+};
+
+const openSettings = (): void => {
+  if (!settingsView) return;
+  closeAccountMenu();
+  closeSpotlight();
+  settingsTrigger?.setAttribute("aria-expanded", "true");
+  settingsView.open();
+};
+
 const closeMenus = (): void => {
   closeAccountMenu();
   closeSpotlight();
+  closeSettings();
 };
 
 profileTrigger?.addEventListener("click", () => {
@@ -155,7 +189,7 @@ const openSpotlight = (): void => {
 spotlightTrigger?.addEventListener("click", () => spotlightPanel?.hidden ? openSpotlight() : closeMenus());
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    const returnFocus = spotlightPanel?.hidden === false ? spotlightTrigger : profileTrigger;
+    const returnFocus = settingsView?.isOpen() ? settingsTrigger : spotlightPanel?.hidden === false ? spotlightTrigger : profileTrigger;
     closeMenus();
     returnFocus?.focus();
   } else if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
@@ -167,6 +201,7 @@ document.addEventListener("pointerdown", (event) => {
   const target = event.target;
   if (!(target instanceof Node)) return;
   if (accountPopover?.contains(target) || profileTrigger?.contains(target) || spotlightPanel?.contains(target) || spotlightTrigger?.contains(target)) return;
+  if (settingsPanel?.contains(target) || settingsTrigger?.contains(target)) return;
   closeMenus();
 });
 
@@ -277,15 +312,22 @@ wireDockMotion();
 
 void bootstrap().then((platform) => {
   introduceDock();
+
+  createThemeController({ settings: platform.settings, publishTheme: platform.publishTheme });
+  if (settingsPanel && settingsTabs && settingsBody && settingsStatus) {
+    settingsView = createSettingsView({
+      panel: settingsPanel, tabs: settingsTabs, body: settingsBody, status: settingsStatus, platform, reducedMotion
+    });
+    settingsTrigger?.addEventListener("click", () => { if (settingsView?.isOpen()) closeSettings(); else openSettings(); });
+    settingsClose?.addEventListener("click", () => { closeSettings(); settingsTrigger?.focus(); });
+  }
+
   if (import.meta.env.VITE_INSTALL_FIXTURE === "true") {
     Object.defineProperty(window, "__platformTest", { value: platform, configurable: true });
   }
   if (button) button.disabled = false;
 
-  let accountRender = 0;
-  const renderAccount = async (): Promise<void> => {
-    const renderId = ++accountRender;
-    const pubkey = platform.activeAccountPubkey;
+  const renderIdentity = (pubkey: string | undefined, profile: { name?: string | undefined; displayName?: string | undefined; picture?: string | undefined } | undefined): void => {
     if (accountStatus) accountStatus.textContent = pubkey ? `Active: ${pubkey.slice(0, 12)}…${pubkey.slice(-8)}` : "No active identity";
     if (connectAccount) connectAccount.hidden = Boolean(pubkey);
     if (signOut) signOut.hidden = !pubkey;
@@ -295,10 +337,6 @@ void bootstrap().then((platform) => {
       if (profileImage) { profileImage.hidden = true; profileImage.removeAttribute("src"); }
       return;
     }
-    if (profileLabel) profileLabel.textContent = `${pubkey.slice(0, 8)}…`;
-    if (profileFallback) profileFallback.textContent = pubkey.slice(0, 2).toUpperCase();
-    const profile = await platform.activeAccountProfile();
-    if (renderId !== accountRender || pubkey !== platform.activeAccountPubkey) return;
     const name = profile?.displayName || profile?.name;
     if (profileLabel) profileLabel.textContent = name || `${pubkey.slice(0, 8)}…`;
     if (profileFallback) profileFallback.textContent = (name || pubkey).slice(0, 2).toUpperCase();
@@ -309,19 +347,22 @@ void bootstrap().then((platform) => {
       else { profileImage.hidden = true; profileImage.removeAttribute("src"); }
     }
   };
-  void renderAccount();
+  // The pubkey and the profile arrive independently, so the pair is combined rather than
+  // sequenced. This replaces a render-token guard that existed only to discard a stale profile.
+  const identitySubscription = combineLatest([activePubkey$, activeProfile$])
+    .subscribe(([pubkey, profile]) => renderIdentity(pubkey, profile));
+  window.addEventListener("pagehide", () => identitySubscription.unsubscribe(), { once: true });
   if (connectAccount) connectAccount.disabled = false;
   connectAccount?.addEventListener("click", () => {
     connectAccount.disabled = true;
     if (accountStatus) accountStatus.textContent = "Waiting for Nostr extension…";
     void platform.connectExtension()
-      .then(() => renderAccount())
       .catch((error: unknown) => {
         if (accountStatus) accountStatus.textContent = error instanceof Error ? error.message : "Unable to connect Nostr extension";
       })
       .finally(() => { connectAccount.disabled = false; });
   });
-  signOut?.addEventListener("click", () => { platform.signOut(); void renderAccount(); closeMenus(); });
+  signOut?.addEventListener("click", () => { platform.signOut(); closeMenus(); });
 
   const openedCoordinates = new Map<string, string>();
   windowsContainer?.addEventListener("click", (event) => {

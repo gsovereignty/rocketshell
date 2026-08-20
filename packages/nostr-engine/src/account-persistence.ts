@@ -1,5 +1,4 @@
-import { AccountManager, type SerializedAccount } from "applesauce-accounts";
-import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
+import type { AccountManager, SerializedAccount } from "applesauce-accounts";
 import { Subscription } from "rxjs";
 import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 
@@ -65,8 +64,13 @@ export interface PersistentAccountManager {
   close(): Promise<void>;
 }
 
-export async function createPersistentAccountManager(store: AccountSnapshotStore, manager = new AccountManager()): Promise<PersistentAccountManager> {
-  registerCommonAccountTypes(manager);
+/**
+ * Restores accounts from `store` into `manager` and keeps them saved.
+ *
+ * The caller registers the account types; doing it here would throw for the shared manager, which
+ * already has them, and `fromJSON` below needs them registered before it runs either way.
+ */
+export async function createPersistentAccountManager(store: AccountSnapshotStore, manager: AccountManager): Promise<PersistentAccountManager> {
   const restored = await store.load();
   if (restored) {
     manager.fromJSON([...restored.accounts]);

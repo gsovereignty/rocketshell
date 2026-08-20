@@ -3,15 +3,13 @@ import type { ServiceHandler } from "@kehto/runtime";
 import type { AclCheckEvent } from "@kehto/runtime";
 import type { NostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
-import type { NostrEngine } from "@platform/nostr-engine";
-import { createRelayPublisher, openRelayStream, validateFilters } from "@platform/nostr-engine";
+import { accounts, eventStore, ingress, openRelayStream, publisher, relayPolicy, relayPool, telemetry, validateFilters } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
-import { createRelayPoolLike } from "./relay-pool-like.js";
+import { relayPoolLike } from "./relay-pool-like.js";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 import { extractFiltersFromWorkerRequest } from "./worker-relay.js";
 
 export interface ShellAdapterOptions {
-  readonly engine: NostrEngine;
   readonly discoveryRelays: readonly string[];
   readonly readRelays: readonly string[];
   readonly writeRelays: readonly string[];
@@ -38,8 +36,7 @@ function plainEvent(event: NostrEvent): NostrEvent {
 }
 
 export function createPlatformShellAdapter(options: ShellAdapterOptions): PlatformShellAdapter {
-  const { engine } = options; const subscriptions = new Map<string, () => void>();
-  const publisher = createRelayPublisher(engine.relayPool, engine.accounts, engine.ingress, 1, engine.telemetry);
+  const subscriptions = new Map<string, () => void>();
   const scoped = new Map<string, { relay: string; close: () => void }>();
   let initialAccount = true; let closed = false;
   const closeAccountWork = (): void => {
@@ -48,26 +45,26 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     for (const entry of scoped.values()) entry.close();
     scoped.clear();
   };
-  const accountChanges = engine.accounts.manager.active$.subscribe(() => {
+  const accountChanges = accounts.manager.active$.subscribe(() => {
     if (initialAccount) initialAccount = false;
     else closeAccountWork();
   });
-  const relayConfiguration = options.relayConfiguration ?? createRelayConfiguration(engine.relayPolicy, {
+  const relayConfiguration = options.relayConfiguration ?? createRelayConfiguration(relayPolicy, {
     discovery: [...options.discoveryRelays], super: [...options.readRelays], outbox: [...options.writeRelays]
   });
   return {
     services: Object.fromEntries((options.advertisedServices ?? []).map((name) => [name, advertisedService(name)])),
     relayPool: {
-      getRelayPool: () => createRelayPoolLike(engine),
+      getRelayPool: () => relayPoolLike,
       trackSubscription(key, cleanup) { subscriptions.get(key)?.(); subscriptions.set(key, cleanup); },
       untrackSubscription(key) { subscriptions.get(key)?.(); subscriptions.delete(key); },
       openScopedRelay(windowId, relayUrl, subId, filters, sourceWindow) {
         scoped.get(windowId)?.close();
-        const relay = engine.relayPolicy.normalize(relayUrl, "explicit");
-        const handle = openRelayStream(engine.relayPool, engine.ingress, [relay], validateFilters(filters as Filter[]), {
+        const relay = relayPolicy.normalize(relayUrl, "explicit");
+        const handle = openRelayStream(relayPool, ingress, [relay], validateFilters(filters as Filter[]), {
           event: (event) => sourceWindow.postMessage(["EVENT", subId, event], "*"),
           eose: () => sourceWindow.postMessage(["EOSE", subId], "*")
-        }, 15_000, engine.telemetry);
+        }, 15_000, telemetry);
         scoped.set(windowId, { relay, close: () => handle.close() });
       },
       closeScopedRelay(windowId) { scoped.get(windowId)?.close(); scoped.delete(windowId); },
@@ -86,20 +83,20 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     },
     windowManager: { createWindow: options.createWindow },
     auth: {
-      getUserPubkey: () => engine.accounts.publicKey || null,
+      getUserPubkey: () => accounts.publicKey || null,
       getSigner: () => {
-        const active = engine.accounts.manager.active;
+        const active = accounts.manager.active;
         if (!active) return null;
         return {
-          getPublicKey: () => engine.accounts.manager.signer.getPublicKey(),
-          signEvent: (template: Parameters<typeof engine.accounts.manager.signer.signEvent>[0]) => engine.accounts.sign(template),
+          getPublicKey: () => accounts.manager.signer.getPublicKey(),
+          signEvent: (template: Parameters<typeof accounts.manager.signer.signEvent>[0]) => accounts.sign(template),
           ...(active.nip04 ? { nip04: {
-            encrypt: (pubkey: string, plaintext: string) => engine.accounts.nip04Encrypt(pubkey, plaintext),
-            decrypt: (pubkey: string, ciphertext: string) => engine.accounts.nip04Decrypt(pubkey, ciphertext)
+            encrypt: (pubkey: string, plaintext: string) => accounts.nip04Encrypt(pubkey, plaintext),
+            decrypt: (pubkey: string, ciphertext: string) => accounts.nip04Decrypt(pubkey, ciphertext)
           } } : {}),
           ...(active.nip44 ? { nip44: {
-            encrypt: (pubkey: string, plaintext: string) => engine.accounts.nip44Encrypt(pubkey, plaintext),
-            decrypt: (pubkey: string, ciphertext: string) => engine.accounts.nip44Decrypt(pubkey, ciphertext)
+            encrypt: (pubkey: string, plaintext: string) => accounts.nip44Encrypt(pubkey, plaintext),
+            decrypt: (pubkey: string, ciphertext: string) => accounts.nip44Decrypt(pubkey, ciphertext)
           } } : {})
         };
       }
@@ -107,9 +104,9 @@ export function createPlatformShellAdapter(options: ShellAdapterOptions): Platfo
     config: { getNappUpdateBehavior: () => "banner" },
     hotkeys: { executeHotkeyFromForward: (event) => options.executeHotkey?.(event) },
     workerRelay: { getWorkerRelay: () => ({
-      async event(event) { const admitted = engine.ingress.admit(event as NostrEvent, "local:worker"); if (!admitted) throw new Error("invalid-event"); return admitted; },
-      async query(request) { return engine.eventStore.getByFilters(extractFiltersFromWorkerRequest(request)).map(plainEvent); },
-      async count(request) { return engine.eventStore.getByFilters(extractFiltersFromWorkerRequest(request)).length; }
+      async event(event) { const admitted = ingress.admit(event as NostrEvent, "local:worker"); if (!admitted) throw new Error("invalid-event"); return admitted; },
+      async query(request) { return eventStore.getByFilters(extractFiltersFromWorkerRequest(request)).map(plainEvent); },
+      async count(request) { return eventStore.getByFilters(extractFiltersFromWorkerRequest(request)).length; }
     }) },
     crypto: { verifyEvent: async (event) => verifyEvent(plainEvent(event as NostrEvent)) },
     ...(options.intentAvailable ? { intent: { isAvailable: options.intentAvailable } } : {}),

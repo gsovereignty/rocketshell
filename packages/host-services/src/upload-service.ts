@@ -17,19 +17,34 @@ const normalizeServer = (raw: string): string => {
   return url.href.replace(/\/$/, "");
 };
 
-export function registerUploadService(runtime: Runtime, options: UploadHostOptions): void {
-  const servers = [...new Set(options.blossomServers.map(normalizeServer))];
-  if (servers.length === 0) throw new TypeError("At least one Blossom server is required");
-  const uploader = createHttpUploader({
-    rails: { blossom: { servers } }, defaultRail: "blossom",
-    signEvent: options.signEvent,
-    ...(options.fetch ? { fetch: options.fetch } : {})
-  });
-  runtime.registerService("upload", createUploadService({
-    uploader,
-    uploadInfo: {
-      rails: [{ rail: "blossom", enabled: true, returns: ["url", "sha256", "size", "mimeType", "nip94"] }],
-      ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes })
-    }
-  }));
+export interface UploadServiceRegistration {
+  /** Re-registers the service against a new server list, e.g. after the settings panel edits it. */
+  update(blossomServers: readonly string[]): void;
+  /** The server list currently backing the service. */
+  servers(): readonly string[];
+}
+
+export function registerUploadService(runtime: Runtime, options: UploadHostOptions): UploadServiceRegistration {
+  let current: string[] = [];
+
+  const register = (blossomServers: readonly string[]): void => {
+    const servers = [...new Set(blossomServers.map(normalizeServer))];
+    if (servers.length === 0) throw new TypeError("At least one Blossom server is required");
+    const uploader = createHttpUploader({
+      rails: { blossom: { servers } }, defaultRail: "blossom",
+      signEvent: options.signEvent,
+      ...(options.fetch ? { fetch: options.fetch } : {})
+    });
+    runtime.registerService("upload", createUploadService({
+      uploader,
+      uploadInfo: {
+        rails: [{ rail: "blossom", enabled: true, returns: ["url", "sha256", "size", "mimeType", "nip94"] }],
+        ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes })
+      }
+    }));
+    current = servers;
+  };
+
+  register(options.blossomServers);
+  return { update: register, servers: () => current };
 }

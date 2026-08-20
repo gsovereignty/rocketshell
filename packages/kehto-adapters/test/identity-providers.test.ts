@@ -1,11 +1,10 @@
-import { createNostrEngine } from "@platform/nostr-engine";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { describe, expect, it } from "vitest";
-import { createIdentityProviders } from "../src/identity-providers.js";
+import { freshAdapters } from "./fresh.js";
 
 describe("NAP-IDENTITY providers", () => {
   it("resolves every replaceable identity view from the shared EventStore", async () => {
-    const engine = createNostrEngine();
+    const { engine, adapters } = await freshAdapters();
     const userSecret = generateSecretKey();
     const userEvent = (kind: number, tags: string[][], content = "") => finalizeEvent({ kind, created_at: kind, tags, content }, userSecret);
     const profile = userEvent(0, [], JSON.stringify({ name: "alice", display_name: "Alice", picture: "https://media.example/alice.png" }));
@@ -20,7 +19,7 @@ describe("NAP-IDENTITY providers", () => {
       userEvent(30_000, [["d", "blocked"], ["p", "33".repeat(32)]])
     ];
     for (const event of events) engine.ingress.admit(event, "local:test");
-    const identity = createIdentityProviders(engine, []);
+    const identity = adapters.createIdentityProviders([]);
 
     await expect(identity.getProfile(pubkey)).resolves.toEqual({ name: "alice", displayName: "Alice", picture: "https://media.example/alice.png" });
     await expect(identity.getFollows(pubkey)).resolves.toEqual(["11".repeat(32)]);
@@ -34,11 +33,11 @@ describe("NAP-IDENTITY providers", () => {
     await expect(identity.getMutes(pubkey)).resolves.toEqual(["22".repeat(32)]);
     await expect(identity.getBlocked(pubkey)).resolves.toEqual(["33".repeat(32)]);
     await expect(identity.getList("", pubkey)).resolves.toEqual([]);
-    await engine.close();
+    engine.shutdownNostrServices();
   });
 
   it("resolves NIP-57 receipts and NIP-58 awards while omitting malformed data", async () => {
-    const engine = createNostrEngine();
+    const { engine, adapters } = await freshAdapters();
     const userSecret = generateSecretKey();
     const issuerSecret = generateSecretKey();
     const user = finalizeEvent({ kind: 0, created_at: 1, tags: [], content: "{}" }, userSecret);
@@ -53,7 +52,7 @@ describe("NAP-IDENTITY providers", () => {
     const validZap = finalizeEvent({ kind: 9735, created_at: 4, tags: [["p", user.pubkey], ["P", definition.pubkey], ["bolt11", invoice], ["description", JSON.stringify(zapRequest)]], content: "" }, issuerSecret);
     const malformedZap = finalizeEvent({ kind: 9735, created_at: 4, tags: [["p", user.pubkey], ["P", definition.pubkey], ["bolt11", "not-an-invoice"]], content: "" }, issuerSecret);
     for (const event of [user, definition, award, validZap, malformedZap]) engine.ingress.admit(event, "local:test");
-    const identity = createIdentityProviders(engine, []);
+    const identity = adapters.createIdentityProviders([]);
 
     await expect(identity.getBadges(user.pubkey)).resolves.toEqual([{
       id: pointer,
@@ -66,6 +65,6 @@ describe("NAP-IDENTITY providers", () => {
     await expect(identity.getZaps(user.pubkey)).resolves.toEqual([{
       eventId: validZap.id, sender: definition.pubkey, amount: 10_000, content: "Great work!"
     }]);
-    await engine.close();
+    engine.shutdownNostrServices();
   });
 });

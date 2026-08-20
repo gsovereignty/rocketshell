@@ -1,8 +1,7 @@
-import { decodeAddressPointer, type NostrEvent } from "applesauce-core/helpers";
-import { createAddressLoader } from "applesauce-loaders/loaders";
-import { Observable, defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
+import { decodeAddressPointer } from "applesauce-core/helpers";
+import { defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
 import type { SignedManifest } from "@platform/napplet-gateway";
-import { openRelayStream, type NostrEngine } from "@platform/nostr-engine";
+import { eventLoader, eventStore, relayPolicy } from "@platform/nostr-engine";
 
 const LOAD_TIMEOUT_MS = 16_000;
 const NAMED_NAPPLET_KIND = 35129;
@@ -28,25 +27,19 @@ export function parseNappletCoordinate(raw: string): NappletCoordinate {
   return { kind: NAMED_NAPPLET_KIND, pubkey, identifier };
 }
 
-export function createManifestResolver(engine: NostrEngine, relayUrls: readonly string[]) {
-  const selectedRelays = engine.relayPolicy.select(relayUrls, "discovery");
-  const request = (relays: string[], filters: Parameters<typeof openRelayStream>[3]) => new Observable<NostrEvent>((observer) => {
-    const selected = engine.relayPolicy.select(relays, "discovery");
-    const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, {
-      event: (event) => observer.next(event), eose: () => observer.complete()
-    }, 15_000, engine.telemetry);
-    return () => handle.close();
-  });
-  const loader = createAddressLoader(request, { eventStore: engine.eventStore, bufferTime: 0, extraRelays: selectedRelays });
+export function createManifestResolver(relayUrls: readonly string[]) {
+  // Selected per call rather than once at construction. The previous version snapshotted the
+  // relay list here, which was the one path a settings-panel edit never reached.
+  const discoveryRelays = (): string[] => relayPolicy.select([...relayUrls], "discovery");
 
   return async (rawCoordinate: string): Promise<SignedManifest> => {
     const coordinate = parseNappletCoordinate(rawCoordinate);
-    const cached = engine.eventStore.getReplaceable(coordinate.kind, coordinate.pubkey, coordinate.identifier);
-    if (selectedRelays.length === 0) throw new Error("No discovery relays configured");
-    const event = await firstValueFrom(loader({ ...coordinate, relays: selectedRelays }).pipe(
+    const relays = discoveryRelays();
+    if (relays.length === 0) throw new Error("No discovery relays configured");
+    const event = await firstValueFrom(eventLoader({ ...coordinate, relays }).pipe(
       timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
     )).catch(() => undefined);
-    const resolved = event ?? engine.eventStore.getReplaceable(coordinate.kind, coordinate.pubkey, coordinate.identifier);
+    const resolved = event ?? eventStore.getReplaceable(coordinate.kind, coordinate.pubkey, coordinate.identifier);
     if (!resolved) throw new Error("Napplet manifest not found on discovery relays");
     return resolved as SignedManifest;
   };

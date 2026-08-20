@@ -16,7 +16,7 @@
             <button class="profile-action" type="button" data-radial-slot="0" data-stub="Profile" aria-label="Profile (coming soon)">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.25"></circle><path d="M5.5 20c.5-4 2.7-6 6.5-6s6 2 6.5 6"></path></svg>
             </button>
-            <button class="profile-action" type="button" data-radial-slot="1" data-stub="Preferences" aria-label="Preferences (coming soon)">
+            <button id="settings-trigger" class="profile-action" type="button" data-radial-slot="1" aria-label="Preferences" aria-expanded="false" aria-controls="settings-panel" aria-haspopup="dialog">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg>
             </button>
             <button class="profile-action" type="button" data-radial-slot="2" data-stub="Help" aria-label="Help (coming soon)">
@@ -45,6 +45,17 @@
         <p id="loader-status" role="status" aria-live="polite">Enter an naddr or kind:pubkey:identifier coordinate.</p>
         <span id="loader-progress" aria-hidden="true"></span>
       </form>
+    </div>
+    <div id="settings-panel" role="dialog" aria-modal="false" aria-labelledby="settings-title" hidden>
+      <header class="settings-header">
+        <h2 id="settings-title">Preferences</h2>
+        <button id="settings-close" class="icon-button menu-button" type="button" aria-label="Close preferences">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+        </button>
+      </header>
+      <div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Preference sections"></div>
+      <div id="settings-body" class="settings-body"></div>
+      <p id="settings-status" class="settings-status" role="status" aria-live="polite"></p>
     </div>
     <main id="app">
       <header>

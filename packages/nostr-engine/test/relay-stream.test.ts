@@ -15,7 +15,7 @@ describe("full-message relay stream", () => {
     const handle = openRelayStream({ req: () => messages }, ingress, ["wss://one", "wss://two"], {}, { event: (value) => delivered.push(value), eose }, 10_000);
     messages.next({ type: "EVENT", from: "wss://one", id: "r", event }); messages.next({ type: "EVENT", from: "wss://two", id: "r", event });
     messages.next({ type: "EOSE", from: "wss://one", id: "r" }); messages.next({ type: "CLOSED", from: "wss://two", id: "r", reason: "done" }); messages.next({ type: "EOSE", from: "wss://two", id: "r" });
-    expect(delivered).toHaveLength(1); expect(eose).toHaveBeenCalledOnce(); expect(eose).toHaveBeenCalledWith({ partial: false, pendingRelays: [] });
+    expect(delivered).toHaveLength(1); expect(eose).toHaveBeenCalledOnce(); expect(eose).toHaveBeenCalledOnce();
     expect([...getSeenRelays(store.getEvent(event.id)!)!].sort()).toEqual(["wss://one", "wss://two"]);
     handle.close(); store.dispose();
   });
@@ -28,17 +28,17 @@ describe("full-message relay stream", () => {
   it("completes an empty relay selection without opening a request", () => {
     const store = new EventStore({ verifyEvent }); const req = vi.fn(() => new Subject<GroupReqMessage>()); const eose = vi.fn();
     const handle = openRelayStream({ req }, createEventIngress(store, verifyEvent), [], {}, { event: vi.fn(), eose });
-    expect(req).not.toHaveBeenCalled(); expect(eose).toHaveBeenCalledOnce(); expect(eose).toHaveBeenCalledWith({ partial: false, pendingRelays: [] });
+    expect(req).not.toHaveBeenCalled(); expect(eose).toHaveBeenCalledOnce(); expect(eose).toHaveBeenCalledOnce();
     handle.close(); expect(handle.closed).toBe(true); store.dispose();
   });
-  it("reports timeout as partial and keeps delivering live events", async () => {
+  it("ends the barrier on timeout and keeps delivering live events", async () => {
     vi.useFakeTimers();
     const messages = new Subject<GroupReqMessage>(); const store = new EventStore({ verifyEvent }); const delivered = vi.fn(); const eose = vi.fn();
     const event = finalizeEvent({ kind: 1, created_at: 1, content: "late", tags: [] }, generateSecretKey());
     const handle = openRelayStream({ req: () => messages }, createEventIngress(store, verifyEvent), ["wss://one", "wss://two"], {}, { event: delivered, eose }, 50);
     messages.next({ type: "EOSE", from: "wss://one", id: "r" });
     await vi.advanceTimersByTimeAsync(50);
-    expect(eose).toHaveBeenCalledWith({ partial: true, pendingRelays: ["wss://two"] });
+    expect(eose).toHaveBeenCalledOnce();
     messages.next({ type: "EVENT", from: "wss://two", id: "r", event });
     messages.next({ type: "EOSE", from: "wss://two", id: "r" });
     expect(delivered).toHaveBeenCalledOnce(); expect(eose).toHaveBeenCalledOnce();
@@ -52,7 +52,7 @@ describe("full-message relay stream", () => {
     messages.next({ type: "ERROR", from: "wss://one", error: new Error("offline") });
     messages.next({ type: "CLOSED", from: "wss://two", id: "r", reason: "blocked" });
     expect(delivered).not.toHaveBeenCalled(); expect(error).toHaveBeenCalledOnce();
-    expect(eose).toHaveBeenCalledWith({ partial: false, pendingRelays: [] });
+    expect(eose).toHaveBeenCalledOnce();
     handle.close(); store.dispose();
   });
   it("maps observable failure to every pending relay and emits one EOSE", () => {

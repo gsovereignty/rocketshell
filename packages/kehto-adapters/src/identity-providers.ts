@@ -1,14 +1,12 @@
-import {
-  getInboxes, getOutboxes, getProfileContent, getPublicContacts, kinds, type NostrEvent
-} from "applesauce-core/helpers";
+import { kinds, type NostrEvent } from "applesauce-core/helpers";
 import {
   getBadgeAwardPointer, getBadgeDescription, getBadgeImage, getBadgeName, getBadgeThumbnails,
   getZapAmount, getZapRequest, getZapSender
 } from "applesauce-common/helpers";
-import { createAddressLoader } from "applesauce-loaders/loaders";
-import { Observable, defaultIfEmpty, firstValueFrom, timeout } from "rxjs";
-import type { NostrEngine } from "@platform/nostr-engine";
-import { openRelayStream } from "@platform/nostr-engine";
+import { castUser, type Profile } from "applesauce-common/casts";
+import { EMPTY, catchError, defaultIfEmpty, firstValueFrom, lastValueFrom, timeout } from "rxjs";
+import type { ReplaceableLookup } from "@platform/nostr-engine";
+import { eventLoader, eventStore, relayPolicy, relayPool } from "@platform/nostr-engine";
 import type { Badge, ProfileData, RelayPermission, ZapReceipt } from "@napplet/nap/identity";
 
 const LOAD_TIMEOUT_MS = 16_000;
@@ -33,19 +31,28 @@ export interface IdentityProviders {
   getMutes(pubkey: string): Promise<string[]>;
   getBlocked(pubkey: string): Promise<string[]>;
   getBadges(pubkey: string): Promise<Badge[]>;
+  /**
+   * Resolves a replaceable event, reporting whether it is genuinely unpublished or merely
+   * unreachable. Editors of replaceable lists must not treat the two the same.
+   */
+  lookupReplaceable(kind: number, pubkey: string, options?: LookupOptions): Promise<ReplaceableLookup>;
 }
 
-const toProfile = (event: NostrEvent | undefined): ProfileData | null => {
-  if (!event) return null;
-  const profile = getProfileContent(event);
+export interface LookupOptions {
+  /** Skip the local event store and always ask the network for the newest version. */
+  readonly refresh?: boolean;
+  readonly hints?: readonly string[];
+}
+
+const toProfile = (profile: Profile | undefined): ProfileData | null => {
   if (!profile) return null;
   return {
     ...(profile.name ? { name: profile.name } : {}),
-    ...(profile.display_name || profile.displayName ? { displayName: profile.display_name ?? profile.displayName } : {}),
+    ...(profile.displayName ? { displayName: profile.displayName } : {}),
     ...(profile.about ? { about: profile.about } : {}),
     ...(profile.picture ? { picture: profile.picture } : {}),
     ...(profile.banner ? { banner: profile.banner } : {}),
-    ...(profile.nip05 ? { nip05: profile.nip05 } : {}),
+    ...(profile.dnsIdentity ? { nip05: profile.dnsIdentity } : {}),
     ...(profile.lud16 ? { lud16: profile.lud16 } : {}),
     ...(profile.website ? { website: profile.website } : {})
   };
@@ -59,54 +66,75 @@ const listEntries = (event: NostrEvent | undefined): string[] => event
   ? [...new Set(event.tags.flatMap((tag) => typeof tag[0] === "string" && !LIST_METADATA_TAGS.has(tag[0]) && typeof tag[1] === "string" && tag[1].length > 0 ? [tag[1]] : []))]
   : [];
 
-export function createIdentityProviders(engine: NostrEngine, relayUrls: readonly string[]): IdentityProviders {
-  const request = (relays: string[], filters: Parameters<typeof openRelayStream>[3]) => new Observable<NostrEvent>((observer) => {
-    const selected = engine.relayPolicy.select(relays, "read");
-    const handle = openRelayStream(engine.relayPool, engine.ingress, selected, filters, {
-      event: (event) => observer.next(event), eose: () => observer.complete()
-    }, 15_000, engine.telemetry);
-    return () => handle.close();
-  });
-  const loader = createAddressLoader(request, { eventStore: engine.eventStore, bufferTime: 0, extraRelays: [...relayUrls] });
-  const resolve = async (kind: number, pubkey: string, identifier?: string, hints: readonly string[] = []): Promise<NostrEvent | undefined> => {
-    const cached = engine.eventStore.getReplaceable(kind, pubkey, identifier);
-    if (cached || !pubkey || relayUrls.length === 0) return cached;
+/**
+ * `relayUrls` is read on every request rather than copied, so passing the live tier arrays from
+ * {@link createRelayConfiguration} keeps the direct queries current as settings change.
+ *
+ * Replaceable lookups go through the shared {@link eventLoader}, whose relays are observables and
+ * therefore already follow both the account's own lists and the settings panel.
+ */
+export function createIdentityProviders(relayUrls: string[]): IdentityProviders {
+
+
+  const lookupReplaceable = async (kind: number, pubkey: string, lookup: LookupOptions = {}): Promise<ReplaceableLookup> => {
+    const stored = (): NostrEvent | undefined => eventStore.getReplaceable(kind, pubkey);
+    if (!pubkey) return { status: "unavailable", reason: "signed-out" };
+    const cached = stored();
+    if (cached && !lookup.refresh) return { status: "found", event: cached };
+    if (relayUrls.length === 0) return { status: "unavailable", reason: "no-relays-configured" };
     try {
-      const event = await firstValueFrom(loader({ kind, pubkey, ...(identifier ? { identifier } : {}), relays: [...hints] }).pipe(
+      const event = await firstValueFrom(eventLoader({ kind, pubkey, relays: [...(lookup.hints ?? [])] }).pipe(
         timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
       ));
-      return event ?? engine.eventStore.getReplaceable(kind, pubkey, identifier);
+      const resolved = event ?? stored();
+      // Completing without an event means the relays answered EOSE with nothing: genuinely unpublished.
+      return resolved ? { status: "found", event: resolved } : { status: "absent" };
     } catch {
-      return engine.eventStore.getReplaceable(kind, pubkey, identifier);
+      const fallback = stored();
+      return fallback ? { status: "found", event: fallback } : { status: "unavailable", reason: "relay-lookup-failed" };
     }
   };
-  const query = async (filter: Parameters<typeof engine.eventStore.getByFilters>[0]): Promise<NostrEvent[]> => {
-    const cached = engine.eventStore.getByFilters(filter);
+  const resolve = async (kind: number, pubkey: string, identifier?: string, hints: readonly string[] = []): Promise<NostrEvent | undefined> => {
+    const cached = eventStore.getReplaceable(kind, pubkey, identifier);
+    if (cached || !pubkey || relayUrls.length === 0) return cached;
+    try {
+      const event = await firstValueFrom(eventLoader({ kind, pubkey, ...(identifier ? { identifier } : {}), relays: [...hints] }).pipe(
+        timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
+      ));
+      return event ?? eventStore.getReplaceable(kind, pubkey, identifier);
+    } catch {
+      return eventStore.getReplaceable(kind, pubkey, identifier);
+    }
+  };
+  const query = async (filter: Parameters<typeof eventStore.getByFilters>[0]): Promise<NostrEvent[]> => {
+    const cached = eventStore.getByFilters(filter);
     if (cached.length > 0 || relayUrls.length === 0) return cached;
-    if (relayUrls.length > 0) {
-      await new Promise<void>((complete) => {
-        let handle: ReturnType<typeof openRelayStream> | undefined;
-        handle = openRelayStream(engine.relayPool, engine.ingress, relayUrls, filter, {
-          event() {}, eose: () => { handle?.close(); complete(); }
-        }, 15_000, engine.telemetry);
-      });
-    }
-    return engine.eventStore.getByFilters(filter);
+    // The request completes on EOSE and writes through the store's verifier on the way.
+    await lastValueFrom(relayPool.request(relayPolicy.select(relayUrls, "read"), filter, {
+      eventStore, timeout: LOAD_TIMEOUT_MS
+    }).pipe(catchError(() => EMPTY), defaultIfEmpty(undefined)));
+    return eventStore.getByFilters(filter);
   };
+
+  /** Casts read straight from the shared store and resolve missing events through its loader. */
+  const user = (pubkey: string) => castUser(pubkey, eventStore);
   return {
+    lookupReplaceable: (kind, pubkey, lookup) => lookupReplaceable(kind, pubkey, lookup ?? {}),
     getRelays: async (pubkey) => {
-      const event = await resolve(kinds.RelayList, pubkey);
-      if (!event) return {};
-      const inboxes = new Set(getInboxes(event));
-      const outboxes = new Set(getOutboxes(event));
+      if (!pubkey) return {};
+      const mailboxes = await user(pubkey).mailboxes$.$first(LOAD_TIMEOUT_MS, undefined);
+      if (!mailboxes) return {};
+      const inboxes = new Set(mailboxes.inboxes);
+      const outboxes = new Set(mailboxes.outboxes);
       return Object.fromEntries([...new Set([...inboxes, ...outboxes])].map((url) => [url, {
         read: inboxes.has(url), write: outboxes.has(url)
       }]));
     },
-    getProfile: async (pubkey) => toProfile(await resolve(kinds.Metadata, pubkey)),
+    getProfile: async (pubkey) => pubkey ? toProfile(await user(pubkey).profile$.$first(LOAD_TIMEOUT_MS, undefined)) : null,
     getFollows: async (pubkey) => {
-      const contacts = await resolve(kinds.Contacts, pubkey);
-      return contacts ? [...new Set(getPublicContacts(contacts).map((contact) => contact.pubkey))] : [];
+      if (!pubkey) return [];
+      const contacts = await user(pubkey).contacts$.$first(LOAD_TIMEOUT_MS, []);
+      return [...new Set(contacts.map((contact) => contact.pubkey))];
     },
     getList: async (type, pubkey) => {
       const normalized = type.trim().toLowerCase();
@@ -127,7 +155,11 @@ export function createIdentityProviders(engine: NostrEngine, relayUrls: readonly
         return [{ eventId: event.id, sender, amount, ...(content ? { content } : {}) }];
       }).sort((a, b) => a.eventId.localeCompare(b.eventId));
     },
-    getMutes: async (pubkey) => publicPubkeys(await resolve(kinds.Mutelist, pubkey)),
+    getMutes: async (pubkey) => {
+      if (!pubkey) return [];
+      const mutes = await user(pubkey).mutes$.$first(LOAD_TIMEOUT_MS, undefined);
+      return mutes ? [...mutes.pubkeys] : [];
+    },
     getBlocked: async (pubkey) => publicPubkeys(await resolve(BLOCK_LIST_KIND, pubkey, BLOCK_LIST_IDENTIFIER)),
     getBadges: async (pubkey) => {
       const awards = await query({ kinds: [kinds.BadgeAward], "#p": [pubkey] });
