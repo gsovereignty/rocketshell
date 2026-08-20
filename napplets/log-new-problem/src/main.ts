@@ -52,7 +52,7 @@ root.innerHTML = `
       </details>
       <footer class="action-rail">
         <output id="status-line" role="status" aria-live="polite">Connecting to shell…</output>
-        <button id="publish" type="submit" disabled><span>Publish problem</span><span aria-hidden="true">↗</span></button>
+        <button id="publish" type="button" disabled><span>Publish problem</span><span aria-hidden="true">↗</span></button>
       </footer>
     </form>
   </article>`;
@@ -145,8 +145,7 @@ advanced.addEventListener("toggle", () => {
   if (advanced.open) animate(advanced.querySelector(".advanced-grid"), { duration: 0.24 });
 });
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function publishProblem() {
   if (childRequestPending) return;
   publishButton.disabled = true;
   setStatus("Preparing event for shell approval…", "busy");
@@ -166,6 +165,12 @@ form.addEventListener("submit", async (event) => {
   } finally {
     publishButton.disabled = !pubkey || childRequestPending || (mode.textContent === "Child" && !parent);
   }
+}
+
+publishButton.addEventListener("click", () => { void publishProblem(); });
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void publishProblem();
 });
 
 async function start() {
