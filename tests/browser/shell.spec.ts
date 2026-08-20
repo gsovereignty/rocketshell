@@ -95,6 +95,21 @@ test("moves widgets by toolbar drag and keeps resize handles independent", async
   await expect.poll(() => first.evaluate((element) => (element as HTMLElement).style.gridColumn)).toBe(secondColumn);
   await expect.poll(() => second.evaluate((element) => (element as HTMLElement).style.gridColumn)).toBe(firstColumn);
 
+  const movedFirstColumn = await first.evaluate((element) => element.style.gridColumn);
+  const movedSecondColumn = await second.evaluate((element) => element.style.gridColumn);
+  await page.locator("#windows").evaluate((windows) => {
+    const widget = document.createElement("article");
+    widget.id = "new-fixture";
+    widget.className = "napplet-window";
+    widget.innerHTML = '<header class="napplet-window-toolbar"><span class="napplet-window-title">New fixture</span></header><div></div>';
+    windows.append(widget);
+  });
+  await expect(page.locator("#new-fixture .napplet-resize-both")).toBeVisible();
+  await expect(first).toHaveCSS("grid-column", "3 / span 2");
+  await expect(second).toHaveCSS("grid-column", "1 / span 2");
+  expect(await first.evaluate((element) => element.style.gridColumn)).toBe(movedFirstColumn);
+  expect(await second.evaluate((element) => element.style.gridColumn)).toBe(movedSecondColumn);
+
   const resizeHandle = second.locator(".napplet-resize-inline");
   await page.waitForTimeout(300);
   await resizeHandle.hover({ position: { x: 2, y: 30 } });

@@ -178,6 +178,7 @@ export const createWidgetGrid = (
   const rects = new Map<HTMLElement, WidgetRect>();
   let resize: ResizeState | null = null;
   let move: MoveState | null = null;
+  let layoutCustomized = false;
   let keyboardMove: { element: HTMLElement; startRect: WidgetRect; candidate: WidgetRect; placement: RelocationResult } | null = null;
   const preview = document.createElement("div");
   preview.className = "napplet-pack-preview-layer";
@@ -296,6 +297,7 @@ export const createWidgetGrid = (
     const before = new Map([...updates.keys()].map((target) => [target, target.getBoundingClientRect()]));
     gsap.set(element, { clearProps: "transform" });
     if (!commitRects(updates)) return false;
+    layoutCustomized = true;
     animateCommittedPlacement(updates, before);
     return true;
   };
@@ -332,7 +334,7 @@ export const createWidgetGrid = (
         updates.set(candidate, { ...rect, row: rect.row + appliedHeightDelta, height: rect.height - appliedHeightDelta });
       }
     }
-    commitRects(updates);
+    if (commitRects(updates) && (appliedWidthDelta !== 0 || appliedHeightDelta !== 0)) layoutCustomized = true;
   };
 
   const animateLayout = (elements: readonly HTMLElement[]): void => {
@@ -349,6 +351,7 @@ export const createWidgetGrid = (
 
   const reset = (animate = true): void => {
     const elements = widgetElements(container);
+    layoutCustomized = false;
     rects.clear();
     defaultWidgetRects(elements.length, profile.columns).forEach((rect, index) => {
       const element = elements[index];
@@ -375,9 +378,21 @@ export const createWidgetGrid = (
 
   const sync = (): void => {
     const elements = widgetElements(container);
+    const added = elements.filter((element) => !rects.has(element));
     for (const element of elements) decorate(element);
     for (const element of [...rects.keys()]) if (!elements.includes(element)) rects.delete(element);
-    reset(true);
+    if (rects.size === 0 || !layoutCustomized) {
+      reset(true);
+      return;
+    }
+    const defaults = defaultWidgetRects(elements.length, profile.columns);
+    for (const element of added) {
+      const index = elements.indexOf(element);
+      const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
+      const packed = firstAvailableRect(template, profile.columns, [...rects.values()]);
+      if (packed) setRect(element, packed);
+    }
+    animateLayout(added);
   };
 
   const resizeBy = (element: HTMLElement, widthDelta: number, heightDelta: number): void => {
