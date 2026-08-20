@@ -116,6 +116,24 @@ export function descendantsCount(dag: ProblemDag, coordinate: string): number {
   return seen.size;
 }
 
+export function openLeafDescendants(dag: ProblemDag, coordinate: string): ProblemNode[] {
+  const leaves: ProblemNode[] = [];
+  const seen = new Set<string>();
+  const visit = (parent: string) => {
+    for (const childCoordinate of dag.children.get(parent) ?? []) {
+      if (seen.has(childCoordinate)) continue;
+      seen.add(childCoordinate);
+      const child = dag.nodes.get(childCoordinate);
+      if (!child) continue;
+      const children = dag.children.get(childCoordinate) ?? [];
+      if (children.length) visit(childCoordinate);
+      else if (child.status === "open") leaves.push(child);
+    }
+  };
+  visit(coordinate);
+  return leaves.sort((a, b) => a.title.localeCompare(b.title));
+}
+
 export function statusLabel(status: ProblemStatus): string {
   return status === "rfm" ? "RFM" : status[0].toUpperCase() + status.slice(1);
 }

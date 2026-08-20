@@ -9,7 +9,7 @@ import { intent, outbox, type OutboxSubscription, type RelayEventResult } from "
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, statusLabel,
+  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, openLeafDescendants, statusLabel,
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
 import {
@@ -116,19 +116,19 @@ function renderList() {
   if (!dag) return;
   const parent = dag.nodes.get(selected);
   if (!parent) return;
-  const children = (dag.children.get(selected) ?? []).map((coordinate) => dag!.nodes.get(coordinate)!).filter(Boolean);
-  const visible = activeFilter === "all" ? children : children.filter((node) => node.status === activeFilter);
+  const actionable = openLeafDescendants(dag, selected);
+  const visible = activeFilter === "all" ? actionable : actionable.filter((node) => node.status === activeFilter);
   const list = document.querySelector<HTMLElement>("#problem-list");
   const filters = document.querySelector<HTMLElement>("#filters");
   const sectionTitle = document.querySelector<HTMLElement>("#section-title");
   const logChildButton = document.querySelector<HTMLButtonElement>("#log-child");
   if (!list || !filters || !sectionTitle || !logChildButton) return;
-  sectionTitle.textContent = parent.coordinate === dag.rootCoordinate ? "Ground-level problems" : `Children of ${parent.title}`;
+  sectionTitle.textContent = "Actionable problems";
   logChildButton.disabled = !problemChildHandlerAvailable || childComposerBusy;
   logChildButton.title = problemChildHandlerAvailable
     ? `Log a child problem under ${parent.title}`
     : "No compatible problem composer available";
-  filters.innerHTML = filterCounts(children).map(([value, label, count]) => `
+  filters.innerHTML = filterCounts(actionable).map(([value, label, count]) => `
     <button data-filter="${value}" aria-pressed="${activeFilter === value}">${label} <span>${count}</span></button>`).join("");
   list.innerHTML = visible.length ? visible.map((node, index) => `
     <li class="problem-row${node.coordinate === selected ? " selected" : ""}">
@@ -140,7 +140,7 @@ function renderList() {
       </button>
       <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable ? "" : "disabled"}
         aria-label="Open ${escapeHtml(node.title)} in note viewer" title="${noteHandlerAvailable ? "Open in note viewer" : "No note viewer available"}">${externalIcon}</button>
-    </li>`).join("") : `<li class="empty">${children.length ? "No children match this filter." : "This problem has no direct children."}</li>`;
+    </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No open leaf problems below this problem."}</li>`;
   gsap.fromTo(".problem-row", { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
 }
 
