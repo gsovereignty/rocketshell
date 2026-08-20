@@ -50,6 +50,9 @@ describe("open napplets store", () => {
   it("migrates coordinate-only saved values", () => {
     const storage = memoryStorage();
     storage.setItem("shell.open-napplets", JSON.stringify(["naddr1legacy"]));
-    expect(createOpenNappletsStore(storage).get()).toEqual([{ coordinate: "naddr1legacy" }]);
+    const store = createOpenNappletsStore(storage);
+    expect(store.get()).toEqual([{ coordinate: "naddr1legacy" }]);
+    store.identify("naddr1legacy", "installed-napplet");
+    expect(store.get()).toEqual([{ coordinate: "naddr1legacy", dTag: "installed-napplet" }]);
   });
 });

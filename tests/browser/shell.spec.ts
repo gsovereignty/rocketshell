@@ -370,6 +370,27 @@ test("refresh restores open installed napplets", async ({ page }) => {
   await expect(page.locator(".napplet-window")).toHaveCount(2);
 });
 
+test("refresh migrates legacy dock state without relay discovery", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  const coordinate = await page.locator(".dock-launcher").evaluate((button) => {
+    button.click();
+    return new Promise<string>((resolve) => {
+      const poll = (): void => {
+        const saved = JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]") as { coordinate: string }[];
+        if (saved[0]?.coordinate) resolve(saved[0].coordinate);
+        else setTimeout(poll, 10);
+      };
+      poll();
+    });
+  });
+  await page.evaluate((savedCoordinate) => localStorage.setItem("shell.open-napplets", JSON.stringify([savedCoordinate])), coordinate);
+
+  await page.reload();
+  await expect(page.locator(".napplet-window")).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]")[0]?.dTag)).toBe("reference-napplet");
+});
+
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");

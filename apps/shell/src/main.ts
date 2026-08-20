@@ -454,7 +454,12 @@ void bootstrap().then((platform) => {
   const initialNapplets = openNapplets.get();
   if (initialNapplets.length > 0) {
     void (async () => {
-      for (const napplet of initialNapplets) await openCoordinate(napplet.coordinate, false, napplet.dTag);
+      const launchers = await platform.dockLaunchers();
+      for (const napplet of initialNapplets) {
+        const dTag = napplet.dTag ?? launchers.find((launcher) => launcher.coordinate === napplet.coordinate)?.dTag;
+        if (dTag && !napplet.dTag) openNapplets.identify(napplet.coordinate, dTag);
+        await openCoordinate(napplet.coordinate, false, dTag);
+      }
     })();
   }
 }).catch((error: unknown) => {

@@ -3,6 +3,7 @@ const OPEN_NAPPLETS_KEY = "shell.open-napplets";
 export interface OpenNappletsStore {
   get(): readonly OpenNapplet[];
   add(coordinate: string, dTag: string): void;
+  identify(coordinate: string, dTag: string): void;
   remove(coordinate: string): void;
 }
 
@@ -37,6 +38,12 @@ export const createOpenNappletsStore = (storage: Storage): OpenNappletsStore => 
   return {
     get,
     add(coordinate, dTag) { set([...get(), { coordinate, dTag }]); },
+    identify(coordinate, dTag) {
+      const napplets = get();
+      const index = napplets.findIndex((napplet) => napplet.coordinate === coordinate && !napplet.dTag);
+      if (index < 0) return;
+      set(napplets.map((napplet, itemIndex) => itemIndex === index ? { coordinate, dTag } : napplet));
+    },
     remove(coordinate) {
       const napplets = get();
       const index = napplets.findIndex((napplet) => napplet.coordinate === coordinate);
