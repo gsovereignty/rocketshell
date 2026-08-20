@@ -87,6 +87,11 @@ test("settles intent result before caller navigation unmounts it", async ({ page
 });
 
 test("mediates Blossom upload without exposing signer or server selection", async ({ page }) => {
+  // The shell reads its media servers from the settings store, so point it at the mock server there.
+  // Keys left out fall back to the shipped defaults.
+  await page.addInitScript(() => {
+    localStorage.setItem("platform:settings:v1", JSON.stringify({ backupBlossomServers: ["http://127.0.0.1:4173/mock-blossom"] }));
+  });
   const secret = new Uint8Array(32); secret[31] = 7;
   const pubkey = getPublicKey(secret);
   await page.exposeFunction("__platformTestSignEvent", (template: Parameters<typeof finalizeEvent>[0]) => finalizeEvent(template, secret));
@@ -275,8 +280,6 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await profile.click();
   await expect(page.locator("#account-popover")).toBeVisible();
   await expect(page.getByRole("button", { name: "Profile (coming soon)" })).toBeVisible();
-  await page.getByRole("button", { name: "Preferences (coming soon)" }).click();
-  await expect(page.locator("#account-status")).toHaveText("Preferences is coming soon.");
   await page.locator("#connect-account").evaluate((element) => { (element as HTMLButtonElement).hidden = true; });
   await page.locator("#sign-out").evaluate((element) => { (element as HTMLButtonElement).hidden = false; });
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
@@ -288,6 +291,42 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await expect(page.locator("#coordinate")).toBeVisible();
   await spotlight.click();
   await expect(page.locator("#spotlight-panel")).toBeHidden();
+});
+
+test("preferences panel themes the shell and edits the local relay list", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await page.locator("#profile-menu-trigger").click();
+  await page.getByRole("button", { name: "Preferences" }).click();
+  await expect(page.locator("#settings-panel")).toBeVisible();
+  await expect(page.locator("#account-popover")).toBeHidden();
+
+  await expect(page.getByRole("tab", { name: "Appearance" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Dark", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.getByRole("tab", { name: "Relays" }).click();
+  await expect(page.getByText("Connect an identity to see and edit this list.")).toBeVisible();
+  const backup = page.getByLabel("Add to backup relays");
+  await backup.fill("http://insecure.example.com");
+  await backup.press("Enter");
+  await expect(page.getByText("Relay scheme forbidden")).toBeVisible();
+  await backup.fill("wss://added.example.com");
+  await backup.press("Enter");
+  await expect(page.getByText("wss://added.example.com/", { exact: true })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#settings-panel")).toBeHidden();
+
+  // Both the theme and the relay edit are persisted, not just held in memory.
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.locator("#profile-menu-trigger").click();
+  await page.getByRole("button", { name: "Preferences" }).click();
+  await page.getByRole("tab", { name: "Relays" }).click();
+  await expect(page.getByText("wss://added.example.com/", { exact: true })).toBeVisible();
 });
 
 test("dock introduces itself then returns at bottom edge", async ({ page }) => {
