@@ -9,6 +9,27 @@
 
 - Do not use environment variables.
 
+## Shell and packaged napplet boundary
+
+- Treat packaged napplets and the shell as separate products with a strict
+  host/application boundary.
+- Packaged napplet code belongs under `napplets/<napplet>/`. It must remain
+  independently buildable and deployable, and may depend only on public
+  napplet SDKs and platform contracts. It must not import shell source, host
+  services, adapters, the Nostr engine, shell state, or shell-only UI assets.
+- Shell and host implementation belongs under `apps/shell/` and `packages/`.
+  It may discover, load, sandbox, and provide declared capabilities to
+  napplets, but must not contain napplet-specific application behavior or
+  reach into a napplet's internal modules.
+- All communication across this boundary must use the public napplet manifest,
+  gateway, and platform contract. Do not bypass that contract with workspace
+  imports, shared mutable state, DOM access across the boundary, or private
+  implementation APIs.
+- Before changing code, classify the change as shell-owned, contract-owned, or
+  napplet-owned and keep implementation and tests on that side. If both sides
+  must change, separate the changes and preserve dependency direction from
+  napplet to public contract, never to shell implementation.
+
 ## Applesauce requirements
 
 - For any task involving Applesauce, always activate and follow the installed
