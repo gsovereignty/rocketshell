@@ -314,7 +314,7 @@ test("coordinate loader reports malformed input without opening a window", async
   await expect(page.locator("#windows iframe")).toHaveCount(1);
 });
 
-test("coordinate loader animates pending work and settles success", async ({ page }) => {
+test("coordinate loader animates pending work and stores open napplets", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   await page.evaluate(() => {
@@ -340,9 +340,9 @@ test("coordinate loader animates pending work and settles success", async ({ pag
   await page.locator("#coordinate").fill("35129:fixture:second");
   await page.getByRole("button", { name: "Open Napplet", exact: true }).click();
   await expect(page.locator("#loader-status")).toHaveText("Opened Animated Fixture.");
-  expect(await page.evaluate(() => new URL(location.href).searchParams.getAll("napplet"))).toEqual([
-    "35129:fixture:animated",
-    "35129:fixture:second"
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]"))).toEqual([
+    { coordinate: "35129:fixture:animated", dTag: "animated-fixture" },
+    { coordinate: "35129:fixture:second", dTag: "animated-fixture" }
   ]);
   await page.evaluate(() => {
     const close = document.createElement("button");
@@ -352,7 +352,22 @@ test("coordinate loader animates pending work and settles success", async ({ pag
     close.click();
     close.remove();
   });
-  expect(await page.evaluate(() => new URL(location.href).searchParams.getAll("napplet"))).toEqual(["35129:fixture:second"]);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]"))).toEqual([
+    { coordinate: "35129:fixture:second", dTag: "animated-fixture" }
+  ]);
+});
+
+test("refresh restores open installed napplets", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await expect(page.locator(".dock-launcher")).toHaveCount(1);
+  await page.locator(".dock-launcher").click();
+  await expect(page.locator(".napplet-window")).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("shell.open-napplets"))).not.toBeNull();
+
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await expect(page.locator(".napplet-window")).toHaveCount(2);
 });
 
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
