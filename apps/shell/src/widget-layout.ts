@@ -413,7 +413,7 @@ export const createWidgetGrid = (
   };
 
   const animateLayout = (elements: readonly HTMLElement[]): void => {
-    if (reducedMotion.matches) return;
+    if (reducedMotion.matches || elements.length === 0) return;
     gsap.fromTo(elements, { autoAlpha: 0, scale: .985, filter: "blur(3px)" }, {
       autoAlpha: 1,
       scale: 1,
