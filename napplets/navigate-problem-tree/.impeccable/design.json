@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-20T23:30:00Z",
+  "title": "Design System: Navigate Problem Tree",
+  "extensions": {
+    "colorMeta": {
+      "electric-blue": { "role": "primary", "displayName": "Current Blue", "canonical": "#145cff" },
+      "panel": { "role": "neutral", "displayName": "Outline Panel", "canonical": "#f4f4f6" },
+      "surface": { "role": "neutral", "displayName": "Working White", "canonical": "#ffffff" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Setup Display", "purpose": "Root configuration headline only." },
+      "label": { "displayName": "Pane Label", "purpose": "Compact navigation headings." }
+    },
+    "shadows": [
+      { "name": "selected-filter", "value": "0 2px 8px rgba(23, 26, 34, .13)", "purpose": "Selected filter inside shared control group." }
+    ],
+    "motion": [
+      { "name": "authored-entry", "value": "GSAP expo.out, 300–620ms", "purpose": "Setup, workspace reveal, and refreshed child rows." }
+    ],
+    "breakpoints": [
+      { "name": "stacked", "value": "760px" },
+      { "name": "compact", "value": "430px" }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "The Operations Index",
+    "overview": "A quiet, split structural navigator with one electric-blue current position.",
+    "keyCharacteristics": ["split outline and list", "flat tonal hierarchy", "semantic state chips", "dense accessible rows"],
+    "rules": [
+      { "name": "Current Position Rule", "body": "Use electric blue only for current position or decisive action.", "section": "colors" }
+    ],
+    "dos": ["Keep DAG relationships visible.", "Reflow panes vertically on narrow screens."],
+    "donts": ["Do not render problem descriptions.", "Do not elevate every problem into a card."]
+  }
+}
