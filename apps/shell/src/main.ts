@@ -1,6 +1,16 @@
 import { bootstrap } from "./bootstrap.js";
+import { createShellSettingsStore } from "@platform/host-services";
 import { gsap } from "gsap";
+import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
+import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
 import "./style.css";
+
+// Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
+// flash of the dark palette while IndexedDB and the service worker come up.
+document.documentElement.setAttribute("data-theme", resolveTheme(
+  createShellSettingsStore(localStorage, DEFAULT_SHELL_SETTINGS).get().theme,
+  window.matchMedia("(prefers-color-scheme: dark)").matches
+));
 
 const status = document.querySelector<HTMLElement>("#status");
 const form = document.querySelector<HTMLFormElement>("#napplet-loader");
@@ -20,6 +30,12 @@ const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-t
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
 const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
 const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
+const settingsTrigger = document.querySelector<HTMLButtonElement>("#settings-trigger");
+const settingsPanel = document.querySelector<HTMLElement>("#settings-panel");
+const settingsTabs = document.querySelector<HTMLElement>("#settings-tabs");
+const settingsBody = document.querySelector<HTMLElement>("#settings-body");
+const settingsStatus = document.querySelector<HTMLElement>("#settings-status");
+const settingsClose = document.querySelector<HTMLButtonElement>("#settings-close");
 const windowsContainer = document.querySelector<HTMLElement>("#windows");
 const dockShell = document.querySelector<HTMLElement>("#dock-shell");
 const dock = document.querySelector<HTMLElement>("#napplet-dock");
@@ -30,6 +46,7 @@ const coarsePointer = window.matchMedia("(hover: none)");
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
+let settingsView: SettingsView | null = null;
 let dockHideTimer: number | undefined;
 
 profileImage?.addEventListener("error", () => {
@@ -121,9 +138,24 @@ const openAccountMenu = (): void => {
   buildAccountTimeline().timeScale(1).play();
 };
 
+const closeSettings = (): void => {
+  if (!settingsView?.isOpen()) return;
+  settingsView.close();
+  settingsTrigger?.setAttribute("aria-expanded", "false");
+};
+
+const openSettings = (): void => {
+  if (!settingsView) return;
+  closeAccountMenu();
+  closeSpotlight();
+  settingsTrigger?.setAttribute("aria-expanded", "true");
+  settingsView.open();
+};
+
 const closeMenus = (): void => {
   closeAccountMenu();
   closeSpotlight();
+  closeSettings();
 };
 
 profileTrigger?.addEventListener("click", () => {
@@ -155,7 +187,7 @@ const openSpotlight = (): void => {
 spotlightTrigger?.addEventListener("click", () => spotlightPanel?.hidden ? openSpotlight() : closeMenus());
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    const returnFocus = spotlightPanel?.hidden === false ? spotlightTrigger : profileTrigger;
+    const returnFocus = settingsView?.isOpen() ? settingsTrigger : spotlightPanel?.hidden === false ? spotlightTrigger : profileTrigger;
     closeMenus();
     returnFocus?.focus();
   } else if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
@@ -167,6 +199,7 @@ document.addEventListener("pointerdown", (event) => {
   const target = event.target;
   if (!(target instanceof Node)) return;
   if (accountPopover?.contains(target) || profileTrigger?.contains(target) || spotlightPanel?.contains(target) || spotlightTrigger?.contains(target)) return;
+  if (settingsPanel?.contains(target) || settingsTrigger?.contains(target)) return;
   closeMenus();
 });
 
@@ -277,6 +310,16 @@ wireDockMotion();
 
 void bootstrap().then((platform) => {
   introduceDock();
+
+  createThemeController({ settings: platform.settings, publishTheme: platform.publishTheme });
+  if (settingsPanel && settingsTabs && settingsBody && settingsStatus) {
+    settingsView = createSettingsView({
+      panel: settingsPanel, tabs: settingsTabs, body: settingsBody, status: settingsStatus, platform, reducedMotion
+    });
+    settingsTrigger?.addEventListener("click", () => { if (settingsView?.isOpen()) closeSettings(); else openSettings(); });
+    settingsClose?.addEventListener("click", () => { closeSettings(); settingsTrigger?.focus(); });
+  }
+
   if (import.meta.env.VITE_INSTALL_FIXTURE === "true") {
     Object.defineProperty(window, "__platformTest", { value: platform, configurable: true });
   }
@@ -289,6 +332,7 @@ void bootstrap().then((platform) => {
     if (accountStatus) accountStatus.textContent = pubkey ? `Active: ${pubkey.slice(0, 12)}…${pubkey.slice(-8)}` : "No active identity";
     if (connectAccount) connectAccount.hidden = Boolean(pubkey);
     if (signOut) signOut.hidden = !pubkey;
+    settingsView?.refresh();
     if (!pubkey) {
       if (profileLabel) profileLabel.textContent = "Not connected";
       if (profileFallback) profileFallback.textContent = "K";
@@ -302,6 +346,7 @@ void bootstrap().then((platform) => {
     const name = profile?.displayName || profile?.name;
     if (profileLabel) profileLabel.textContent = name || `${pubkey.slice(0, 8)}…`;
     if (profileFallback) profileFallback.textContent = (name || pubkey).slice(0, 2).toUpperCase();
+    settingsView?.refresh();
     if (profileImage) {
       const picture = profile?.picture;
       const validPicture = picture && (() => { try { return ["https:", "http:"].includes(new URL(picture).protocol); } catch { return false; } })();
