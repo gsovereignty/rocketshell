@@ -38,20 +38,26 @@ function showSetup(message = "") {
         <h1 id="setup-title">Choose problem root</h1>
         <p>Enter full root problem coordinate. Navigator loads only structure belonging to that DAG.</p>
       </div>
-      <form id="root-form" novalidate>
+      <div id="root-form">
         <label for="root-coordinate">Root problem a-tag</label>
         <div class="coordinate-entry">
           <input id="root-coordinate" name="root" required autocomplete="off" spellcheck="false"
             placeholder="31971:owner-pubkey:problem-id" aria-describedby="setup-status">
-          <button type="submit">Load DAG</button>
+          <button type="button">Load DAG</button>
         </div>
         <output id="setup-status" class="setup-status" aria-live="polite">${escapeHtml(message)}</output>
-      </form>
+      </div>
     </section>`;
-  document.querySelector<HTMLFormElement>("#root-form")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const input = document.querySelector<HTMLInputElement>("#root-coordinate");
+  const input = document.querySelector<HTMLInputElement>("#root-coordinate");
+  const submit = document.querySelector<HTMLButtonElement>("#root-form button");
+  const loadRoot = () => {
     if (input) void loadDag(input.value);
+  };
+  submit?.addEventListener("click", loadRoot);
+  input?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    loadRoot();
   });
   gsap.fromTo(".setup > *", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .07, ease: "expo.out" });
 }
