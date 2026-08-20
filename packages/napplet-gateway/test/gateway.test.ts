@@ -124,6 +124,7 @@ describe("package gateway", () => {
     expect(csp).toContain("'nonce-");
     expect(csp).toContain("'wasm-unsafe-eval'");
     expect(csp?.split(/\s|;/)).not.toContain("'unsafe-eval'");
+    expect(csp).toContain("media-src 'self' blob: data:");
     expect(response?.headers.get("access-control-allow-origin")).toBe("*");
     expect((await routeNappletRequest(new Request(`https://host.test${url}x`), "/project/", store))?.status).toBe(404);
   });
