@@ -9,6 +9,7 @@ import { createWidgetGrid } from "./widget-layout.js";
 import { createOpenNappletsStore } from "./open-napplets-store.js";
 import { createDockStore } from "./dock-store.js";
 import type { DockLauncher } from "./dock-launchers.js";
+import { openDockIconStore, type DockIconOverride } from "./dock-icon-store.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -315,7 +316,7 @@ const wireDockMotion = (): void => {
 
 wireDockMotion();
 
-void bootstrap().then((platform) => {
+void bootstrap().then(async (platform) => {
   introduceDock();
 
   createThemeController({ settings: platform.settings, publishTheme: platform.publishTheme });
@@ -372,17 +373,100 @@ void bootstrap().then((platform) => {
   const openedCoordinates = new Map<string, { coordinate: string; dTag: string }>();
   const openNapplets = createOpenNappletsStore(localStorage);
   const dockStore = createDockStore(localStorage);
+  const dockIconStore = await openDockIconStore();
+  const iconOverrides = new Map<string, DockIconOverride>();
   const dockMenu = document.createElement("div");
-  const dockMenuAction = document.createElement("button");
+  const dockMenuIconAction = document.createElement("button");
+  const dockMenuResetAction = document.createElement("button");
+  const dockMenuPinAction = document.createElement("button");
+  const iconEditor = document.createElement("section");
+  const iconEditorTitle = document.createElement("h2");
+  const iconEditorPreview = document.createElement("div");
+  const iconEditorLetter = document.createElement("input");
+  const iconEditorUseLetter = document.createElement("button");
+  const iconEditorUpload = document.createElement("button");
+  const iconEditorReset = document.createElement("button");
+  const iconEditorCancel = document.createElement("button");
+  const iconEditorFile = document.createElement("input");
+  const iconEditorStatus = document.createElement("p");
   let dockMenuLauncher: DockLauncher | undefined;
   let dockMenuAnchor: HTMLButtonElement | undefined;
+  let iconEditorLauncher: DockLauncher | undefined;
+  let iconEditorAnchor: HTMLButtonElement | undefined;
   dockMenu.className = "dock-context-menu";
   dockMenu.hidden = true;
   dockMenu.setAttribute("role", "menu");
-  dockMenuAction.type = "button";
-  dockMenuAction.setAttribute("role", "menuitem");
-  dockMenu.append(dockMenuAction);
-  document.body.append(dockMenu);
+  for (const action of [dockMenuIconAction, dockMenuResetAction, dockMenuPinAction]) {
+    action.type = "button";
+    action.setAttribute("role", "menuitem");
+  }
+  dockMenuIconAction.textContent = "Change Icon…";
+  dockMenuResetAction.textContent = "Reset to Napplet Icon";
+  dockMenu.append(dockMenuIconAction, dockMenuResetAction, dockMenuPinAction);
+
+  iconEditor.className = "dock-icon-editor";
+  iconEditor.hidden = true;
+  iconEditor.setAttribute("role", "dialog");
+  iconEditor.setAttribute("aria-modal", "false");
+  iconEditorTitle.id = "dock-icon-editor-title";
+  iconEditor.setAttribute("aria-labelledby", iconEditorTitle.id);
+  iconEditorPreview.className = "dock-icon-editor-preview";
+  iconEditorLetter.className = "dock-icon-letter-input";
+  iconEditorLetter.maxLength = 2;
+  iconEditorLetter.autocomplete = "off";
+  iconEditorLetter.spellcheck = false;
+  iconEditorLetter.setAttribute("aria-label", "Icon letters");
+  iconEditorUseLetter.type = "button";
+  iconEditorUseLetter.textContent = "Use Letters";
+  iconEditorUpload.type = "button";
+  iconEditorUpload.textContent = "Upload Image";
+  iconEditorReset.type = "button";
+  iconEditorReset.textContent = "Use Napplet Icon";
+  iconEditorCancel.type = "button";
+  iconEditorCancel.textContent = "Cancel";
+  iconEditorFile.type = "file";
+  iconEditorFile.accept = "image/png,image/jpeg,image/webp,image/avif";
+  iconEditorFile.hidden = true;
+  iconEditorStatus.className = "dock-icon-editor-status";
+  iconEditorStatus.setAttribute("role", "status");
+  const iconEditorActions = document.createElement("div");
+  iconEditorActions.className = "dock-icon-editor-actions";
+  iconEditorActions.append(iconEditorUseLetter, iconEditorUpload, iconEditorReset, iconEditorCancel);
+  iconEditor.append(iconEditorTitle, iconEditorPreview, iconEditorLetter, iconEditorActions, iconEditorFile, iconEditorStatus);
+  document.body.append(dockMenu, iconEditor);
+
+  const createDockIcon = (launcher: DockLauncher, override = iconOverrides.get(launcher.coordinate)): HTMLImageElement | HTMLSpanElement => {
+    const imageUrl = override?.type === "image" ? override.dataUrl : override ? undefined : launcher.iconUrl;
+    if (imageUrl) {
+      const image = document.createElement("img");
+      image.src = imageUrl;
+      image.alt = "";
+      image.decoding = "async";
+      return image;
+    }
+    const initial = document.createElement("span");
+    initial.className = "dock-initial";
+    initial.textContent = override?.type === "letter" ? override.value : launcher.initial;
+    initial.setAttribute("aria-hidden", "true");
+    return initial;
+  };
+
+  const renderIconEditorPreview = (): void => {
+    const launcher = iconEditorLauncher;
+    if (!launcher) return;
+    iconEditorPreview.replaceChildren(createDockIcon(launcher));
+  };
+
+  const closeIconEditor = (restoreFocus = false): void => {
+    if (iconEditor.hidden) return;
+    gsap.killTweensOf(iconEditor);
+    iconEditor.hidden = true;
+    iconEditorLauncher = undefined;
+    iconEditorStatus.textContent = "";
+    iconEditorFile.value = "";
+    if (restoreFocus) iconEditorAnchor?.focus();
+    iconEditorAnchor = undefined;
+  };
 
   const closeDockMenu = (restoreFocus = false): void => {
     if (dockMenu.hidden) return;
@@ -400,9 +484,12 @@ void bootstrap().then((platform) => {
     dockMenuAnchor = anchor;
     anchor.dataset.contextOpen = "true";
     const pinned = dockStore.has(launcher.coordinate);
-    dockMenuAction.disabled = launcher.builtIn === true;
-    dockMenuAction.textContent = launcher.builtIn ? "Built in to Rocketshell" : pinned ? "Remove from Dock" : "Keep in Dock";
-    dockMenuAction.setAttribute("aria-label", launcher.builtIn
+    dockMenuIconAction.setAttribute("aria-label", `Change ${launcher.title} icon`);
+    dockMenuResetAction.hidden = !iconOverrides.has(launcher.coordinate);
+    dockMenuResetAction.setAttribute("aria-label", `Reset ${launcher.title} to Napplet icon`);
+    dockMenuPinAction.disabled = launcher.builtIn === true;
+    dockMenuPinAction.textContent = launcher.builtIn ? "Built in to Rocketshell" : pinned ? "Remove from Dock" : "Keep in Dock";
+    dockMenuPinAction.setAttribute("aria-label", launcher.builtIn
       ? `${launcher.title} is built in to Rocketshell`
       : `${pinned ? "Remove" : "Keep"} ${launcher.title} ${pinned ? "from" : "in"} Dock`);
     dockMenu.hidden = false;
@@ -414,10 +501,10 @@ void bootstrap().then((platform) => {
     dockMenu.style.top = `${Math.max(8, preferredY - menuRect.height - 10)}px`;
     if (reducedMotion.matches) gsap.set(dockMenu, { autoAlpha: 1, scale: 1, y: 0 });
     else gsap.fromTo(dockMenu, { autoAlpha: 0, scale: .94, y: 6 }, { autoAlpha: 1, scale: 1, y: 0, duration: .22, ease: "expo.out" });
-    dockMenuAction.focus();
+    dockMenuIconAction.focus();
   };
 
-  dockMenuAction.addEventListener("click", () => {
+  dockMenuPinAction.addEventListener("click", () => {
     const launcher = dockMenuLauncher;
     if (!launcher || launcher.builtIn) return;
     if (dockStore.has(launcher.coordinate)) dockStore.unpin(launcher.coordinate);
@@ -425,12 +512,102 @@ void bootstrap().then((platform) => {
     closeDockMenu(true);
     void renderDock();
   });
+  dockMenuIconAction.addEventListener("click", () => {
+    const launcher = dockMenuLauncher;
+    if (!launcher) return;
+    iconEditorAnchor = dockMenuAnchor;
+    closeDockMenu();
+    iconEditorLauncher = launcher;
+    iconEditorTitle.textContent = `Change ${launcher.title} icon`;
+    const override = iconOverrides.get(launcher.coordinate);
+    iconEditorLetter.value = override?.type === "letter" ? override.value : launcher.initial;
+    renderIconEditorPreview();
+    iconEditor.hidden = false;
+    if (reducedMotion.matches) gsap.set(iconEditor, { autoAlpha: 1, scale: 1, y: 0 });
+    else gsap.fromTo(iconEditor, { autoAlpha: 0, scale: .96, y: 8 }, { autoAlpha: 1, scale: 1, y: 0, duration: .24, ease: "expo.out" });
+    iconEditorLetter.focus();
+    iconEditorLetter.select();
+  });
+  dockMenuResetAction.addEventListener("click", () => {
+    const launcher = dockMenuLauncher;
+    if (!launcher) return;
+    void dockIconStore.delete(launcher.coordinate).then(() => {
+      iconOverrides.delete(launcher.coordinate);
+      closeDockMenu(true);
+      void renderDock();
+    }).catch(() => {
+      dockMenuResetAction.textContent = "Unable to reset icon";
+    });
+  });
+  const saveIconOverride = async (override: DockIconOverride): Promise<void> => {
+    const launcher = iconEditorLauncher;
+    if (!launcher) return;
+    await dockIconStore.set(launcher.coordinate, override);
+    iconOverrides.set(launcher.coordinate, override);
+    await renderDock();
+    closeIconEditor(true);
+  };
+  iconEditorUseLetter.addEventListener("click", () => {
+    const value = Array.from(iconEditorLetter.value.trim()).slice(0, 2).join("").toLocaleUpperCase();
+    if (!value) {
+      iconEditorStatus.textContent = "Enter one or two characters.";
+      iconEditorLetter.focus();
+      return;
+    }
+    iconEditorStatus.textContent = "Saving icon…";
+    void saveIconOverride({ type: "letter", value }).catch(() => { iconEditorStatus.textContent = "Unable to save icon."; });
+  });
+  iconEditorUpload.addEventListener("click", () => iconEditorFile.click());
+  iconEditorFile.addEventListener("change", () => {
+    const file = iconEditorFile.files?.[0];
+    if (!file) return;
+    void (async () => {
+      if (file.size > 5 * 1024 * 1024) throw new Error("Choose an image smaller than 5 MB.");
+      iconEditorStatus.textContent = "Preparing image…";
+      const bitmap = await createImageBitmap(file);
+      try {
+        if (bitmap.width < 1 || bitmap.height < 1) throw new Error("Image has no visible pixels.");
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Image editor unavailable.");
+        const scale = Math.max(256 / bitmap.width, 256 / bitmap.height);
+        const width = bitmap.width * scale;
+        const height = bitmap.height * scale;
+        context.drawImage(bitmap, (256 - width) / 2, (256 - height) / 2, width, height);
+        const dataUrl = canvas.toDataURL("image/webp", .9);
+        await saveIconOverride({ type: "image", dataUrl });
+      } finally {
+        bitmap.close();
+      }
+    })().catch((error: unknown) => {
+      iconEditorStatus.textContent = error instanceof Error ? error.message : "Unable to use that image.";
+      iconEditorFile.value = "";
+    });
+  });
+  iconEditorReset.addEventListener("click", () => {
+    const launcher = iconEditorLauncher;
+    if (!launcher) return;
+    iconEditorStatus.textContent = "Restoring Napplet icon…";
+    void dockIconStore.delete(launcher.coordinate).then(async () => {
+      iconOverrides.delete(launcher.coordinate);
+      await renderDock();
+      closeIconEditor(true);
+    }).catch(() => { iconEditorStatus.textContent = "Unable to restore icon."; });
+  });
+  iconEditorCancel.addEventListener("click", () => closeIconEditor(true));
   document.addEventListener("pointerdown", (event) => {
     if (!dockMenu.hidden && !dockMenu.contains(event.target as Node) && !dockMenuAnchor?.contains(event.target as Node)) closeDockMenu();
+    if (!iconEditor.hidden && !iconEditor.contains(event.target as Node) && !iconEditorAnchor?.contains(event.target as Node)) closeIconEditor();
   });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !dockMenu.hidden) { event.preventDefault(); closeDockMenu(true); } });
-  window.addEventListener("resize", () => closeDockMenu());
-  window.addEventListener("scroll", () => closeDockMenu(), true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!iconEditor.hidden) { event.preventDefault(); closeIconEditor(true); }
+    else if (!dockMenu.hidden) { event.preventDefault(); closeDockMenu(true); }
+  });
+  window.addEventListener("resize", () => { closeDockMenu(); closeIconEditor(); });
+  window.addEventListener("scroll", () => { closeDockMenu(); closeIconEditor(); }, true);
 
   windowsContainer?.addEventListener("click", (event) => {
     const target = event.target;
@@ -477,6 +654,11 @@ void bootstrap().then((platform) => {
   const renderDock = async (): Promise<void> => {
     if (!dockItems || !dock || !dockStatus) return;
     const available = await platform.dockLaunchers();
+    await Promise.all(available.map(async (launcher) => {
+      const override = await dockIconStore.get(launcher.coordinate);
+      if (override) iconOverrides.set(launcher.coordinate, override);
+      else iconOverrides.delete(launcher.coordinate);
+    }));
     const pinned = dockStore.get();
     const openDTags = new Set(platform.windows.listWindowIds().flatMap((windowId) => {
       const managed = platform.windows.findByWindowId(windowId);
@@ -498,22 +680,13 @@ void bootstrap().then((platform) => {
     const buttons = launchers.map((launcher) => {
       const item = document.createElement("li");
       const dockButton = document.createElement("button");
-      const icon = launcher.iconUrl ? document.createElement("img") : document.createElement("span");
+      const icon = createDockIcon(launcher);
       const label = document.createElement("span");
       const running = document.createElement("span");
       dockButton.type = "button";
       dockButton.className = "dock-launcher";
       dockButton.title = launcher.title;
       dockButton.setAttribute("aria-label", `Open ${launcher.title}`);
-      if (icon instanceof HTMLImageElement) {
-        icon.src = launcher.iconUrl!;
-        icon.alt = "";
-        icon.decoding = "async";
-      } else {
-        icon.className = "dock-initial";
-        icon.textContent = launcher.initial;
-        icon.setAttribute("aria-hidden", "true");
-      }
       label.className = "dock-label";
       label.textContent = launcher.title;
       running.className = "dock-running-indicator";
@@ -562,7 +735,7 @@ void bootstrap().then((platform) => {
   };
 
   const unsubscribeDock = platform.windows.onWindowsChanged(() => { void renderDock(); });
-  window.addEventListener("pagehide", unsubscribeDock, { once: true });
+  window.addEventListener("pagehide", () => { unsubscribeDock(); dockIconStore.close(); }, { once: true });
   void renderDock();
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });

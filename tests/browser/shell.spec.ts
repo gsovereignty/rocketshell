@@ -486,6 +486,25 @@ test("dock always includes built-in Napplets", async ({ page }) => {
   await expect(page.getByRole("menuitem", { name: "Reference Napplet is built in to Rocketshell" })).toBeDisabled();
 });
 
+test("dock icon override persists and can be reset", async ({ page }) => {
+  await page.goto("./");
+  let launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  await launcher.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Change Reference Napplet icon" }).click();
+
+  const editor = page.getByRole("dialog", { name: "Change Reference Napplet icon" });
+  await editor.getByRole("textbox", { name: "Icon letters" }).fill("rs");
+  await editor.getByRole("button", { name: "Use Letters" }).click();
+  await expect(launcher.locator(".dock-initial")).toHaveText("RS");
+
+  await page.reload();
+  launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  await expect(launcher.locator(".dock-initial")).toHaveText("RS");
+  await launcher.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Reset Reference Napplet to Napplet icon" }).click();
+  await expect(launcher.locator("img")).toBeVisible();
+});
+
 test("dock context menu pins an open Napplet and removes it after close", async ({ page }) => {
   await page.goto("./");
   const launcher = page.getByRole("button", { name: "Open Platform Fixture" });
