@@ -396,7 +396,7 @@ void bootstrap().then((platform) => {
       openedCoordinates.set(opened.windowId, coordinate);
       void renderDock();
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
-      if (remember) openNapplets.add(coordinate);
+      if (remember) openNapplets.add(coordinate, opened.dTag);
       setLoaderStatus(`Opened ${opened.title}.`, "success");
       settleLoading("success");
       setTimeout(() => closeMenus(), 500);
@@ -451,10 +451,10 @@ void bootstrap().then((platform) => {
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
   if (status) status.textContent = "Platform ready";
-  const initialCoordinates = openNapplets.get();
-  if (initialCoordinates.length > 0) {
+  const initialNapplets = openNapplets.get();
+  if (initialNapplets.length > 0) {
     void (async () => {
-      for (const coordinate of initialCoordinates) await openCoordinate(coordinate, false);
+      for (const napplet of initialNapplets) await openCoordinate(napplet.coordinate, false, napplet.dTag);
     })();
   }
 }).catch((error: unknown) => {
