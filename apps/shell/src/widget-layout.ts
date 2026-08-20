@@ -68,7 +68,7 @@ export const canPlaceRect = (
 ): boolean => candidate.column >= 0 && candidate.row >= 0 && candidate.width >= 1 && candidate.height >= 1 &&
   candidate.column + candidate.width <= columns && !occupied.some((rect) => rectsOverlap(candidate, rect));
 
-type ResizeEdge = "inline" | "block" | "both";
+type ResizeEdge = "inline-start" | "inline" | "block" | "both";
 
 interface ResizeState {
   readonly element: HTMLElement;
@@ -223,10 +223,11 @@ export const createWidgetGrid = (
     [...rects].filter(([candidate]) => candidate !== element).map(([, rect]) => rect);
 
   const updateHandleValues = (element: HTMLElement, rect: WidgetRect): void => {
+    const inlineStart = element.querySelector<HTMLElement>(".napplet-resize-inline-start");
     const inline = element.querySelector<HTMLElement>(".napplet-resize-inline");
     const block = element.querySelector<HTMLElement>(".napplet-resize-block");
     const both = element.querySelector<HTMLElement>(".napplet-resize-both");
-    for (const handle of [inline, both]) {
+    for (const handle of [inlineStart, inline, both]) {
       handle?.setAttribute("aria-valuemin", "1");
       handle?.setAttribute("aria-valuemax", String(profile.columns - rect.column));
       handle?.setAttribute("aria-valuenow", String(rect.width));
@@ -369,17 +370,30 @@ export const createWidgetGrid = (
     start: WidgetRect,
     widthDelta: number,
     heightDelta: number,
+    inlineStartDelta = 0,
     baseRects: ReadonlyMap<HTMLElement, WidgetRect> = rects
   ): void => {
     const updates = new Map<HTMLElement, WidgetRect>();
-    const width = Math.max(1, Math.min(profile.columns - start.column, start.width + widthDelta));
+    const originalRight = start.column + start.width;
+    const column = Math.max(0, Math.min(originalRight - 1, start.column + inlineStartDelta));
+    const appliedInlineStartDelta = column - start.column;
+    const width = Math.max(1, Math.min(profile.columns - column, originalRight - column + widthDelta));
     const height = Math.max(1, start.height + heightDelta);
-    const appliedWidthDelta = width - start.width;
+    const appliedWidthDelta = column + width - originalRight;
     const appliedHeightDelta = height - start.height;
-    updates.set(element, { ...start, width, height });
+    updates.set(element, { ...start, column, width, height });
+
+    if (appliedInlineStartDelta !== 0) {
+      const neighbor = [...baseRects].find(([candidate, rect]) => candidate !== element && rect.column + rect.width === start.column &&
+        rect.row < start.row + start.height && rect.row + rect.height > start.row);
+      if (neighbor) {
+        const [candidate, rect] = neighbor;
+        updates.set(candidate, { ...rect, width: rect.width + appliedInlineStartDelta });
+      }
+    }
 
     if (appliedWidthDelta !== 0) {
-      const boundary = start.column + start.width;
+      const boundary = originalRight;
       const neighbor = [...baseRects].find(([candidate, rect]) => candidate !== element && rect.column === boundary &&
         rect.row < start.row + start.height && rect.row + rect.height > start.row);
       if (neighbor) {
@@ -396,7 +410,7 @@ export const createWidgetGrid = (
         updates.set(candidate, { ...rect, row: rect.row + appliedHeightDelta, height: rect.height - appliedHeightDelta });
       }
     }
-    if (commitRects(updates) && (appliedWidthDelta !== 0 || appliedHeightDelta !== 0)) {
+    if (commitRects(updates) && (appliedInlineStartDelta !== 0 || appliedWidthDelta !== 0 || appliedHeightDelta !== 0)) {
       layoutCustomized = true;
       persistCurrentLayout();
     }
@@ -436,6 +450,7 @@ export const createWidgetGrid = (
       toolbar.setAttribute("aria-label", "Move window. Press Space, then use arrow keys.");
     }
     element.append(
+      makeHandle("inline-start", "Resize window from left edge"),
       makeHandle("inline", "Resize window width"),
       makeHandle("block", "Resize window height"),
       makeHandle("both", "Resize window width and height")
@@ -494,10 +509,11 @@ export const createWidgetGrid = (
     animateLayout(added);
   };
 
-  const resizeBy = (element: HTMLElement, widthDelta: number, heightDelta: number): void => {
+  const resizeBy = (element: HTMLElement, edge: ResizeEdge, widthDelta: number, heightDelta: number): void => {
     const current = rects.get(element);
     if (!current) return;
-    resizeFrom(element, current, widthDelta, heightDelta);
+    resizeFrom(element, current, edge === "inline-start" ? 0 : widthDelta, heightDelta,
+      edge === "inline-start" ? widthDelta : 0);
   };
 
   const onPointerDown = (event: PointerEvent): void => {
@@ -548,9 +564,13 @@ export const createWidgetGrid = (
       const gap = Number.parseFloat(styles.columnGap) || 0;
       const cellWidth = (containerRect.width - gap * (profile.columns - 1)) / profile.columns;
       const rowHeight = Number.parseFloat(styles.gridAutoRows) || 220;
-      const widthDelta = resize.edge === "block" ? 0 : Math.round((event.clientX - resize.startX) / (cellWidth + gap));
-      const heightDelta = resize.edge === "inline" ? 0 : Math.round((event.clientY - resize.startY) / (rowHeight + gap));
-      resizeFrom(resize.element, resize.startRect, widthDelta, heightDelta, resize.startRects);
+      const horizontalDelta = Math.round((event.clientX - resize.startX) / (cellWidth + gap));
+      const widthDelta = resize.edge === "block" || resize.edge === "inline-start" ? 0 : horizontalDelta;
+      const heightDelta = resize.edge === "inline" || resize.edge === "inline-start"
+        ? 0
+        : Math.round((event.clientY - resize.startY) / (rowHeight + gap));
+      const inlineStartDelta = resize.edge === "inline-start" ? horizontalDelta : 0;
+      resizeFrom(resize.element, resize.startRect, widthDelta, heightDelta, inlineStartDelta, resize.startRects);
       return;
     }
     if (!move || event.pointerId !== move.pointerId) return;
@@ -660,7 +680,7 @@ export const createWidgetGrid = (
     const heightDelta = edge === "inline" ? 0 : event.key === "ArrowDown" ? delta : event.key === "ArrowUp" ? -delta : 0;
     if (widthDelta === 0 && heightDelta === 0) return;
     event.preventDefault();
-    resizeBy(element, widthDelta, heightDelta);
+    resizeBy(element, edge, widthDelta, heightDelta);
   };
 
   const mutationObserver = new MutationObserver(sync);

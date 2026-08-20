@@ -110,6 +110,25 @@ test("moves widgets by toolbar drag and keeps resize handles independent", async
   expect(await first.evaluate((element) => element.style.gridColumn)).toBe(movedFirstColumn);
   expect(await second.evaluate((element) => element.style.gridColumn)).toBe(movedSecondColumn);
 
+  const leftResizeHandle = first.locator(".napplet-resize-inline-start");
+  await expect(leftResizeHandle).toHaveCSS("cursor", "ew-resize");
+  const leftHandleBounds = await leftResizeHandle.boundingBox();
+  const gridStep = await page.locator("#windows").evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const styles = getComputedStyle(element);
+    const gap = Number.parseFloat(styles.columnGap) || 0;
+    return (bounds.width - gap * 3) / 4 + gap;
+  });
+  expect(leftHandleBounds).not.toBeNull();
+  await page.waitForTimeout(300);
+  await leftResizeHandle.hover({ position: { x: 2, y: 60 } });
+  await page.mouse.down();
+  await expect(page.locator("#windows")).toHaveAttribute("data-interacting", "resize");
+  await page.mouse.move(leftHandleBounds!.x - gridStep + 2, leftHandleBounds!.y + 60);
+  await page.mouse.up();
+  await expect.poll(() => first.evaluate((element) => element.style.gridColumn)).toBe("2 / span 3");
+  await expect.poll(() => second.evaluate((element) => element.style.gridColumn)).toBe("1 / span 1");
+
   const resizeHandle = second.locator(".napplet-resize-inline");
   await page.waitForTimeout(300);
   await resizeHandle.hover({ position: { x: 2, y: 30 } });

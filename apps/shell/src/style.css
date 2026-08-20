@@ -314,6 +314,7 @@ p { margin: 0; }
   color: transparent;
   touch-action: none;
 }
+.napplet-resize-inline-start { top: 2.4rem; bottom: 0; left: 0; width: .7rem; cursor: ew-resize; }
 .napplet-resize-inline { top: 2.4rem; right: 0; bottom: 0; width: .7rem; cursor: ew-resize; }
 .napplet-resize-block { right: 0; bottom: 0; left: 0; height: .7rem; cursor: ns-resize; }
 .napplet-resize-both { right: 0; bottom: 0; width: 1.35rem; height: 1.35rem; cursor: nwse-resize; }
@@ -333,6 +334,7 @@ p { margin: 0; }
 
 @media (pointer: coarse) {
   .napplet-window-toolbar { min-height: 2.75rem; }
+  .napplet-resize-inline-start { width: 2.75rem; }
   .napplet-resize-inline { width: 2.75rem; }
   .napplet-resize-block { height: 2.75rem; }
   .napplet-resize-both { width: 2.75rem; height: 2.75rem; }
