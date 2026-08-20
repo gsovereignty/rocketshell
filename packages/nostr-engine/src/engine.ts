@@ -4,6 +4,7 @@ import { RelayPool } from "applesauce-relay";
 import { verifyEvent } from "nostr-tools/pure";
 import { createPlatformTelemetry, type PlatformTelemetry } from "@project/platform-nap-contract";
 import { createAccountController, type AccountController } from "./accounts.js";
+import { isEventWithinLimits } from "./event-limits.js";
 import { createEventIngress, type EventIngress, type VerifyNostrEvent } from "./event-ingress.js";
 import { createRelayPolicy, type RelayPolicy, type RelayPolicyOptions } from "./relay-policy.js";
 import { createRelayAuthenticator } from "./relay-auth.js";
@@ -23,7 +24,9 @@ export interface EngineOptions { readonly verifyEvent?: VerifyNostrEvent; readon
 export function createNostrEngine(options: EngineOptions = {}): NostrEngine {
   const verification = options.verifyEvent ?? verifyEvent;
   const telemetry = options.telemetry ?? createPlatformTelemetry();
-  const eventStore = new EventStore({ verifyEvent: verification });
+  // Enforced on the store itself, not only in `ingress.admit`: loaders and casts write to the
+  // store directly, so a funnel-only check would stop applying the moment either is wired up.
+  const eventStore = new EventStore({ verifyEvent: (event) => isEventWithinLimits(event) && verification(event) });
   const relayPool = new RelayPool();
   const accounts = createAccountController(options.accountManager ?? new AccountManager());
   const authenticator = createRelayAuthenticator(relayPool, accounts, undefined, telemetry);

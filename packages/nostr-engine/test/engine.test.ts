@@ -1,6 +1,6 @@
 import { generateSecretKey, finalizeEvent } from "nostr-tools/pure";
 import { describe, expect, it, vi } from "vitest";
-import { createNostrEngine, createRelayPolicy } from "../src/index.js";
+import { MAX_EVENT_TAGS, createNostrEngine, createRelayPolicy } from "../src/index.js";
 
 describe("relay policy", () => {
   it("normalizes and deduplicates secure relay URLs", () => {
@@ -31,6 +31,14 @@ describe("shared engine", () => {
     expect(engine.ingress.admit({ kind: 1, created_at: 1, content: "x", tags: null } as never, "wss://relay.example/")).toBeNull();
     expect(engine.ingress.admit({ id: "id", pubkey: "pk", sig: "sig", kind: 1, created_at: 1, content: "x".repeat(256 * 1024 + 1), tags: [] }, "wss://relay.example/")).toBeNull();
     expect(verify).not.toHaveBeenCalled();
+    await engine.close();
+  });
+  it("enforces event limits on direct store writes, not only through ingress", async () => {
+    const engine = createNostrEngine(); const key = generateSecretKey();
+    const tags = Array.from({ length: MAX_EVENT_TAGS + 1 }, (_, index) => ["t", String(index)]);
+    const oversized = finalizeEvent({ kind: 1, created_at: 1, content: "", tags }, key);
+    // Loaders and casts insert straight into the store, so `ingress.admit` never sees these.
+    expect(engine.eventStore.add(oversized)).toBeNull();
     await engine.close();
   });
   it("keeps the newest replaceable winner", async () => {
