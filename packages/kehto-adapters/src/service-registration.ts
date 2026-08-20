@@ -3,12 +3,16 @@ import type { ShellBridge } from "@kehto/shell";
 import { createIdentityService, createOutboxService, createRelayPoolOutboxRouter, createRelayPoolService } from "@kehto/services";
 import type { NostrEvent as CoreNostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
-import { DEFAULT_PUBLISH_TIMEOUT_MS, accounts, createRelayListResolver, eventStore, ingress, openRelayStream, publisher, relayPolicy, relayPool, telemetry, validateFilters } from "@platform/nostr-engine";
+import { DEFAULT_PUBLISH_TIMEOUT_MS, accounts, eventStore, ingress, openRelayStream, publisher, relayPolicy, relayPool, telemetry, validateFilters } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
+import { castUser } from "applesauce-common/casts";
 import { createIdentityProviders } from "./identity-providers.js";
 import type { IdentityProviders } from "./identity-providers.js";
 import { limitServiceSubscriptions } from "./subscription-limit.js";
+
+/** How long to wait for another user's NIP-65 list before routing without it. */
+const RELAY_LIST_TIMEOUT_MS = 4_000;
 
 export interface CoreServiceOptions { readonly discoveryRelays?: readonly string[]; readonly directReadRelays: readonly string[]; readonly directWriteRelays: readonly string[]; readonly relayConfiguration?: PlatformRelayConfiguration; readonly lookupRelays?: string[] }
 export interface CoreServiceRegistration { readonly identity: IdentityProviders; close(): void }
@@ -69,23 +73,21 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     getBlocked: (pubkey) => identityProviders.getBlocked(pubkey),
     getBadges: (pubkey) => identityProviders.getBadges(pubkey)
   }));
-  const relayLists = createRelayListResolver(eventStore, ingress, relayPolicy, discoveryRelays, async (relays, authors) => {
-    if (relays.length === 0 || authors.length === 0) return [];
-    return new Promise((resolve) => {
-      const events: CoreNostrEvent[] = [];
-      let handle: { close(): void } | undefined;
-      handle = openRelayStream(relayPool, ingress, relays, [{ kinds: [10002], authors: [...authors] }], {
-        event: (event) => events.push(event), eose: () => { resolve(events); handle?.close(); }
-      }, 15_000, telemetry);
-    });
-  }, { telemetry: telemetry });
   const outboxPool = createOutboxRelayPool(readRelays, writeRelays);
   const outboxRouter = createRelayPoolOutboxRouter({
     relayPool: outboxPool,
+    // Freshness, deduplication and the network fetch all live in the event store and its loader
+    // now; this used to be a hand-rolled TTL cache with its own discovery query.
     loadRelayLists: async (pubkeys) => {
-      const resolved = await relayLists.resolve(pubkeys); const result = new Map<string, { read: string[]; write: string[] }>();
-      for (const [pubkey, list] of resolved) if (list) result.set(pubkey, { read: [...list.read], write: [...list.write] });
-      return result;
+      const entries = await Promise.all([...new Set(pubkeys)].map(async (pubkey): Promise<[string, { read: string[]; write: string[] }]> => {
+        const user = castUser(pubkey, eventStore);
+        const [read, write] = await Promise.all([
+          user.inboxes$.$first<string[]>(RELAY_LIST_TIMEOUT_MS, []),
+          user.outboxes$.$first<string[]>(RELAY_LIST_TIMEOUT_MS, [])
+        ]);
+        return [pubkey, { read: [...read], write: [...write] }];
+      }));
+      return new Map(entries.filter(([, list]) => list.read.length > 0 || list.write.length > 0));
     },
     fallbackRelays: readRelays,
     signEvent: (template) => accounts.sign(template),

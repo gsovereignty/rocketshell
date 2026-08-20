@@ -4,7 +4,6 @@ export * from "./account-persistence.js";
 export * from "./event-ingress.js";
 export * from "./event-limits.js";
 export * from "./relay-policy.js";
-export * from "./relay-lists.js";
 export * from "./relay-auth.js";
 export * from "./relay-publish.js";
 export * from "./relay-stream.js";
