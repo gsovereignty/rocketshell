@@ -438,6 +438,7 @@ p { margin: 0; }
   transform: translateX(-50%);
 }
 .dock-launcher:hover:not(:disabled) { box-shadow: var(--shadow-launcher-hover); }
+.dock-launcher:disabled { opacity: 1; }
 .dock-label {
   position: absolute;
   bottom: calc(100% + .55rem);
