@@ -60,6 +60,46 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
 });
 
+test("moves widgets by toolbar drag and keeps resize handles independent", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
+  await page.locator("#windows").evaluate((windows) => {
+    const widget = document.createElement("article");
+    widget.id = "drag-fixture";
+    widget.className = "napplet-window";
+    widget.innerHTML = '<header class="napplet-window-toolbar"><span class="napplet-window-title">Drag fixture</span></header><div></div>';
+    windows.append(widget);
+  });
+  const first = page.locator(".napplet-window").first();
+  const second = page.locator("#drag-fixture");
+  await expect(second.locator(".napplet-resize-both")).toBeVisible();
+  const firstColumn = await first.evaluate((element) => element.style.gridColumn);
+  const secondColumn = await second.evaluate((element) => element.style.gridColumn);
+  const firstToolbar = first.locator(".napplet-window-toolbar");
+  const secondToolbar = second.locator(".napplet-window-toolbar");
+  const from = await firstToolbar.boundingBox();
+  const to = await secondToolbar.boundingBox();
+  expect(from).not.toBeNull();
+  expect(to).not.toBeNull();
+  await page.mouse.move(from!.x + 20, from!.y + from!.height / 2);
+  await page.mouse.down();
+  await expect(page.locator("#windows")).toHaveAttribute("data-interacting", "move");
+  await expect(page.locator("#windows iframe")).toHaveCSS("pointer-events", "none");
+  await page.mouse.move(to!.x + 20, to!.y + to!.height / 2, { steps: 4 });
+  await expect(page.locator(".napplet-drop-preview")).toHaveAttribute("data-placement", "swap");
+  await page.mouse.up();
+  await expect.poll(() => first.evaluate((element) => (element as HTMLElement).style.gridColumn)).toBe(secondColumn);
+  await expect.poll(() => second.evaluate((element) => (element as HTMLElement).style.gridColumn)).toBe(firstColumn);
+
+  const resizeHandle = second.locator(".napplet-resize-inline");
+  await page.waitForTimeout(300);
+  await resizeHandle.hover({ position: { x: 2, y: 30 } });
+  await page.mouse.down();
+  await expect(page.locator("#windows")).toHaveAttribute("data-interacting", "resize");
+  await page.mouse.up();
+  await expect(page.locator("#windows")).not.toHaveAttribute("data-interacting");
+});
+
 test("settles intent result before caller navigation unmounts it", async ({ page }) => {
   await page.goto("./");
   const frame = page.frameLocator('iframe[title="platform-fixture"]');

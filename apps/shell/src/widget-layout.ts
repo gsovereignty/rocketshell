@@ -62,7 +62,7 @@ export const canPlaceRect = (
 
 type ResizeEdge = "inline" | "block" | "both";
 
-interface DragState {
+interface ResizeState {
   readonly element: HTMLElement;
   readonly edge: ResizeEdge;
   readonly pointerId: number;
@@ -71,6 +71,49 @@ interface DragState {
   readonly startRect: WidgetRect;
   readonly startRects: ReadonlyMap<HTMLElement, WidgetRect>;
 }
+
+interface MoveState {
+  readonly element: HTMLElement;
+  readonly toolbar: HTMLElement;
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly startRect: WidgetRect;
+  readonly grabOffsetX: number;
+  readonly grabOffsetY: number;
+  candidate: WidgetRect;
+  placement: RelocationResult;
+}
+
+export type RelocationResult =
+  | { readonly kind: "move"; readonly updates: ReadonlyMap<number, WidgetRect> }
+  | { readonly kind: "swap"; readonly updates: ReadonlyMap<number, WidgetRect> }
+  | { readonly kind: "reject"; readonly updates: ReadonlyMap<number, WidgetRect> };
+
+export const resolveRelocation = (
+  movingIndex: number,
+  candidate: WidgetRect,
+  rects: readonly WidgetRect[],
+  columns: number
+): RelocationResult => {
+  const start = rects[movingIndex];
+  if (!start || candidate.column < 0 || candidate.row < 0 || candidate.column + candidate.width > columns) {
+    return { kind: "reject", updates: new Map() };
+  }
+  const collisions = rects
+    .map((rect, index) => ({ rect, index }))
+    .filter(({ rect, index }) => index !== movingIndex && rectsOverlap(candidate, rect));
+  if (collisions.length === 0) return { kind: "move", updates: new Map([[movingIndex, candidate]]) };
+  if (collisions.length !== 1) return { kind: "reject", updates: new Map() };
+  const collision = collisions[0]!;
+  const sameSize = collision.rect.width === candidate.width && collision.rect.height === candidate.height;
+  const exactTarget = collision.rect.column === candidate.column && collision.rect.row === candidate.row;
+  if (!sameSize || !exactTarget) return { kind: "reject", updates: new Map() };
+  return {
+    kind: "swap",
+    updates: new Map([[movingIndex, candidate], [collision.index, start]])
+  };
+};
 
 const widgetElements = (container: HTMLElement): HTMLElement[] =>
   Array.from(container.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains("napplet-window"));
@@ -102,7 +145,13 @@ export const createWidgetGrid = (
 ): WidgetGridController => {
   let profile = profileForWidth(container.getBoundingClientRect().width);
   const rects = new Map<HTMLElement, WidgetRect>();
-  let drag: DragState | null = null;
+  let resize: ResizeState | null = null;
+  let move: MoveState | null = null;
+  let keyboardMove: { element: HTMLElement; startRect: WidgetRect; candidate: WidgetRect; placement: RelocationResult } | null = null;
+  const preview = document.createElement("div");
+  preview.className = "napplet-drop-preview";
+  preview.setAttribute("aria-hidden", "true");
+  container.append(preview);
 
   const occupiedExcept = (element: HTMLElement): WidgetRect[] =>
     [...rects].filter(([candidate]) => candidate !== element).map(([, rect]) => rect);
@@ -139,6 +188,62 @@ export const createWidgetGrid = (
 
   const setRect = (element: HTMLElement, rect: WidgetRect): boolean =>
     commitRects(new Map([[element, rect]]));
+
+  const placementFor = (element: HTMLElement, candidate: WidgetRect): RelocationResult => {
+    const entries = [...rects];
+    const movingIndex = entries.findIndex(([candidateElement]) => candidateElement === element);
+    return resolveRelocation(movingIndex, candidate, entries.map(([, rect]) => rect), profile.columns);
+  };
+
+  const showPreview = (candidate: WidgetRect, placement: RelocationResult): void => {
+    applyRect(preview, candidate);
+    preview.dataset.placement = placement.kind;
+    preview.hidden = false;
+  };
+
+  const hidePreview = (): void => {
+    preview.hidden = true;
+    delete preview.dataset.placement;
+  };
+
+  const animateCommittedPlacement = (
+    updates: ReadonlyMap<HTMLElement, WidgetRect>,
+    before: ReadonlyMap<HTMLElement, DOMRect>
+  ): void => {
+    if (reducedMotion.matches) return;
+    for (const element of updates.keys()) {
+      const oldBounds = before.get(element);
+      if (!oldBounds) continue;
+      const nextBounds = element.getBoundingClientRect();
+      gsap.fromTo(element, {
+        x: oldBounds.left - nextBounds.left,
+        y: oldBounds.top - nextBounds.top,
+        scale: element === move?.element ? 1.015 : 1
+      }, {
+        x: 0,
+        y: 0,
+        scale: 1,
+        duration: .24,
+        ease: "power4.out",
+        clearProps: "transform"
+      });
+    }
+  };
+
+  const commitPlacement = (element: HTMLElement, placement: RelocationResult): boolean => {
+    if (placement.kind === "reject") return false;
+    const entries = [...rects];
+    const updates = new Map<HTMLElement, WidgetRect>();
+    for (const [index, rect] of placement.updates) {
+      const target = entries[index]?.[0];
+      if (target) updates.set(target, rect);
+    }
+    const before = new Map([...updates.keys()].map((target) => [target, target.getBoundingClientRect()]));
+    gsap.set(element, { clearProps: "transform" });
+    if (!commitRects(updates)) return false;
+    animateCommittedPlacement(updates, before);
+    return true;
+  };
 
   const resizeFrom = (
     element: HTMLElement,
@@ -200,6 +305,12 @@ export const createWidgetGrid = (
   const decorate = (element: HTMLElement): void => {
     if (element.dataset.widgetResizable === "true") return;
     element.dataset.widgetResizable = "true";
+    const toolbar = element.querySelector<HTMLElement>(".napplet-window-toolbar");
+    if (toolbar) {
+      toolbar.tabIndex = 0;
+      toolbar.dataset.widgetDragHandle = "true";
+      toolbar.setAttribute("aria-label", "Move window. Press Space, then use arrow keys.");
+    }
     element.append(
       makeHandle("inline", "Resize window width"),
       makeHandle("block", "Resize window height"),
@@ -224,38 +335,151 @@ export const createWidgetGrid = (
     const handle = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-resize-edge]") : null;
     const element = handle?.closest<HTMLElement>(".napplet-window");
     const startRect = element ? rects.get(element) : undefined;
-    if (!handle || !element || !startRect || event.button !== 0) return;
+    if (handle && element && startRect && event.button === 0) {
+      event.preventDefault();
+      const edge = handle.dataset.resizeEdge as ResizeEdge;
+      handle.setPointerCapture(event.pointerId);
+      resize = { element, edge, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startRect, startRects: new Map(rects) };
+      container.dataset.interacting = "resize";
+      element.dataset.resizing = "true";
+      return;
+    }
+    const toolbar = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-widget-drag-handle]") : null;
+    const movingElement = toolbar?.closest<HTMLElement>(".napplet-window");
+    const movingRect = movingElement ? rects.get(movingElement) : undefined;
+    if (!toolbar || !movingElement || !movingRect || event.button !== 0 || event.target instanceof Element && event.target.closest("button, a, input, select, textarea")) return;
     event.preventDefault();
-    const edge = handle.dataset.resizeEdge as ResizeEdge;
-    handle.setPointerCapture(event.pointerId);
-    drag = { element, edge, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startRect, startRects: new Map(rects) };
-    container.dataset.interacting = "true";
-    element.dataset.resizing = "true";
+    toolbar.setPointerCapture(event.pointerId);
+    const bounds = movingElement.getBoundingClientRect();
+    const placement = placementFor(movingElement, movingRect);
+    move = {
+      element: movingElement,
+      toolbar,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startRect: movingRect,
+      grabOffsetX: event.clientX - bounds.left,
+      grabOffsetY: event.clientY - bounds.top,
+      candidate: movingRect,
+      placement
+    };
+    keyboardMove = null;
+    container.dataset.interacting = "move";
+    movingElement.dataset.dragging = "true";
+    toolbar.setAttribute("aria-grabbed", "true");
+    showPreview(movingRect, placement);
+    if (!reducedMotion.matches) gsap.to(movingElement, { scale: 1.015, duration: .14, ease: "power3.out" });
   };
 
   const onPointerMove = (event: PointerEvent): void => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (resize && event.pointerId === resize.pointerId) {
+      const containerRect = container.getBoundingClientRect();
+      const styles = getComputedStyle(container);
+      const gap = Number.parseFloat(styles.columnGap) || 0;
+      const cellWidth = (containerRect.width - gap * (profile.columns - 1)) / profile.columns;
+      const rowHeight = Number.parseFloat(styles.gridAutoRows) || 220;
+      const widthDelta = resize.edge === "block" ? 0 : Math.round((event.clientX - resize.startX) / (cellWidth + gap));
+      const heightDelta = resize.edge === "inline" ? 0 : Math.round((event.clientY - resize.startY) / (rowHeight + gap));
+      resizeFrom(resize.element, resize.startRect, widthDelta, heightDelta, resize.startRects);
+      return;
+    }
+    if (!move || event.pointerId !== move.pointerId) return;
     const containerRect = container.getBoundingClientRect();
     const styles = getComputedStyle(container);
     const gap = Number.parseFloat(styles.columnGap) || 0;
     const cellWidth = (containerRect.width - gap * (profile.columns - 1)) / profile.columns;
     const rowHeight = Number.parseFloat(styles.gridAutoRows) || 220;
-    const widthDelta = drag.edge === "block" ? 0 : Math.round((event.clientX - drag.startX) / (cellWidth + gap));
-    const heightDelta = drag.edge === "inline" ? 0 : Math.round((event.clientY - drag.startY) / (rowHeight + gap));
-    resizeFrom(drag.element, drag.startRect, widthDelta, heightDelta, drag.startRects);
+    const column = Math.max(0, Math.min(profile.columns - move.startRect.width,
+      Math.round((event.clientX - containerRect.left - move.grabOffsetX) / (cellWidth + gap))));
+    const row = Math.max(0, Math.round((event.clientY - containerRect.top - move.grabOffsetY) / (rowHeight + gap)));
+    move.candidate = { ...move.startRect, column, row };
+    move.placement = placementFor(move.element, move.candidate);
+    showPreview(move.candidate, move.placement);
+    gsap.set(move.element, { x: event.clientX - move.startX, y: event.clientY - move.startY });
   };
 
   const endDrag = (event: PointerEvent): void => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    delete drag.element.dataset.resizing;
+    if (resize && event.pointerId === resize.pointerId) {
+      const resizeHandle = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-resize-edge]") : null;
+      if (resizeHandle?.hasPointerCapture(event.pointerId)) resizeHandle.releasePointerCapture(event.pointerId);
+      delete resize.element.dataset.resizing;
+      delete container.dataset.interacting;
+      resize = null;
+      return;
+    }
+    if (!move || event.pointerId !== move.pointerId) return;
+    const active = move;
+    if (active.toolbar.hasPointerCapture(event.pointerId)) active.toolbar.releasePointerCapture(event.pointerId);
+    const accepted = event.type !== "pointercancel" && commitPlacement(active.element, active.placement);
+    if (!accepted) {
+      gsap.to(active.element, {
+        x: 0,
+        y: 0,
+        scale: 1,
+        duration: reducedMotion.matches ? 0 : .2,
+        ease: "power4.out",
+        clearProps: "transform"
+      });
+    }
+    delete active.element.dataset.dragging;
+    active.toolbar.removeAttribute("aria-grabbed");
     delete container.dataset.interacting;
-    drag = null;
+    hidePreview();
+    move = null;
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
     const handle = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-resize-edge]") : null;
     const element = handle?.closest<HTMLElement>(".napplet-window");
-    if (!handle || !element) return;
+    if (!handle || !element) {
+      const toolbar = event.target instanceof HTMLElement && event.target.matches("[data-widget-drag-handle]") ? event.target : null;
+      const movingElement = toolbar?.closest<HTMLElement>(".napplet-window");
+      const current = movingElement ? rects.get(movingElement) : undefined;
+      if (!toolbar || !movingElement || !current) return;
+      if (!keyboardMove && (event.key === " " || event.key === "Spacebar")) {
+        event.preventDefault();
+        keyboardMove = { element: movingElement, startRect: current, candidate: current, placement: placementFor(movingElement, current) };
+        container.dataset.interacting = "move";
+        movingElement.dataset.dragging = "true";
+        toolbar.setAttribute("aria-grabbed", "true");
+        showPreview(current, keyboardMove.placement);
+        return;
+      }
+      if (!keyboardMove || keyboardMove.element !== movingElement) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        delete movingElement.dataset.dragging;
+        toolbar.removeAttribute("aria-grabbed");
+        delete container.dataset.interacting;
+        hidePreview();
+        keyboardMove = null;
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        commitPlacement(movingElement, keyboardMove.placement);
+        delete movingElement.dataset.dragging;
+        toolbar.removeAttribute("aria-grabbed");
+        delete container.dataset.interacting;
+        hidePreview();
+        keyboardMove = null;
+        return;
+      }
+      const columnDelta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      const rowDelta = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+      if (columnDelta === 0 && rowDelta === 0) return;
+      event.preventDefault();
+      const candidate = {
+        ...keyboardMove.candidate,
+        column: Math.max(0, Math.min(profile.columns - current.width, keyboardMove.candidate.column + columnDelta)),
+        row: Math.max(0, keyboardMove.candidate.row + rowDelta)
+      };
+      keyboardMove.candidate = candidate;
+      keyboardMove.placement = placementFor(movingElement, candidate);
+      showPreview(candidate, keyboardMove.placement);
+      return;
+    }
     const edge = handle.dataset.resizeEdge as ResizeEdge;
     if (event.key === "Home") {
       event.preventDefault();
@@ -301,6 +525,7 @@ export const createWidgetGrid = (
       container.removeEventListener("pointerup", endDrag);
       container.removeEventListener("pointercancel", endDrag);
       container.removeEventListener("keydown", onKeyDown);
+      preview.remove();
       rects.clear();
     }
   };
