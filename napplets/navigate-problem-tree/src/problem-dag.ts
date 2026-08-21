@@ -116,7 +116,7 @@ export function descendantsCount(dag: ProblemDag, coordinate: string): number {
   return seen.size;
 }
 
-export function openLeafDescendants(dag: ProblemDag, coordinate: string): ProblemNode[] {
+export function leafDescendants(dag: ProblemDag, coordinate: string): ProblemNode[] {
   const leaves: ProblemNode[] = [];
   const seen = new Set<string>();
   const visit = (parent: string) => {
@@ -127,7 +127,7 @@ export function openLeafDescendants(dag: ProblemDag, coordinate: string): Proble
       if (!child) continue;
       const children = dag.children.get(childCoordinate) ?? [];
       if (children.length) visit(childCoordinate);
-      else if (child.status === "open") leaves.push(child);
+      else leaves.push(child);
     }
   };
   visit(coordinate);

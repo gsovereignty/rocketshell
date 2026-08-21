@@ -9,7 +9,7 @@ import { intent, outbox, type OutboxSubscription, type RelayEventResult } from "
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, openLeafDescendants, statusLabel,
+  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel,
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
 import {
@@ -116,7 +116,7 @@ function renderList() {
   if (!dag) return;
   const parent = dag.nodes.get(selected);
   if (!parent) return;
-  const actionable = openLeafDescendants(dag, selected);
+  const actionable = leafDescendants(dag, selected);
   const visible = activeFilter === "all" ? actionable : actionable.filter((node) => node.status === activeFilter);
   const list = document.querySelector<HTMLElement>("#problem-list");
   const filters = document.querySelector<HTMLElement>("#filters");
@@ -140,7 +140,7 @@ function renderList() {
       </button>
       <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable ? "" : "disabled"}
         aria-label="Open ${escapeHtml(node.title)} in note viewer" title="${noteHandlerAvailable ? "Open in note viewer" : "No note viewer available"}">${externalIcon}</button>
-    </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No open leaf problems below this problem."}</li>`;
+    </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
   gsap.fromTo(".problem-row", { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
 }
 

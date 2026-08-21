@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, openLeafDescendants } from "./problem-dag";
+import { ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants } from "./problem-dag";
 
 const hex = (char: string) => char.repeat(64);
 const root = `31971:${hex("a")}:${hex("b")}`;
@@ -46,7 +46,7 @@ describe("problem DAG", () => {
     expect(dag.nodes.get(child)?.parentCoordinates).toEqual([root, otherParent].sort());
   });
 
-  it("finds open leaf descendants recursively", () => {
+  it("finds all leaf descendants recursively", () => {
     const grandchild = `31971:${hex("e")}:${hex("f")}`;
     const closedLeaf = `31971:${hex("6")}:${hex("7")}`;
     const dag = buildProblemDag(root, [
@@ -60,8 +60,8 @@ describe("problem DAG", () => {
       })
     ]);
 
-    expect(openLeafDescendants(dag, root).map((node) => node.coordinate)).toEqual([grandchild]);
-    expect(openLeafDescendants(dag, child).map((node) => node.coordinate)).toEqual([grandchild]);
-    expect(openLeafDescendants(dag, grandchild)).toEqual([]);
+    expect(leafDescendants(dag, root).map((node) => node.coordinate)).toEqual([grandchild, closedLeaf]);
+    expect(leafDescendants(dag, child).map((node) => node.coordinate)).toEqual([grandchild]);
+    expect(leafDescendants(dag, grandchild)).toEqual([]);
   });
 });
