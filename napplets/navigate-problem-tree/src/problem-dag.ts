@@ -1,7 +1,7 @@
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
 
 export const PROBLEM_KIND = 31971;
-export const ROOT_A_TAG = "31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:79358b35c722c94fd9ff49ec0fcc257081efe29bc38902fcf6e85d83c58633e4";
+export const ROOT_A_TAG = "31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170";
 export const COORDINATE = /^31971:([0-9a-f]{64}):([0-9a-f]{64})$/;
 
 export type ProblemStatus = "draft" | "rfm" | "big" | "children" | "open" | "claimed" | "patched" | "closed";

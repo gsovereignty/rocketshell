@@ -17,7 +17,7 @@ const problem = (coordinate: string, id: string, extra: string[][] = [], created
 
 describe("problem DAG", () => {
   it("uses the configured problem tree root", () => {
-    expect(ROOT_A_TAG).toBe("31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:79358b35c722c94fd9ff49ec0fcc257081efe29bc38902fcf6e85d83c58633e4");
+    expect(ROOT_A_TAG).toBe("31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170");
   });
 
   it("validates full kind 31971 coordinates", () => {
