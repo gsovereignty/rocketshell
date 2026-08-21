@@ -800,9 +800,10 @@ void bootstrap().then(async (platform) => {
       const managed = platform.windows.findByWindowId(windowId);
       if (!managed?.launch) return [];
       const replacesWindowId = managed.replacesWindowId;
+      const replaced = replacesWindowId ? platform.windows.findByWindowId(replacesWindowId) : undefined;
       return [{
         windowId, dTag: managed.identity.dTag, launch: managed.launch, hidden: managed.element.hidden,
-        ...(replacesWindowId ? { replacesWindowId } : {})
+        ...(replacesWindowId && replaced?.element.hidden ? { replacesWindowId } : {})
       }];
     });
     const focusedWindowId = platform.windows.focusedWindowId;

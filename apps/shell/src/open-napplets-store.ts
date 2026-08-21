@@ -46,8 +46,11 @@ const parseSession = (value: unknown): WindowSession | undefined => {
       ...(typeof item.replacesWindowId === "string" && item.replacesWindowId ? { replacesWindowId: item.replacesWindowId } : {})
     }];
   });
+  const hiddenWindowIds = new Set(windows.filter(({ hidden }) => hidden).map(({ windowId }) => windowId));
+  const normalizedWindows = windows.map(({ replacesWindowId, ...window }) =>
+    replacesWindowId && hiddenWindowIds.has(replacesWindowId) ? { ...window, replacesWindowId } : window);
   return {
-    version: 2, windows,
+    version: 2, windows: normalizedWindows,
     ...(typeof session.focusedWindowId === "string" && session.focusedWindowId ? { focusedWindowId: session.focusedWindowId } : {})
   };
 };

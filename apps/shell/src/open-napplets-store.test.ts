@@ -51,6 +51,33 @@ describe("window session store", () => {
     ]);
   });
 
+  it("drops stale replacement state when DAG and viewer are both visible", () => {
+    const storage = memoryStorage();
+    storage.setItem("shell.window-session.v2", JSON.stringify({
+      version: 2,
+      windows: [
+        { windowId: "tree-1", dTag: "navigate-problem-tree", launch: { type: "direct", coordinate: "tree-coordinate" }, hidden: false },
+        {
+          windowId: "viewer-1", dTag: "problem-viewer", hidden: false, replacesWindowId: "tree-1",
+          launch: {
+            type: "intent", sender: "navigate-problem-tree", convention: "napplet:note/open",
+            payload: { target: { type: "event", id: "problem-id" } }
+          }
+        }
+      ]
+    }));
+    expect(createWindowSessionStore(storage).get().windows).toEqual([
+      { windowId: "tree-1", dTag: "navigate-problem-tree", launch: { type: "direct", coordinate: "tree-coordinate" }, hidden: false },
+      {
+        windowId: "viewer-1", dTag: "problem-viewer", hidden: false,
+        launch: {
+          type: "intent", sender: "navigate-problem-tree", convention: "napplet:note/open",
+          payload: { target: { type: "event", id: "problem-id" } }
+        }
+      }
+    ]);
+  });
+
   it("persists direct and intent-created windows with focus state", () => {
     const storage = memoryStorage();
     createWindowSessionStore(storage).set(session);
