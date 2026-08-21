@@ -19,7 +19,7 @@ export interface AccountController {
   close(): void;
 }
 
-export function createAccountController(manager: AccountManager): AccountController {
+export function createAccountController(manager: AccountManager, onSigned?: (event: NostrEvent) => void): AccountController {
   let generation = 0;
   let closed = false;
   let initial = true;
@@ -41,7 +41,12 @@ export function createAccountController(manager: AccountManager): AccountControl
     manager,
     get generation() { return generation; },
     get publicKey() { return manager.active?.pubkey ?? ""; },
-    sign: async (template) => { validateEventTemplate(template); return withCurrent((account) => account.signEvent(template)); },
+    sign: async (template) => {
+      validateEventTemplate(template);
+      const event = await withCurrent((account) => account.signEvent(template));
+      onSigned?.(event);
+      return event;
+    },
     nip04Encrypt: (pubkey, plaintext) => withCurrent((account) => {
       if (!account.nip04) throw unavailable("NIP-04 unavailable"); return account.nip04.encrypt(pubkey, plaintext);
     }),

@@ -2,7 +2,7 @@ import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
 import { createShellSettingsStore } from "@platform/host-services";
 import { connectedRelayCount$ } from "@platform/nostr-engine";
-import { activePubkey$, activeProfile$ } from "./nostr.js";
+import { activePubkey$, activeProfile$, signedEvents$ } from "./nostr.js";
 import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
@@ -11,6 +11,7 @@ import { createOpenNappletsStore } from "./open-napplets-store.js";
 import { createDockStore } from "./dock-store.js";
 import type { DockLauncher } from "./dock-launchers.js";
 import { openDockIconStore, type DockIconOverride } from "./dock-icon-store.js";
+import { createSignedEventsView } from "./signed-events-view.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -36,6 +37,16 @@ const profileFallback = document.querySelector<HTMLElement>("#profile-avatar-fal
 const accountPopover = document.querySelector<HTMLElement>("#account-popover");
 const profileActions = Array.from(document.querySelectorAll<HTMLButtonElement>(".profile-action"));
 const spotlightTrigger = document.querySelector<HTMLButtonElement>("#spotlight-trigger");
+const signedEventsTrigger = document.querySelector<HTMLButtonElement>("#signed-events-trigger");
+const signedEventsCount = document.querySelector<HTMLElement>("#signed-events-count");
+const signedEventsPanel = document.querySelector<HTMLElement>("#signed-events-panel");
+const signedEventsClose = document.querySelector<HTMLButtonElement>("#signed-events-close");
+const signedEventsList = document.querySelector<HTMLUListElement>("#signed-events-list");
+const signedEventsEmpty = document.querySelector<HTMLElement>("#signed-events-empty");
+const signedEventDialog = document.querySelector<HTMLDialogElement>("#signed-event-dialog");
+const signedEventDialogTitle = document.querySelector<HTMLElement>("#signed-event-dialog-title");
+const signedEventCode = document.querySelector<HTMLElement>("#signed-event-code");
+const signedEventDialogClose = document.querySelector<HTMLButtonElement>("#signed-event-dialog-close");
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
 const spotlightIcon = spotlightPanel?.querySelector<SVGElement>(".spotlight-icon");
 const loaderProgress = document.querySelector<HTMLElement>("#loader-progress");
@@ -57,6 +68,13 @@ let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
 let settingsView: SettingsView | null = null;
+const signedEventsView = signedEventsTrigger && signedEventsCount && signedEventsPanel && signedEventsClose && signedEventsList && signedEventsEmpty && signedEventDialog && signedEventDialogTitle && signedEventCode && signedEventDialogClose
+  ? createSignedEventsView({
+    trigger: signedEventsTrigger, count: signedEventsCount, panel: signedEventsPanel, close: signedEventsClose,
+    list: signedEventsList, empty: signedEventsEmpty, dialog: signedEventDialog,
+    dialogTitle: signedEventDialogTitle, code: signedEventCode, dialogClose: signedEventDialogClose
+  }, signedEvents$, reducedMotion, () => { closeAccountMenu(); closeSpotlight(); closeSettings(); })
+  : null;
 let dockHideTimer: number | undefined;
 
 const relayCountSubscription = connectedRelayCount$.subscribe((count) => {
@@ -175,7 +193,10 @@ const closeMenus = (): void => {
   closeAccountMenu();
   closeSpotlight();
   closeSettings();
+  signedEventsView?.close();
 };
+
+window.addEventListener("pagehide", () => signedEventsView?.destroy(), { once: true });
 
 profileTrigger?.addEventListener("click", () => {
   if (!accountOpen) openAccountMenu();
@@ -206,7 +227,10 @@ const openSpotlight = (): void => {
 spotlightTrigger?.addEventListener("click", () => spotlightPanel?.hidden ? openSpotlight() : closeMenus());
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    const returnFocus = settingsView?.isOpen() ? settingsTrigger : spotlightPanel?.hidden === false ? spotlightTrigger : profileTrigger;
+    const returnFocus = settingsView?.isOpen() ? settingsTrigger
+      : spotlightPanel?.hidden === false ? spotlightTrigger
+        : signedEventsPanel?.hidden === false ? signedEventsTrigger
+          : profileTrigger;
     closeMenus();
     returnFocus?.focus();
   } else if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
@@ -218,6 +242,7 @@ document.addEventListener("pointerdown", (event) => {
   const target = event.target;
   if (!(target instanceof Node)) return;
   if (accountPopover?.contains(target) || profileTrigger?.contains(target) || spotlightPanel?.contains(target) || spotlightTrigger?.contains(target)) return;
+  if (signedEventsPanel?.contains(target) || signedEventsTrigger?.contains(target) || signedEventDialog?.contains(target)) return;
   if (settingsPanel?.contains(target) || settingsTrigger?.contains(target)) return;
   closeMenus();
 });

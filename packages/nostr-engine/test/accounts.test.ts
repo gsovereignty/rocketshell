@@ -63,4 +63,18 @@ describe("account controller", () => {
     expect(signEvent).not.toHaveBeenCalled();
     controller.close();
   });
+  it("reports only signatures completed for the current account", async () => {
+    const manager = new AccountManager(); const signed: NostrEvent[] = [];
+    const secretKey = generateSecretKey();
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "signed", tags: [] }, secretKey);
+    const account = {
+      id: "reporting", type: "test", pubkey: event.pubkey, signer: undefined as never,
+      getPublicKey: async () => event.pubkey, signEvent: async () => event, toJSON: () => ({})
+    };
+    account.signer = account as never; manager.addAccount(account as never); manager.setActive(account as never);
+    const controller = createAccountController(manager, (result) => signed.push(result));
+    await expect(controller.sign({ kind: 1, created_at: 1, content: "signed", tags: [] })).resolves.toBe(event);
+    expect(signed).toEqual([event]);
+    controller.close();
+  });
 });

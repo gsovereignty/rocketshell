@@ -41,6 +41,10 @@
         <button id="spotlight-trigger" class="menu-button icon-button" type="button" aria-label="Open Napplet Spotlight" aria-expanded="false" aria-controls="spotlight-panel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
         </button>
+        <button id="signed-events-trigger" class="menu-button icon-button signed-events-trigger" type="button" aria-label="Signed events, 0 this session" aria-expanded="false" aria-controls="signed-events-panel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h8l3 3v14h-11z"></path><path d="M14.5 3.5v3h3M9.5 11h5M9.5 14.5h5"></path></svg>
+          <span id="signed-events-count" hidden>0</span>
+        </button>
       </div>
     </nav>
     <div id="spotlight-panel" hidden>
@@ -53,6 +57,25 @@
         <span id="loader-progress" aria-hidden="true"></span>
       </form>
     </div>
+    <aside id="signed-events-panel" aria-labelledby="signed-events-title" hidden>
+      <header class="signed-events-header">
+        <div><h2 id="signed-events-title">Signed this session</h2><p>Completed signatures from current browser session.</p></div>
+        <button id="signed-events-close" class="icon-button menu-button" type="button" aria-label="Close signed events">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+        </button>
+      </header>
+      <p id="signed-events-empty">No events signed yet.</p>
+      <ol id="signed-events-list"></ol>
+    </aside>
+    <dialog id="signed-event-dialog" aria-labelledby="signed-event-dialog-title">
+      <header class="signed-event-dialog-header">
+        <h2 id="signed-event-dialog-title">Signed event</h2>
+        <button id="signed-event-dialog-close" class="icon-button menu-button" type="button" aria-label="Close event code">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+        </button>
+      </header>
+      <pre><code id="signed-event-code"></code></pre>
+    </dialog>
     <div id="settings-panel" role="dialog" aria-modal="false" aria-labelledby="settings-title" hidden>
       <header class="settings-header">
         <h2 id="settings-title">Preferences</h2>
