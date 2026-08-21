@@ -16,6 +16,7 @@ export interface ProblemView {
   title: string;
   description: string;
   status: string;
+  maintainers: string[];
   claim?: { eventId: string; claimant: string };
 }
 
@@ -64,8 +65,16 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
     title: tagValue(selected.event, "title") ?? "Untitled problem",
     description: selected.event.content,
     status: tagValue(selected.event, "status") ?? "open",
+    maintainers: selected.event.tags
+      .filter((item) => item[0] === "p" && item[3] === "maintainer" && HEX_64.test(item[1] ?? ""))
+      .map((item) => item[1]),
     claim: claim?.[1] && claim[2] ? { eventId: claim[1], claimant: claim[2] } : undefined
   };
+}
+
+export function mayEditProblem(problem: ProblemView, currentPubkey: string) {
+  return HEX_64.test(currentPubkey) &&
+    (currentPubkey === problem.owner || problem.maintainers.includes(currentPubkey));
 }
 
 export function buildWorkflowTemplate(problem: ProblemView, content: string, action?: "claim"): EventTemplate {

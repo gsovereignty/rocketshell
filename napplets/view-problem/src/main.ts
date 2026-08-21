@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
-  selectEffectiveClaim, selectProblem, shortKey,
+  mayEditProblem, selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -85,6 +85,7 @@ function render() {
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && Boolean(pubkey) && !effectiveClaim && !claimPending;
+  const canEdit = mayEditProblem(problem, pubkey);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
     <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
@@ -93,7 +94,7 @@ function render() {
       : `<strong>Deadline unavailable</strong>`}</div>
   </div>` : "";
   app.innerHTML = `<article class="problem-view">
-    <header class="topbar"><button id="change-problem" type="button">Change problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></header>
+    <header class="topbar"><button id="change-problem" type="button">Change problem</button><div class="topbar-actions"><button id="edit-problem" type="button" ${canEdit ? "" : "disabled"} title="${canEdit ? "Edit this problem" : "Only the author or a current maintainer can edit this problem"}">Edit problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></div></header>
     <section class="problem-copy" aria-labelledby="problem-title">
       <div class="state-line"><span class="status status-${escapeHtml(displayedStatus)}"><i></i>${escapeHtml(statusLabel(displayedStatus))}</span></div>
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
@@ -155,6 +156,7 @@ function bind() {
     image.outerHTML = fallbackAvatar(author);
   }, { once: true }));
   document.querySelector("#change-problem")?.addEventListener("click", () => showSetup());
+  document.querySelector("#edit-problem")?.addEventListener("click", () => void editProblem());
   document.querySelector("#claim")?.addEventListener("click", () => void publishAction("I am claiming this problem.", "claim"));
   document.querySelector("#report-related")?.addEventListener("click", () => void reportRelated());
   document.querySelector("#post-comment")?.addEventListener("click", () => void postComment());
@@ -203,6 +205,19 @@ async function reportRelated() {
     if (!result.ok || !result.handled) throw new Error(result.error ?? "No compatible problem composer is available.");
     setLiveStatus("Related problem composer opened.");
   } catch (error) { setLiveStatus(error instanceof Error ? error.message : "Problem composer could not be opened."); }
+}
+
+async function editProblem() {
+  if (!problem || !mayEditProblem(problem, pubkey)) return;
+  setLiveStatus("Opening problem editor…");
+  try {
+    const result = await intent.invoke({ archetype: "composer", action: "problem-edit", convention: "napplet:composer/problem-edit", payload: { problemId: problem.problemId }, behavior: { focus: true, reuse: true } });
+    if (!result.ok || !result.handled) throw new Error(result.error ?? "No compatible problem editor is available.");
+    setLiveStatus("Problem editor opened.");
+  } catch (error) {
+    console.error("Problem editor intent failed", { problemId: problem.problemId, error });
+    setLiveStatus(error instanceof Error ? error.message : "Problem editor could not be opened.");
+  }
 }
 
 function setLiveStatus(message: string) {

@@ -129,6 +129,10 @@ Palette is civic and direct: neutral paper and ink carry reading, electric blue 
 
 **The One Action Color Rule.** Reserve electric blue for agency: actions, links, carets, and selection. Do not use it as decorative surface fill.
 
+**The Edit Authority Rule.** Keep Edit problem visible in top bar. Use action
+blue only for authorized owner or current maintainer; use muted disabled styling
+for every other identity.
+
 **The Semantic Wash Rule.** Workflow state uses dark semantic text on a pale tint; color never carries state without a text label.
 
 ## Typography

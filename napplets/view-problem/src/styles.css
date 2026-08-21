@@ -24,6 +24,8 @@ button { color: inherit; }
 .problem-view { width:min(1060px,100%); margin:auto; padding:0 clamp(20px,6vw,72px) 42px; }
 .topbar { display:flex; justify-content:space-between; align-items:center; min-height:72px; border-bottom:1px solid var(--line); }
 .topbar button,.related-action { border:0; padding:8px 0; color:var(--blue); background:transparent; text-decoration:underline; text-underline-offset:4px; cursor:pointer; }
+.topbar-actions { display:flex; align-items:center; gap:18px; }
+.topbar button:disabled { color:#9296a1; cursor:not-allowed; text-decoration:none; }
 .topbar code { color:var(--muted); font-size:.74rem; }
 .problem-copy { padding:48px 0 38px; }
 .state-line { margin-bottom:24px; }

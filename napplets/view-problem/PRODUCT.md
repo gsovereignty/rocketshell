@@ -28,6 +28,9 @@ current revision, workflow state, related problem references, and NIP-22 kind
 - Reads and publishes only through NAP-OUTBOX; user identity through NAP-IDENTITY.
 - Child problem composition uses the existing project-local
   `napplet:composer/problem-child` convention through NAP-INTENT.
+- Problem editing uses project-local `napplet:composer/problem-edit` through
+  NAP-INTENT. Edit remains visible but disabled unless current identity is the
+  problem owner or a maintainer listed by current revision.
 - Registers the standard `note` archetype and accepts `napplet:note/open` event
   targets so problem navigators can open a selected revision in focused detail.
 - Shows each comment author's shortened pubkey and a deterministic generated
