@@ -8,7 +8,8 @@ import { identity, inc, intent, outbox, resource, type OutboxSubscription, type 
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, hasClaimRequest, parseCoordinate, relatedCoordinates, selectProblem, shortKey,
+  COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
+  selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -32,6 +33,7 @@ let intentSubscription: Subscription | undefined;
 let busy = false;
 let liveMessage = "";
 let intentReceived = false;
+let countdownTimer: ReturnType<typeof setInterval> | undefined;
 const profiles = new Map<string, ProfileData>();
 const avatarHandles = new Map<string, { url: string; revoke(): void }>();
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -42,6 +44,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => (
 
 function showSetup(message = "") {
   discussionSubscription?.close();
+  if (countdownTimer) clearInterval(countdownTimer);
   app.innerHTML = `<section class="setup" aria-labelledby="setup-title">
     <div class="setup-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
     <div><h1 id="setup-title">Open a problem</h1><p>Paste its full NIP-1971 coordinate to load current state and discussion.</p></div>
@@ -77,18 +80,28 @@ const authorAvatar = (author: string) => {
 function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
-  const claimPending = Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
-  const canClaim = problem.status === "open" && Boolean(pubkey) && !claimPending;
+  const effectiveClaim = selectEffectiveClaim(problem, comments);
+  const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
+  const displayedStatus = effectiveClaim ? "claimed" : problem.status;
+  const canClaim = problem.status === "open" && Boolean(pubkey) && !effectiveClaim && !claimPending;
+  const claimDetails = effectiveClaim ? `<div class="claim-summary">
+    ${authorAvatar(effectiveClaim.claimant)}
+    <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
+    <div class="claim-deadline"><span>Time left for PR</span>${effectiveClaim.expiresAt
+      ? `<time data-claim-deadline="${effectiveClaim.expiresAt}" datetime="${new Date(effectiveClaim.expiresAt * 1000).toISOString()}">${formatClaimCountdown(effectiveClaim.expiresAt - Date.now() / 1000)}</time>`
+      : `<strong>Deadline unavailable</strong>`}</div>
+  </div>` : "";
   app.innerHTML = `<article class="problem-view">
     <header class="topbar"><button id="change-problem" type="button">Change problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></header>
     <section class="problem-copy" aria-labelledby="problem-title">
-      <div class="state-line"><span class="status status-${escapeHtml(problem.status)}"><i></i>${escapeHtml(statusLabel(problem.status))}</span></div>
+      <div class="state-line"><span class="status status-${escapeHtml(displayedStatus)}"><i></i>${escapeHtml(statusLabel(displayedStatus))}</span></div>
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
       <p class="description">${escapeHtml(problem.description)}</p>
       <div class="actions">
-        <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
-        <span>${problem.claim ? `Claimed by ${escapeHtml(shortKey(problem.claim.claimant))}${problem.claim.height ? ` at block ${escapeHtml(problem.claim.height)}` : ""}` : claimPending ? "Awaiting maintainer acceptance." : "Claim opens a 144-block response window after acceptance."}</span>
+        <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
+        <span>${claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
       </div>
+      ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
     </section>
     <section class="related" aria-labelledby="related-title">
@@ -110,7 +123,26 @@ function render() {
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
+  syncClaimCountdown(effectiveClaim?.expiresAt, Boolean(effectiveClaim && !effectiveClaim.acknowledged));
   if (!reducedMotion) gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+}
+
+function syncClaimCountdown(deadline?: number, rerenderOnExpiry = false) {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = undefined;
+  if (!deadline) return;
+  const update = () => {
+    const output = document.querySelector<HTMLElement>("[data-claim-deadline]");
+    if (!output) return;
+    const remaining = deadline - Date.now() / 1000;
+    output.textContent = formatClaimCountdown(remaining);
+    if (remaining > 0) return;
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = undefined;
+    if (rerenderOnExpiry) render();
+  };
+  update();
+  if (deadline > Date.now() / 1000) countdownTimer = setInterval(update, 1000);
 }
 
 function bind() {
@@ -146,7 +178,7 @@ async function publishAction(content: string, action?: "claim") {
       throw new Error(result.error ?? "Shell could not publish the event.");
     }
     receiveDiscussion({ event: result.event, sidecar: { relayHints: acceptedRelays } });
-    setLiveStatus(action ? "Claim request published; awaiting maintainer acceptance." : "Comment published.");
+    setLiveStatus(action ? (problem.status === "rfm" ? "Claim request published; awaiting acknowledgement." : "Problem claimed. You have 24 hours to send a PR.") : "Comment published.");
   } catch (error) {
     setLiveStatus(error instanceof Error ? error.message : "Event could not be published.");
   } finally {
@@ -229,7 +261,8 @@ async function loadProblem(value: string) {
     discussionSubscription = outbox.subscribe(filters, { timeoutMs: 8000 });
     discussionSubscription.on("event", receiveDiscussion);
     render();
-    void loadProfiles(comments.map(({ event }) => event.pubkey));
+    const effectiveClaim = selectEffectiveClaim(problem, comments);
+    void loadProfiles([...comments.map(({ event }) => event.pubkey), ...(effectiveClaim ? [effectiveClaim.claimant] : [])]);
   } catch (error) { showSetup(error instanceof Error ? error.message : "Problem could not be loaded."); }
 }
 
@@ -279,6 +312,7 @@ async function start() {
 
 addEventListener("beforeunload", () => {
   discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close();
+  if (countdownTimer) clearInterval(countdownTimer);
   avatarHandles.forEach((handle) => handle.revoke());
 });
 void start();

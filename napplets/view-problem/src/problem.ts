@@ -3,6 +3,7 @@ import type { EventTemplate, NostrEvent, RelayEventResult } from "@napplet/sdk";
 export const PROBLEM_KIND = 31971;
 export const COMMENT_KIND = 1111;
 export const HEX_64 = /^[0-9a-f]{64}$/;
+export const CLAIM_WINDOW_SECONDS = 86_400;
 
 export interface ProblemView {
   coordinate: string;
@@ -10,11 +11,20 @@ export interface ProblemView {
   owner: string;
   revisionId: string;
   revisionAuthor: string;
+  revisionCreatedAt: number;
   relay: string;
   title: string;
   description: string;
   status: string;
-  claim?: { eventId: string; claimant: string; height?: string };
+  claim?: { eventId: string; claimant: string };
+}
+
+export interface EffectiveClaim {
+  eventId: string;
+  claimant: string;
+  claimedAt?: number;
+  expiresAt?: number;
+  acknowledged: boolean;
 }
 
 const tag = (event: NostrEvent, name: string, marker?: string) =>
@@ -49,11 +59,12 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
   return {
     coordinate, owner, problemId, revisionId: selected.event.id,
     revisionAuthor: selected.event.pubkey,
+    revisionCreatedAt: selected.event.created_at,
     relay: selected.sidecar?.relayHints?.[0] ?? tag(selected.event, "a", "origin")?.[2] ?? "",
     title: tagValue(selected.event, "title") ?? "Untitled problem",
     description: selected.event.content,
     status: tagValue(selected.event, "status") ?? "open",
-    claim: claim?.[1] && claim[2] ? { eventId: claim[1], claimant: claim[2], height: claim[3] } : undefined
+    claim: claim?.[1] && claim[2] ? { eventId: claim[1], claimant: claim[2] } : undefined
   };
 }
 
@@ -74,6 +85,44 @@ export function hasClaimRequest(problem: ProblemView, results: RelayEventResult[
     event.tags.some((item) => item[0] === "claim") &&
     event.tags.some((item) => item[0] === "A" && item[1] === problem.coordinate) &&
     event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));
+}
+
+export function selectEffectiveClaim(problem: ProblemView, results: RelayEventResult[], now = Math.floor(Date.now() / 1000)): EffectiveClaim | undefined {
+  if (problem.claim) {
+    const claimEvent = results.find(({ event }) => event.id === problem.claim?.eventId)?.event;
+    return {
+      eventId: problem.claim.eventId,
+      claimant: problem.claim.claimant,
+      claimedAt: claimEvent?.created_at,
+      expiresAt: claimEvent ? claimEvent.created_at + CLAIM_WINDOW_SECONDS : undefined,
+      acknowledged: true
+    };
+  }
+  if (problem.status === "rfm") return undefined;
+  const candidates = results.map(({ event }) => event).filter((event) =>
+    event.kind === COMMENT_KIND &&
+    event.created_at >= problem.revisionCreatedAt &&
+    event.created_at + CLAIM_WINDOW_SECONDS > now &&
+    event.tags.some((item) => item[0] === "claim") &&
+    event.tags.some((item) => item[0] === "A" && item[1] === problem.coordinate) &&
+    event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));
+  candidates.sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id));
+  const selected = candidates[0];
+  return selected ? {
+    eventId: selected.id,
+    claimant: selected.pubkey,
+    claimedAt: selected.created_at,
+    expiresAt: selected.created_at + CLAIM_WINDOW_SECONDS,
+    acknowledged: false
+  } : undefined;
+}
+
+export function formatClaimCountdown(remainingSeconds: number) {
+  const remaining = Math.max(0, Math.ceil(remainingSeconds));
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export function relatedCoordinates(problem: ProblemView, results: RelayEventResult[]) {

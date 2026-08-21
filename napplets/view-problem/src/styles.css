@@ -36,6 +36,12 @@ button { color: inherit; }
 .primary { min-height:52px; border-radius:10px; padding:0 24px; }
 .primary:disabled { color:#858995; background:#e4e5e9; cursor:not-allowed; }
 .actions span { max-width:42ch; color:var(--muted); font-size:.86rem; line-height:1.45; }
+.claim-summary { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center; max-width:620px; margin-top:20px; border-block:1px solid var(--line); padding:16px 0; }
+.claim-summary > div { display:grid; min-width:0; gap:3px; }
+.claim-summary span { color:var(--muted); font-size:.76rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.claim-summary strong { overflow-wrap:anywhere; }
+.claim-deadline { justify-items:end; text-align:right; }
+.claim-deadline time { color:#8a5a00; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:1rem; font-variant-numeric:tabular-nums; font-weight:750; letter-spacing:.03em; }
 .related-action { margin-top:15px; }
 .related,.discussion { border-top:1px solid var(--line); padding-top:28px; }
 .related h2,.discussion h2 { margin:0 0 18px; color:#555b68; font-size:.76rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
@@ -54,5 +60,5 @@ button { color: inherit; }
 .comment-entry textarea { min-height:54px; resize:vertical; border:1px solid #c8cbd2; border-radius:12px; padding:15px 17px; line-height:1.45; caret-color:var(--blue); }
 .comment-entry button { min-width:94px; border:0; border-radius:12px; color:#fff; background:var(--blue); font-weight:750; cursor:pointer; }.comment-entry button:disabled{color:#858995;background:#e4e5e9;cursor:not-allowed}
 #app-status { display:block; min-height:1.4em; margin-top:14px; color:var(--muted); font-size:.8rem; }
-@media(max-width:680px){.setup{grid-template-columns:1fr;align-content:start}.setup-glyph{min-height:130px}.coordinate-entry{grid-column:1}.coordinate-entry>div{flex-direction:column}.coordinate-entry button{min-height:50px}.problem-view{padding-inline:18px}.problem-copy{padding-top:34px}.actions{align-items:stretch;flex-direction:column;gap:12px}.primary{width:100%}.related li button{align-items:flex-start;flex-direction:column;gap:6px}.comment-entry{grid-template-columns:1fr}.comment-entry button{min-height:48px}.discussion li{grid-template-columns:38px minmax(0,1fr);gap:12px}.avatar{width:36px;height:36px}}
+@media(max-width:680px){.setup{grid-template-columns:1fr;align-content:start}.setup-glyph{min-height:130px}.coordinate-entry{grid-column:1}.coordinate-entry>div{flex-direction:column}.coordinate-entry button{min-height:50px}.problem-view{padding-inline:18px}.problem-copy{padding-top:34px}.actions{align-items:stretch;flex-direction:column;gap:12px}.primary{width:100%}.claim-summary{grid-template-columns:auto minmax(0,1fr)}.claim-deadline{grid-column:2;justify-items:start;text-align:left}.related li button{align-items:flex-start;flex-direction:column;gap:6px}.comment-entry{grid-template-columns:1fr}.comment-entry button{min-height:48px}.discussion li{grid-template-columns:38px minmax(0,1fr);gap:12px}.avatar{width:36px;height:36px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important}}
