@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPolicyFetch, resourceGrantKey, resolveResourceGrants } from "../src/index.js";
+import { createPolicyFetch, isResourceOriginGranted, resourceGrantKey, resolveResourceGrants } from "../src/index.js";
 import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 describe("resource policy fetch", () => {
@@ -13,6 +13,15 @@ describe("resource policy fetch", () => {
     const policy = { grants, resolvePublisher: (dTag: string, hash: string) => publishers.get(`${dTag}\0${hash}`) };
     expect(resolveResourceGrants(policy, "viewer", "old-hash")).toEqual(["https://media.example"]);
     expect(resolveResourceGrants(policy, "viewer", "new-hash")).toEqual([]);
+  });
+  it("allows every origin covered by an HTTPS scheme grant", () => {
+    expect(isResourceOriginGranted("https://media.example", ["https:"])).toBe(true);
+    expect(isResourceOriginGranted("https://cdn.example", ["https:"])).toBe(true);
+    expect(isResourceOriginGranted("http://media.example", ["https:"])).toBe(false);
+  });
+  it("keeps exact-origin grants narrow", () => {
+    expect(isResourceOriginGranted("https://media.example", ["https://media.example"])).toBe(true);
+    expect(isResourceOriginGranted("https://cdn.example", ["https://media.example"])).toBe(false);
   });
   afterEach(() => vi.unstubAllGlobals());
   it("strips ambient credential headers and sniffs returned bytes", async () => {

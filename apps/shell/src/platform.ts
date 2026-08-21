@@ -132,6 +132,13 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const resourceGrants = new Map<string, readonly string[]>();
   const resourcePublishers = new Map<string, string>();
   const resourceIdentityKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
+  const registerResourcePolicy = (installation: Awaited<ReturnType<typeof packageStore.getActive>>): void => {
+    if (!installation) return;
+    resourcePublishers.set(resourceIdentityKey(installation.dTag, installation.aggregateHash), installation.manifestEvent.pubkey);
+    if (installation.manifest.requires.includes("resource")) {
+      resourceGrants.set(resourceGrantKey(installation.manifestEvent.pubkey, installation.dTag, installation.aggregateHash), ["https:"]);
+    }
+  };
   registerResourceService(shell.runtime, {
     grants: resourceGrants,
     resolvePublisher: (dTag, hash) => resourcePublishers.get(resourceIdentityKey(dTag, hash)),
@@ -229,12 +236,12 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     ? await installFixture(packageStore, fixtureResourceUrl)
     : undefined;
   const builtInDTags = await installBuiltInNapplets(packageStore, import.meta.env.BASE_URL);
-  for (const installedDTag of [fixtureDTag, ...builtInDTags]) {
-    if (!installedDTag) continue;
-    const fixture = await packageStore.getActive(installedDTag);
-    if (fixture) resourcePublishers.set(resourceIdentityKey(fixture.dTag, fixture.aggregateHash), fixture.manifestEvent.pubkey);
-    if (fixture && installedDTag === fixtureDTag) resourceGrants.set(resourceGrantKey(fixture.manifestEvent.pubkey, fixture.dTag, fixture.aggregateHash), [new URL(fixtureResourceUrl).origin]);
-    for (const archetype of fixture?.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
+  for (const installation of await packageStore.listActive()) {
+    registerResourcePolicy(installation);
+    if (installation.dTag === fixtureDTag) {
+      resourceGrants.set(resourceGrantKey(installation.manifestEvent.pubkey, installation.dTag, installation.aggregateHash), [new URL(fixtureResourceUrl).origin]);
+    }
+    for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
   const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, { scope: import.meta.env.BASE_URL, type: "module" });
@@ -271,7 +278,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
       const installation = await installRemotePackage(packageStore, event, { allowHttpLocalhost: allowLocalPlaintext });
-      resourcePublishers.set(resourceIdentityKey(installation.dTag, installation.aggregateHash), installation.manifestEvent.pubkey);
+      registerResourcePolicy(installation);
       for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
       const managed = await windows.create(installation.dTag);
       return { dTag: installation.dTag, title: installation.manifest.title ?? installation.dTag, windowId: managed.identity.windowId };
