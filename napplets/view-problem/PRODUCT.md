@@ -26,6 +26,8 @@ current revision, workflow state, related problem references, and NIP-22 kind
 
 - Independently buildable packaged napplet using public napplet SDK contracts.
 - Reads and publishes only through NAP-OUTBOX; user identity through NAP-IDENTITY.
+- Resolves current direct child heads before rendering workflow actions. Any
+  problem with children cannot publish a claim event.
 - Child problem composition uses the existing project-local
   `napplet:composer/problem-child` convention through NAP-INTENT.
 - Problem editing uses project-local `napplet:composer/problem-edit` through

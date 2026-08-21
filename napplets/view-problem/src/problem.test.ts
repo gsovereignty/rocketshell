@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemEdits, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, parseCoordinate, problemEdits, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -211,5 +211,16 @@ describe("problem view", () => {
   it("finds distinct mentioned problem coordinates", () => {
     const other = `31971:${"e".repeat(64)}:${"f".repeat(64)}`;
     expect(relatedCoordinates(selectProblem(coordinate, [result]), [{ event: { tags: [["q", other]] } } as never])).toEqual([other]);
+  });
+  it("counts only current direct child heads", () => {
+    const childCoordinate = `31971:${"e".repeat(64)}:${"f".repeat(64)}`;
+    const child = (eventId: string, previousId?: string, parent = coordinate) => ({ event: {
+      id: eventId, pubkey: "e".repeat(64), kind: 31971, created_at: 2, content: "Child", sig: "f".repeat(128),
+      tags: [["d", "f".repeat(64)], ["a", childCoordinate, "", "origin"], ["a", parent],
+        ...(previousId ? [["e", previousId, "", "previous"]] : [])]
+    } }) as never;
+    const genesis = child("1".repeat(64));
+    expect(hasProblemChildren(coordinate, [genesis])).toBe(true);
+    expect(hasProblemChildren(coordinate, [genesis, child("2".repeat(64), "1".repeat(64), `31971:${owner}:${"0".repeat(64)}`)])).toBe(false);
   });
 });

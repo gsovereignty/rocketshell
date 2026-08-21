@@ -234,4 +234,13 @@ export function relatedCoordinates(problem: ProblemView, results: RelayEventResu
   return Array.from(coordinates);
 }
 
+export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
+  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
+    HEX_64.test(event.id) && tag(event, "a", "origin")?.[1]?.match(/^31971:[0-9a-f]{64}:[0-9a-f]{64}$/));
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  return candidates.some(({ event }) => !referenced.has(event.id) &&
+    event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === coordinate));
+}
+
 export const shortKey = (value: string) => `${value.slice(0, 8)}…${value.slice(-5)}`;

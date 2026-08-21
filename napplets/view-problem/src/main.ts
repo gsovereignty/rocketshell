@@ -8,7 +8,7 @@ import { identity, inc, intent, outbox, resource, type OutboxSubscription, type 
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
+  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates,
   mayEditProblem, problemEdits, problemRevisionAuthors, problemRevisionHistory, selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
@@ -116,9 +116,10 @@ function render() {
     ...discussion.map((result) => ({ type: "comment" as const, createdAt: result.event.created_at, result }))
   ].sort((a, b) => a.createdAt - b.createdAt);
   const effectiveClaim = selectEffectiveClaim(problem, comments, revisions);
+  const hasChildren = hasProblemChildren(problem.coordinate, relatedEvents);
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
-  const canClaim = problem.status === "open" && Boolean(pubkey) && !effectiveClaim && !claimPending;
+  const canClaim = problem.status === "open" && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
   const canEdit = mayEditProblem(problem, pubkey);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
@@ -135,7 +136,7 @@ function render() {
       <p class="description">${escapeHtml(problem.description)}</p>
       <div class="actions">
         <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
-        <span>${claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
+        <span>${hasChildren ? "Problems with children cannot be claimed." : claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
       </div>
       ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
@@ -209,6 +210,10 @@ function bind() {
 
 async function publishAction(content: string, action?: "claim") {
   if (!problem || !pubkey || busy) return;
+  if (action === "claim" && hasProblemChildren(problem.coordinate, relatedEvents)) {
+    setLiveStatus("Problems with children cannot be claimed.");
+    return;
+  }
   busy = true;
   render();
   try {
@@ -380,7 +385,15 @@ async function loadProblem(value: string) {
       if (generation !== loadGeneration) return;
       problemResults = [...problemResults, ...routedResponse.events];
     }
-    const allResults = [...problemResults, ...response.events, ...buffered];
+    const initialRelated = [...response.events, ...buffered];
+    const childProblemIds = [...new Set(initialRelated.flatMap(({ event }) => event.kind === 31971 &&
+      event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === target.coordinate)
+      ? event.tags.filter((item) => item[0] === "d").map((item) => item[1]) : []))];
+    const childRevisions = childProblemIds.length
+      ? (await outbox.query({ kinds: [31971], "#d": childProblemIds, limit: 300 }, { limit: 300, timeoutMs: 8000 })).events
+      : [];
+    if (generation !== loadGeneration) return;
+    const allResults = [...problemResults, ...initialRelated, ...childRevisions];
     const uniqueResults = Array.from(new Map(allResults.map((result) => [result.event.id, result])).values());
     relatedEvents = uniqueResults.filter(({ event }) => event.kind === 31971);
     problem = selectProblem(target.coordinate, relatedEvents);
