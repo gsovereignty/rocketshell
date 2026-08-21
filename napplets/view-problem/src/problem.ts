@@ -27,7 +27,14 @@ export interface ProblemRevision {
   title: string;
   description: string;
   status: string;
+  maintainers: string[];
   previousIds: string[];
+}
+
+export interface ProblemRevisionChange {
+  field: "Title" | "Description" | "Status" | "Maintainers";
+  before?: string;
+  after: string;
 }
 
 export const problemRevisionAuthors = (problem: Pick<ProblemView, "owner" | "maintainers">): string[] =>
@@ -98,11 +105,26 @@ export function problemRevisionHistory(coordinate: string, results: RelayEventRe
       title: tagValue(event, "title") ?? "Untitled problem",
       description: event.content,
       status: tagValue(event, "status") ?? "open",
+      maintainers: event.tags
+        .filter((item) => item[0] === "p" && item[3] === "maintainer" && HEX_64.test(item[1] ?? ""))
+        .map((item) => item[1]).sort(),
       previousIds: event.tags
         .filter((item) => item[0] === "e" && item[3] === "previous" && HEX_64.test(item[1] ?? ""))
         .map((item) => item[1])
     }))
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+}
+
+export function compareProblemRevisions(previous: ProblemRevision | undefined, current: ProblemRevision): ProblemRevisionChange[] {
+  const fields = [
+    ["Title", previous?.title, current.title],
+    ["Description", previous?.description, current.description],
+    ["Status", previous?.status, current.status],
+    ["Maintainers", previous?.maintainers.join(", "), current.maintainers.join(", ")]
+  ] as const;
+  return fields
+    .filter(([, before, after]) => previous === undefined || before !== after)
+    .map(([field, before, after]) => ({ field, ...(previous === undefined ? {} : { before }), after }));
 }
 
 export function mayEditProblem(problem: ProblemView, currentPubkey: string) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -42,6 +42,17 @@ describe("problem view", () => {
     const history = problemRevisionHistory(coordinate, [result, next]);
     expect(history.map(({ id }) => id)).toEqual(["e".repeat(64), revision]);
     expect(history[0]).toMatchObject({ author: "f".repeat(64), status: "closed", previousIds: [revision] });
+  });
+  it("reports fields changed by a revision", () => {
+    const history = problemRevisionHistory(coordinate, [result]);
+    const previous = history[0];
+    const current = { ...previous, title: "Faster wallet setup", status: "claimed" };
+    expect(compareProblemRevisions(previous, current)).toEqual([
+      { field: "Title", before: "Wallet setup is slow", after: "Faster wallet setup" },
+      { field: "Status", before: "open", after: "claimed" }
+    ]);
+    expect(compareProblemRevisions(undefined, previous).map(({ field }) => field))
+      .toEqual(["Title", "Description", "Status", "Maintainers"]);
   });
   it("allows only owner or current maintainer to edit", () => {
     const maintainer = "e".repeat(64);

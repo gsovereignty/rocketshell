@@ -54,13 +54,22 @@ button { color: inherit; }
 .history li { border-left:2px solid var(--line); padding:0 0 28px 20px; }
 .history li:last-child { padding-bottom:0; }
 .history li.current { border-left-color:var(--blue); }
-.history li > div { display:flex; align-items:center; gap:10px; }
+.history details > summary { cursor:pointer; }
+.history-summary { display:grid; gap:9px; padding-left:5px; }
+.history-summary > span { display:flex; align-items:center; gap:10px; }
+.history-summary > strong { font-size:1rem; }
+.history-summary small { display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--muted); font-size:.74rem; font-weight:400; }
+.history-summary code { margin-left:auto; }
 .history .status { padding:5px 10px; font-size:.72rem; }
 .current-label { color:var(--blue); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; }
-.history h3 { margin:12px 0 0; font-size:1rem; }
-.history p { display:-webkit-box; overflow:hidden; max-width:72ch; margin:7px 0 0; color:#555b68; line-height:1.5; white-space:pre-wrap; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
-.history footer { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; color:var(--muted); font-size:.74rem; }
-.history code { margin-left:auto; }
+.history-note { margin:16px 0 0 5px; color:var(--muted); font-size:.8rem; }
+.revision-changes { display:grid; gap:14px; margin:18px 0 0 5px; }
+.revision-changes > div { display:grid; gap:5px; }
+.revision-changes dt { color:var(--muted); font-size:.7rem; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+.revision-changes dd { display:grid; gap:5px; margin:0; }
+.revision-changes del,.revision-changes ins { padding:8px 10px; overflow-wrap:anywhere; line-height:1.5; white-space:pre-wrap; text-decoration:none; }
+.revision-changes del { color:#8b2d2d; background:#fff0f0; text-decoration:line-through; }
+.revision-changes ins { color:#17613f; background:#edf8f1; }
 .related { padding-bottom:30px; }
 .related p { color:var(--muted); }
 .related ul,.discussion ol { margin:0; padding:0; list-style:none; }

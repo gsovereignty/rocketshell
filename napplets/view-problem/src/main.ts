@@ -8,7 +8,7 @@ import { identity, inc, intent, outbox, resource, type OutboxSubscription, type 
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
+  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
   mayEditProblem, problemRevisionAuthors, problemRevisionHistory, selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
@@ -95,6 +95,17 @@ const authorAvatar = (author: string) => {
   return fallbackAvatar(author);
 };
 
+const revisionChanges = (revision: ReturnType<typeof problemRevisionHistory>[number], revisions: ReturnType<typeof problemRevisionHistory>) => {
+  if (!revision.previousIds.length) return `<p class="history-note">Initial version</p>${renderChanges(compareProblemRevisions(undefined, revision))}`;
+  const parents = revision.previousIds.map((id) => revisions.find((candidate) => candidate.id === id)).filter((parent) => parent !== undefined);
+  if (!parents.length) return `<p class="history-note">Previous version unavailable from connected relays.</p>`;
+  return parents.map((parent) => `${revision.previousIds.length > 1 ? `<p class="history-note">Compared with ${shortKey(parent.id)}</p>` : ""}${renderChanges(compareProblemRevisions(parent, revision))}`).join("");
+};
+
+const renderChanges = (changes: ReturnType<typeof compareProblemRevisions>) => changes.length
+  ? `<dl class="revision-changes">${changes.map(({ field, before, after }) => `<div><dt>${field}</dt><dd>${before === undefined ? `<ins>${escapeHtml(after || "None")}</ins>` : `<del>${escapeHtml(before || "None")}</del><ins>${escapeHtml(after || "None")}</ins>`}</dd></div>`).join("")}</dl>`
+  : `<p class="history-note">No visible field changes.</p>`;
+
 function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
@@ -127,10 +138,8 @@ function render() {
     <section class="history" aria-labelledby="history-title">
       <h2 id="history-title">Edit history · ${revisions.length}</h2>
       <ol>${revisions.map((revision) => `<li${revision.id === problem?.revisionId ? ' class="current"' : ""}>
-        <div><span class="status status-${escapeHtml(revision.status)}"><i></i>${escapeHtml(statusLabel(revision.status))}</span>${revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</div>
-        <h3>${escapeHtml(revision.title)}</h3>
-        <p>${escapeHtml(revision.description)}</p>
-        <footer><span title="${escapeHtml(revision.author)}">${escapeHtml(authorName(revision.author))}</span><time datetime="${new Date(revision.createdAt * 1000).toISOString()}" title="${new Date(revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(revision.createdAt)}</time><code title="${revision.id}">${shortKey(revision.id)}</code></footer>
+        <details${revision.id === problem?.revisionId ? " open" : ""}><summary><span class="history-summary"><span><span class="status status-${escapeHtml(revision.status)}"><i></i>${escapeHtml(statusLabel(revision.status))}</span>${revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</span><strong>${escapeHtml(revision.title)}</strong><small><span title="${escapeHtml(revision.author)}">${escapeHtml(authorName(revision.author))}</span><time datetime="${new Date(revision.createdAt * 1000).toISOString()}" title="${new Date(revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(revision.createdAt)}</time><code title="${revision.id}">${shortKey(revision.id)}</code></small></span></summary>
+        ${revisionChanges(revision, revisions)}</details>
       </li>`).join("")}</ol>
     </section>
     <section class="related" aria-labelledby="related-title">
