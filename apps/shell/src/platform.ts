@@ -210,7 +210,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
       intentPreferences.set(activeAccount(), archetype, selected.dTag);
       return selected.dTag;
     },
-    authorizeExplicitHandler: (sender, handler) => window.confirm(`${sender} wants to open ${handler}. Allow?`)
+    // Intent opens are ordinary shell navigation. Catalog resolution still validates
+    // explicit targets; this shell does not add per-invocation consent.
+    authorizeExplicitHandler: () => true
   });
   const resolveManifest = createManifestResolver(discoveryRelays);
   const onMessage = (event: MessageEvent): void => {
