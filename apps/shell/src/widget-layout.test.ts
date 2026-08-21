@@ -155,6 +155,19 @@ describe("viewport-first widget opening", () => {
     expect(placement.rect.row).toBe(0);
   });
 
+  it("restores valid stored geometry with a different size than the default", () => {
+    const preferred = { column: 1, row: 1, width: 2, height: 1 };
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 4, height: 2 },
+      [],
+      4,
+      visibleRows,
+      preferred
+    );
+    expect(placement.kind).toBe("visible");
+    expect(placement.rect).toBe(preferred);
+  });
+
   it("uses rows belonging to the current scrolled viewport", () => {
     const rows = visibleGridRange(-460, 0, 500, 220, 10);
     expect(rows).toEqual({ startRow: 2, endRow: 4 });

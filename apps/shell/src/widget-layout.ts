@@ -223,8 +223,7 @@ export const resolveOpeningPlacement = (
 ): OpeningPlacement => {
   const fullSize = { ...template, width: Math.min(template.width, columns) };
   const fullCandidates = positionsWithinRows(fullSize, columns, rows);
-  const visiblePreferred = preferred && preferred.width === fullSize.width && preferred.height === fullSize.height &&
-    rectWithinRows(preferred, rows) ? preferred : undefined;
+  const visiblePreferred = preferred && rectWithinRows(preferred, rows) ? preferred : undefined;
   const directCandidates = visiblePreferred
     ? [visiblePreferred, ...fullCandidates.filter((candidate) => candidate.column !== visiblePreferred.column || candidate.row !== visiblePreferred.row)]
     : fullCandidates;
@@ -696,7 +695,7 @@ export const createWidgetGrid = (
       animateLayout(elements);
       return;
     }
-    if (!layoutCustomized && added.length === 0) {
+    if (!layoutCustomized) {
       reset(true);
       return;
     }
