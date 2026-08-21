@@ -47,20 +47,17 @@ button { color: inherit; }
 .claim-deadline { justify-items:end; text-align:right; }
 .claim-deadline time { color:#8a5a00; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:1rem; font-variant-numeric:tabular-nums; font-weight:750; letter-spacing:.03em; }
 .related-action { margin-top:15px; }
-.history,.related,.discussion { border-top:1px solid var(--line); padding-top:28px; }
-.history h2,.related h2,.discussion h2 { margin:0 0 18px; color:#555b68; font-size:.76rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
-.history { padding-bottom:30px; }
-.history ol { display:grid; gap:0; margin:0; padding:0; list-style:none; }
-.history li { border-left:2px solid var(--line); padding:0 0 28px 20px; }
-.history li:last-child { padding-bottom:0; }
-.history li.current { border-left-color:var(--blue); }
-.history details > summary { cursor:pointer; }
+.related,.discussion { border-top:1px solid var(--line); padding-top:28px; }
+.related h2,.discussion h2 { margin:0 0 18px; color:#555b68; font-size:.76rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+.revision-entry details { min-width:0; }
+.revision-entry details > summary { cursor:pointer; }
 .history-summary { display:grid; gap:9px; padding-left:5px; }
 .history-summary > span { display:flex; align-items:center; gap:10px; }
 .history-summary > strong { font-size:1rem; }
 .history-summary small { display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--muted); font-size:.74rem; font-weight:400; }
 .history-summary code { margin-left:auto; }
-.history .status { padding:5px 10px; font-size:.72rem; }
+.revision-entry .status { padding:5px 10px; font-size:.72rem; }
+.activity-kind { color:var(--muted); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; }
 .current-label { color:var(--blue); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; }
 .history-note { margin:16px 0 0 5px; color:var(--muted); font-size:.8rem; }
 .revision-changes { display:grid; gap:14px; margin:18px 0 0 5px; }

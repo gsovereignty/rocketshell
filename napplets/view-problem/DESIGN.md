@@ -87,7 +87,7 @@ components:
 
 View Problem is a focused civic issue record: factual, open, and built for action. A white reading surface gives problem truth room to lead, while electric blue marks available actions with unmistakable clarity. Compact semantic state and protocol identifiers remain visible without competing with the title and description.
 
-Discussion behaves as a continuous ledger rather than a collection of floating cards. Thin rules, generous vertical rhythm, and restrained motion keep the surface calm and accountable. The setup view carries the same system through a sparse connection glyph and oversized, tightly set heading.
+Discussion and edit history share one chronological ledger rather than separate sections or floating cards. Thin rules, generous vertical rhythm, and restrained motion keep the surface calm and accountable. The setup view carries the same system through a sparse connection glyph and oversized, tightly set heading.
 
 **Key Characteristics:**
 
@@ -212,10 +212,10 @@ Top bar is a 72px-high horizontal rule with an underlined change action at left 
 
 ### Discussion Ledger
 
-Each comment aligns a deterministic generated avatar and shortened author pubkey
-with date and comment body. Avatar hue and two-character label derive from the
-pubkey, remaining stable without profile metadata or image loading. Entries stay
-separated by ledger rules and never become cards.
+Each comment aligns its author avatar and pubkey with date and body. Problem edits
+appear inline by timestamp with the same author treatment, plus status, revision
+identifier, and expandable field diff. Entries stay separated by ledger rules
+and never become cards.
 
 ### Motion
 

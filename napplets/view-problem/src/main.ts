@@ -110,6 +110,10 @@ function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
   const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
+  const activity = [
+    ...revisions.map((revision) => ({ type: "revision" as const, createdAt: revision.createdAt, revision })),
+    ...discussion.map((result) => ({ type: "comment" as const, createdAt: result.event.created_at, result }))
+  ].sort((a, b) => a.createdAt - b.createdAt);
   const effectiveClaim = selectEffectiveClaim(problem, comments, revisions);
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
@@ -135,23 +139,20 @@ function render() {
       ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
     </section>
-    <section class="history" aria-labelledby="history-title">
-      <h2 id="history-title">Edit history · ${revisions.length}</h2>
-      <ol>${revisions.map((revision) => `<li${revision.id === problem?.revisionId ? ' class="current"' : ""}>
-        <details${revision.id === problem?.revisionId ? " open" : ""}><summary><span class="history-summary"><span><span class="status status-${escapeHtml(revision.status)}"><i></i>${escapeHtml(statusLabel(revision.status))}</span>${revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</span><strong>${escapeHtml(revision.title)}</strong><small><span title="${escapeHtml(revision.author)}">${escapeHtml(authorName(revision.author))}</span><time datetime="${new Date(revision.createdAt * 1000).toISOString()}" title="${new Date(revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(revision.createdAt)}</time><code title="${revision.id}">${shortKey(revision.id)}</code></small></span></summary>
-        ${revisionChanges(revision, revisions)}</details>
-      </li>`).join("")}</ol>
-    </section>
     <section class="related" aria-labelledby="related-title">
       <h2 id="related-title">Related · ${related.length}</h2>
       ${related.length ? `<ul>${related.map((coordinate) => `<li><button type="button" data-related="${coordinate}"><span>Problem ${escapeHtml(shortKey(coordinate.split(":")[2]))}</span><code>${escapeHtml(shortKey(coordinate))}</code></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
     </section>
     <section class="discussion" aria-labelledby="discussion-title">
-      <h2 id="discussion-title">Discussion · ${discussion.length}</h2>
-      <ol>${discussion.length ? discussion.map(({ event }) => `<li>
-        ${authorAvatar(event.pubkey)}
-        <div><header><strong title="${escapeHtml(event.pubkey)}">${escapeHtml(authorName(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}" title="${new Date(event.created_at * 1000).toLocaleString()}">${formatRelativeTime(event.created_at)}</time></header><p>${escapeHtml(event.content)}</p></div>
-      </li>`).join("") : `<li class="empty">No comments yet. Start discussion.</li>`}</ol>
+      <h2 id="discussion-title">Discussion · ${discussion.length} comment${discussion.length === 1 ? "" : "s"} · ${revisions.length} edit${revisions.length === 1 ? "" : "s"}</h2>
+      <ol>${activity.length ? activity.map((item) => item.type === "revision" ? `<li class="revision-entry${item.revision.id === problem?.revisionId ? " current" : ""}">
+        ${authorAvatar(item.revision.author)}
+        <details${item.revision.id === problem?.revisionId ? " open" : ""}><summary><span class="history-summary"><span><strong class="activity-kind">Edit</strong><span class="status status-${escapeHtml(item.revision.status)}"><i></i>${escapeHtml(statusLabel(item.revision.status))}</span>${item.revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</span><strong>${escapeHtml(item.revision.title)}</strong><small><span title="${escapeHtml(item.revision.author)}">${escapeHtml(authorName(item.revision.author))}</span><time datetime="${new Date(item.revision.createdAt * 1000).toISOString()}" title="${new Date(item.revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(item.revision.createdAt)}</time><code title="${item.revision.id}">${shortKey(item.revision.id)}</code></small></span></summary>
+        ${revisionChanges(item.revision, revisions)}</details>
+      </li>` : `<li class="comment-entry-row">
+        ${authorAvatar(item.result.event.pubkey)}
+        <div><header><strong title="${escapeHtml(item.result.event.pubkey)}">${escapeHtml(authorName(item.result.event.pubkey))}</strong><time datetime="${new Date(item.result.event.created_at * 1000).toISOString()}" title="${new Date(item.result.event.created_at * 1000).toLocaleString()}">${formatRelativeTime(item.result.event.created_at)}</time></header><p>${escapeHtml(item.result.event.content)}</p></div>
+      </li>`).join("") : `<li class="empty">No discussion or edit history yet.</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>
         <textarea id="comment" rows="1" maxlength="4000" placeholder="Leave a comment…" ${pubkey && !busy ? "" : "disabled"}></textarea>
@@ -162,7 +163,7 @@ function render() {
   </article>`;
   bind();
   syncClaimCountdown(effectiveClaim?.expiresAt);
-  if (!reducedMotion) gsap.fromTo(".problem-copy > *, .history, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+  if (!reducedMotion) gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
 }
 
 function syncClaimCountdown(deadline?: number) {
