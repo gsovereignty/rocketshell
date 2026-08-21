@@ -3,8 +3,6 @@ import type { Runtime } from "@kehto/runtime";
 import { NOOP_TELEMETRY, type PlatformTelemetry } from "@project/platform-nap-contract";
 
 export interface ResourcePolicy {
-  readonly grants: ReadonlyMap<string, readonly string[]>;
-  readonly resolvePublisher?: (dTag: string, hash: string) => string | undefined;
   readonly maximumBytes?: number;
   readonly timeoutMs?: number;
   readonly allowedMimeTypes?: readonly string[];
@@ -12,11 +10,6 @@ export interface ResourcePolicy {
   readonly telemetry?: PlatformTelemetry;
 }
 
-export const resourceGrantKey = (publisher: string, dTag: string, hash: string): string => `${publisher}\0${dTag}\0${hash}`;
-export const resolveResourceGrants = (policy: Pick<ResourcePolicy, "grants" | "resolvePublisher">, dTag: string, hash: string): readonly string[] => {
-  const publisher = policy.resolvePublisher?.(dTag, hash);
-  return publisher ? policy.grants.get(resourceGrantKey(publisher, dTag, hash)) ?? [] : [];
-};
 const isLocalhost = (hostname: string): boolean => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 
 function validateUrl(raw: string, allowHttpLocalhost: boolean): URL {
@@ -80,8 +73,8 @@ export function registerResourceService(runtime: Runtime, policy: ResourcePolicy
   const info: ResourceInfo = { schemes: [{ scheme: "https", enabled: true }, { scheme: "http", enabled: policy.allowHttpLocalhost ?? false }], maxBytes: policy.maximumBytes ?? 8 * 1024 * 1024, maxUrls: 8 };
   runtime.registerService("resource", createResourceService({
     fetch: createPolicyFetch(policy),
-    isOriginGranted: (origin, grants) => grants.includes(origin),
-    getConnectGrants: (dTag, hash) => resolveResourceGrants(policy, dTag, hash),
+    isOriginGranted: () => true,
+    getConnectGrants: () => [],
     resolveIdentity: (windowId) => {
       const entry = runtime.sessionRegistry.getEntryByWindowId(windowId);
       return entry ? { dTag: entry.dTag, aggregateHash: entry.aggregateHash } : null;

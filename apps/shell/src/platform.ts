@@ -1,5 +1,5 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
-import { createHostAuditTrail, createIntentPreferenceStore, createShellSettingsStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, registerUploadService, resourceGrantKey, type ShellSettings, type ShellSettingsStore } from "@platform/host-services";
+import { createHostAuditTrail, createIntentPreferenceStore, createShellSettingsStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, registerUploadService, type ShellSettings, type ShellSettingsStore } from "@platform/host-services";
 import { createManifestResolver, createPlatformShellAdapter, createRelayConfiguration, registerCoreServices, type PlatformRelayConfiguration } from "@platform/kehto-adapters";
 import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import {
@@ -129,16 +129,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
       return `${accounts.publicKey || "signed-out"}:${identity.dTag}:${identity.aggregateHash}`;
     }
   });
-  const resourceGrants = new Map<string, readonly string[]>();
-  const resourcePublishers = new Map<string, string>();
-  const resourceIdentityKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
-  const registerResourcePublisher = (installation: Awaited<ReturnType<typeof packageStore.getActive>>): void => {
-    if (!installation) return;
-    resourcePublishers.set(resourceIdentityKey(installation.dTag, installation.aggregateHash), installation.manifestEvent.pubkey);
-  };
   registerResourceService(shell.runtime, {
-    grants: resourceGrants,
-    resolvePublisher: (dTag, hash) => resourcePublishers.get(resourceIdentityKey(dTag, hash)),
     allowHttpLocalhost: allowLocalPlaintext,
     telemetry: telemetry
   });
@@ -234,10 +225,6 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     : undefined;
   const builtInDTags = await installBuiltInNapplets(packageStore, import.meta.env.BASE_URL);
   for (const installation of await packageStore.listActive()) {
-    registerResourcePublisher(installation);
-    if (installation.dTag === fixtureDTag) {
-      resourceGrants.set(resourceGrantKey(installation.manifestEvent.pubkey, installation.dTag, installation.aggregateHash), [new URL(fixtureResourceUrl).origin]);
-    }
     for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
@@ -275,7 +262,6 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
       const installation = await installRemotePackage(packageStore, event, { allowHttpLocalhost: allowLocalPlaintext });
-      registerResourcePublisher(installation);
       for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
       const managed = await windows.create(installation.dTag);
       return { dTag: installation.dTag, title: installation.manifest.title ?? installation.dTag, windowId: managed.identity.windowId };
