@@ -129,16 +129,8 @@ function applyTheme(theme: Theme): void {
 
 async function start(): Promise<void> {
   renderWaiting();
-  try {
-    pubkey = await identity.getPublicKey();
-    identitySubscription = identity.onChanged((next) => {
-      pubkey = next;
-      if (current) { current.mayEdit = next === current.owner || current.event.tags.some((item) => item[0] === "p" && item[1] === next && item[3] === "maintainer"); renderEditor(current); }
-    });
-  } catch (error) {
-    console.error("Shell identity initialization failed", { error });
-    status("Shell identity unavailable; editing disabled.", true);
-  }
+  // Register before any await: shell delivers cold-start intents as soon as the
+  // iframe reports ready, while identity initialization may still be pending.
   try {
     intentSubscription = inc.on(EDIT_CONVENTION, (event) => {
       if (!isEditPayload(event.payload)) {
@@ -152,6 +144,16 @@ async function start(): Promise<void> {
   } catch (error) {
     console.error("Problem edit intent subscription failed", { convention: EDIT_CONVENTION, error });
     status("Shell intent delivery unavailable.", true);
+  }
+  try {
+    pubkey = await identity.getPublicKey();
+    identitySubscription = identity.onChanged((next) => {
+      pubkey = next;
+      if (current) { current.mayEdit = next === current.owner || current.event.tags.some((item) => item[0] === "p" && item[1] === next && item[3] === "maintainer"); renderEditor(current); }
+    });
+  } catch (error) {
+    console.error("Shell identity initialization failed", { error });
+    status("Shell identity unavailable; editing disabled.", true);
   }
   const runtime = window as Window & { napplet?: { theme?: unknown } };
   if (runtime.napplet?.theme) {
