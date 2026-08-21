@@ -13,6 +13,7 @@ import {
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
 import { profileFromEvents, type ProfileData } from "./profile";
+import { formatRelativeTime } from "./time";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -65,11 +66,12 @@ const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.
 const commentEvents = () => comments.filter(({ event }) => !event.tags.some((tag) => tag[0] === "claim" || tag[0] === "patched"));
 
 const authorName = (author: string) => profiles.get(author)?.name ?? shortKey(author);
+const fallbackAvatar = (author: string) => `<span class="avatar" style="--avatar-hue:${pubkeyAvatarHue(author)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(authorName(author)))}</span>`;
 const authorAvatar = (author: string) => {
   const profile = profiles.get(author);
   const handle = avatarHandles.get(author);
-  if (profile?.picture && handle) return `<img class="avatar" src="${escapeHtml(handle.url)}" alt="">`;
-  return `<span class="avatar" style="--avatar-hue:${pubkeyAvatarHue(author)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(authorName(author)))}</span>`;
+  if (profile?.picture && handle) return `<img class="avatar" src="${escapeHtml(handle.url)}" data-avatar-author="${author}" alt="">`;
+  return fallbackAvatar(author);
 };
 
 function render() {
@@ -96,7 +98,7 @@ function render() {
       <h2 id="discussion-title">Discussion · ${discussion.length}</h2>
       <ol>${discussion.length ? discussion.map(({ event }) => `<li>
         ${authorAvatar(event.pubkey)}
-        <div><header><strong title="${escapeHtml(event.pubkey)}">${escapeHtml(authorName(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}">${new Date(event.created_at * 1000).toLocaleDateString()}</time></header><p>${escapeHtml(event.content)}</p></div>
+        <div><header><strong title="${escapeHtml(event.pubkey)}">${escapeHtml(authorName(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}" title="${new Date(event.created_at * 1000).toLocaleString()}">${formatRelativeTime(event.created_at)}</time></header><p>${escapeHtml(event.content)}</p></div>
       </li>`).join("") : `<li class="empty">No comments yet. Start discussion.</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>
@@ -111,6 +113,13 @@ function render() {
 }
 
 function bind() {
+  document.querySelectorAll<HTMLImageElement>("[data-avatar-author]").forEach((image) => image.addEventListener("error", () => {
+    const author = image.dataset.avatarAuthor;
+    if (!author) return;
+    avatarHandles.get(author)?.revoke();
+    avatarHandles.delete(author);
+    image.outerHTML = fallbackAvatar(author);
+  }, { once: true }));
   document.querySelector("#change-problem")?.addEventListener("click", () => showSetup());
   document.querySelector("#claim")?.addEventListener("click", () => void publishAction("I am claiming this problem.", "claim"));
   document.querySelector("#report-related")?.addEventListener("click", () => void reportRelated());
@@ -182,7 +191,15 @@ async function loadProfiles(authors: string[]) {
       const profile = profileFromEvents(author, response.events.map(({ event }) => event));
       if (!profile) continue;
       profiles.set(author, profile);
-      if (profile.picture) avatarHandles.set(author, resource.bytesAsObjectURL(profile.picture));
+      if (profile.picture) {
+        try {
+          const blob = await resource.bytes(profile.picture);
+          const url = URL.createObjectURL(blob);
+          avatarHandles.set(author, { url, revoke: () => URL.revokeObjectURL(url) });
+        } catch {
+          // Name and generated initials remain visible when picture fetch fails.
+        }
+      }
     }
     if (problem) render();
   } catch {
