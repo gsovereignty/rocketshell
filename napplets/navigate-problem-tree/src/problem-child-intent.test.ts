@@ -22,8 +22,8 @@ describe("problem child intent", () => {
 });
 
 describe("problem viewer intent", () => {
-  it("keeps the problem tree visible", () => {
-    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: false, reuse: true });
+  it("surfaces the opened problem viewer", () => {
+    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: true, reuse: true });
   });
 
   it("requires an open handler for the note convention", () => {
