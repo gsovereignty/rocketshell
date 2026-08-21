@@ -34,6 +34,7 @@ let childComposerBusy = false;
 let problemEvents: RelayEventResult[] = [];
 let problemSubscription: OutboxSubscription | undefined;
 let loadGeneration = 0;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
@@ -143,7 +144,10 @@ function renderList() {
       <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable ? "" : "disabled"}
         aria-label="Open ${escapeHtml(node.title)} in problem viewer" title="${noteHandlerAvailable ? "Open problem details" : "Problem viewer is not installed"}">${externalIcon}</button>
     </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
-  gsap.fromTo(".problem-row", { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
+  const rows = list.querySelectorAll<HTMLElement>(".problem-row");
+  if (!reducedMotion.matches && rows.length > 0) {
+    gsap.fromTo(rows, { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
+  }
 }
 
 function renderApp() {
