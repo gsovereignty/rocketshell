@@ -1,5 +1,21 @@
 # Napplet implementation rules
 
+## Error handling
+
+- Never silently swallow an exception. Every `catch` must bind the original
+  error and then do at least one of: show a useful error to the user, report it
+  with `console.error` or `console.warn` plus operation-specific context, or
+  rethrow it.
+- Fallback behavior is allowed only after the original failure is reported.
+  Do not use empty `catch` blocks, `catch { ... }`, or context-free forms such
+  as `.catch(() => fallback)`.
+- Error reports must identify the failed operation and include safe identifiers
+  needed to diagnose it. Do not log secrets, decrypted content, private keys,
+  authorization material, or full sensitive payloads.
+- Preserve graceful degradation for optional capabilities, but make the reason
+  observable to developers and, when it affects the requested user action,
+  visible in the napplet UI.
+
 ## Intent navigation
 
 - Open another napplet through the public intent contract using its archetype and

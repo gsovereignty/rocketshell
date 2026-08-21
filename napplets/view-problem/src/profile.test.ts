@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { profileFromEvents } from "./profile";
 
 describe("profile metadata", () => {
@@ -13,11 +13,14 @@ describe("profile metadata", () => {
   });
 
   it("falls back through malformed and empty metadata", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const profile = profileFromEvents(pubkey, [
       { pubkey, created_at: 3, content: "{" },
       { pubkey, created_at: 2, content: JSON.stringify({ name: "  " }) },
       { pubkey, created_at: 1, content: JSON.stringify({ nip05: "ada@example.com" }) },
     ]);
     expect(profile).toEqual({ name: "ada@example.com", picture: undefined });
+    expect(warning).toHaveBeenCalledWith("Ignoring malformed profile metadata", expect.objectContaining({ pubkey }));
+    warning.mockRestore();
   });
 });

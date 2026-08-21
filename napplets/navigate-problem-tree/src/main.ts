@@ -261,8 +261,14 @@ async function loadDag(value: string) {
     });
     const [{ events }, noteAvailability, childAvailability] = await Promise.all([
       outbox.query(filters, { timeoutMs: 8000 }),
-      intent.available("note").catch(() => undefined),
-      intent.available(PROBLEM_CHILD_ARCHETYPE).catch(() => undefined)
+      intent.available("note").catch((error) => {
+        console.warn("Problem viewer availability check failed", { archetype: "note", error });
+        return undefined;
+      }),
+      intent.available(PROBLEM_CHILD_ARCHETYPE).catch((error) => {
+        console.warn("Problem composer availability check failed", { archetype: PROBLEM_CHILD_ARCHETYPE, error });
+        return undefined;
+      })
     ]);
     if (generation !== loadGeneration) return;
     problemEvents = mergeProblemEvents(problemEvents, events).events;

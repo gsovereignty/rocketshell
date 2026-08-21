@@ -196,14 +196,14 @@ async function loadProfiles(authors: string[]) {
           const blob = await resource.bytes(profile.picture);
           const url = URL.createObjectURL(blob);
           avatarHandles.set(author, { url, revoke: () => URL.revokeObjectURL(url) });
-        } catch {
-          // Name and generated initials remain visible when picture fetch fails.
+        } catch (error) {
+          console.warn("Profile picture fetch failed; using generated avatar", { author, picture: profile.picture, error });
         }
       }
     }
     if (problem) render();
-  } catch {
-    // Pubkey fallback remains usable when metadata or image access is unavailable.
+  } catch (error) {
+    console.warn("Profile metadata query failed; using pubkey fallbacks", { authors: missing, error });
   }
 }
 
@@ -256,13 +256,15 @@ async function start() {
       }
       void openProblemRevision(event.payload.target.id);
     });
-  } catch {
+  } catch (error) {
+    console.error("Problem-open intent subscription failed", { error });
     liveMessage = "Shell intent delivery unavailable. Paste a problem coordinate to continue.";
   }
   try {
     pubkey = await identity.getPublicKey();
     identitySubscription = identity.onChanged((next) => { pubkey = next; if (problem) render(); });
-  } catch {
+  } catch (error) {
+    console.error("Shell identity initialization failed", { error });
     pubkey = "";
     liveMessage = "Shell identity unavailable. Viewing remains available; publishing is disabled.";
   }

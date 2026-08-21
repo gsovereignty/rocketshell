@@ -22,8 +22,8 @@ export function profileFromEvents(pubkey: string, events: MetadataEvent[]): Prof
       const name = nonEmptyString(content.display_name) ?? nonEmptyString(content.name) ?? nonEmptyString(content.nip05);
       const picture = nonEmptyString(content.picture);
       if (name || picture) return { name: name ?? pubkey, picture };
-    } catch {
-      // Ignore malformed metadata and try an older replaceable event.
+    } catch (error) {
+      console.warn("Ignoring malformed profile metadata", { pubkey, createdAt: event.created_at, error });
     }
   }
   return undefined;
