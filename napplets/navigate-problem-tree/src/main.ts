@@ -31,6 +31,7 @@ let activeFilter = "all";
 let noteHandlerAvailable = false;
 let problemChildHandlerAvailable = false;
 let childComposerBusy = false;
+let problemViewerBusy = false;
 let problemEvents: RelayEventResult[] = [];
 let problemSubscription: OutboxSubscription | undefined;
 let loadGeneration = 0;
@@ -125,8 +126,14 @@ function renderList() {
   const filters = document.querySelector<HTMLElement>("#filters");
   const sectionTitle = document.querySelector<HTMLElement>("#section-title");
   const logChildButton = document.querySelector<HTMLButtonElement>("#log-child");
-  if (!list || !filters || !sectionTitle || !logChildButton) return;
+  const openSelectedButton = document.querySelector<HTMLButtonElement>("#open-selected");
+  if (!list || !filters || !sectionTitle || !logChildButton || !openSelectedButton) return;
   sectionTitle.textContent = "Actionable problems";
+  openSelectedButton.disabled = !noteHandlerAvailable || problemViewerBusy;
+  openSelectedButton.textContent = problemViewerBusy ? "Opening problem…" : "Open selected problem";
+  openSelectedButton.title = noteHandlerAvailable
+    ? `Open ${parent.title} in problem viewer`
+    : "Problem viewer is not installed";
   logChildButton.disabled = !problemChildHandlerAvailable || childComposerBusy;
   logChildButton.title = problemChildHandlerAvailable
     ? `Log a child problem under ${parent.title}`
@@ -141,7 +148,7 @@ function renderList() {
         ${node.forkCount ? `<span class="fork">${node.forkCount + 1} heads</span>` : ""}
         <span class="status status-${node.status}">${statusLabel(node.status)}</span>
       </button>
-      <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable ? "" : "disabled"}
+      <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable && !problemViewerBusy ? "" : "disabled"}
         aria-label="Open ${escapeHtml(node.title)} in problem viewer" title="${noteHandlerAvailable ? "Open problem details" : "Problem viewer is not installed"}">${externalIcon}</button>
     </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
   const rows = list.querySelectorAll<HTMLElement>(".problem-row");
@@ -160,7 +167,7 @@ function renderApp() {
       </aside>
       <section class="list-pane" aria-labelledby="section-title">
         <header class="list-header">
-          <div class="list-heading"><h2 id="section-title"></h2><button id="log-child" type="button">Log child problem</button></div>
+          <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="open-selected" type="button">Open selected problem</button><button id="log-child" type="button">Log child problem</button></div></div>
           <div id="filters" class="filters" aria-label="Filter children"></div>
         </header>
         <ol id="problem-list" class="problem-list"></ol>
@@ -187,6 +194,8 @@ function bindWorkspace() {
       renderList();
     } else if (openButton?.dataset.open) {
       void openProblem(openButton.dataset.open);
+    } else if (target.closest("#open-selected")) {
+      void openProblem(selected);
     } else if (target.closest("#log-child")) {
       void logChildProblem();
     } else if (target.closest("#change-root")) showSetup();
@@ -225,16 +234,21 @@ async function logChildProblem() {
 async function openProblem(coordinate: string) {
   const node = dag?.nodes.get(coordinate);
   const status = document.querySelector<HTMLOutputElement>("#app-status");
-  if (!node || !status) return;
-  status.textContent = "Opening selected problem…";
+  if (!node || !status || problemViewerBusy) return;
+  problemViewerBusy = true;
+  renderList();
+  status.textContent = `Opening ${node.title}…`;
   try {
     const result = await intent.open(PROBLEM_VIEWER_ARCHETYPE, { target: { type: "event", id: node.revisionId } }, {
       convention: PROBLEM_VIEWER_CONVENTION, behavior: PROBLEM_VIEWER_BEHAVIOR
     });
     if (!result.ok || !result.handled) throw new Error(result.error ?? "View Problem did not accept this problem.");
-    status.textContent = "Problem opened in View Problem.";
+    status.textContent = `${node.title} opened in problem viewer.`;
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : "Problem could not be opened.";
+  } finally {
+    problemViewerBusy = false;
+    renderList();
   }
 }
 
