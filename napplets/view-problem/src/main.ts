@@ -63,7 +63,7 @@ function showSetup(message = "") {
 }
 
 const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
-const commentEvents = () => comments.filter(({ event }) => !event.tags.some((tag) => tag[0] === "claim" || tag[0] === "patched"));
+const commentEvents = () => comments.filter(({ event }) => !event.tags.some((tag) => tag[0] === "patched"));
 
 const authorName = (author: string) => profiles.get(author)?.name ?? shortKey(author);
 const fallbackAvatar = (author: string) => `<span class="avatar" style="--avatar-hue:${pubkeyAvatarHue(author)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(authorName(author)))}</span>`;
