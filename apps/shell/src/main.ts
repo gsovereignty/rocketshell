@@ -59,13 +59,16 @@ const settingsBody = document.querySelector<HTMLElement>("#settings-body");
 const settingsStatus = document.querySelector<HTMLElement>("#settings-status");
 const settingsClose = document.querySelector<HTMLButtonElement>("#settings-close");
 const windowsContainer = document.querySelector<HTMLElement>("#windows");
+const screenNavigation = document.querySelector<HTMLElement>("#screen-nav");
 const dockShell = document.querySelector<HTMLElement>("#dock-shell");
 const dock = document.querySelector<HTMLElement>("#napplet-dock");
 const dockItems = document.querySelector<HTMLUListElement>("#dock-items");
 const dockStatus = document.querySelector<HTMLElement>("#dock-status");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(hover: none)");
-const widgetGrid = windowsContainer ? createWidgetGrid(windowsContainer, reducedMotion) : null;
+const widgetGrid = windowsContainer
+  ? createWidgetGrid(windowsContainer, reducedMotion, window.localStorage, screenNavigation ?? undefined)
+  : null;
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;

@@ -88,6 +88,7 @@ html {
   scroll-padding-top: var(--bar-height);
   scroll-snap-type: y mandatory;
 }
+html[data-screen-scrolling="true"] { scroll-snap-type: none; }
 [hidden] { display: none !important; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 body { margin: 0; min-height: 100vh; background: var(--bg); }
@@ -110,6 +111,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   backdrop-filter: saturate(145%) blur(18px);
 }
 .menu-cluster { position: relative; display: flex; align-items: center; height: 100%; }
+.menu-center { display: flex; min-width: 0; align-items: center; justify-content: center; gap: .45rem; }
 .menu-tools { display: flex; align-items: center; justify-self: end; gap: .25rem; }
 #relay-status {
   display: inline-flex;
@@ -136,6 +138,48 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+#screen-nav {
+  display: flex;
+  max-width: min(28vw, 18rem);
+  align-items: center;
+  gap: .25rem;
+  overflow-x: auto;
+  padding: .2rem;
+  scrollbar-width: none;
+}
+#screen-nav:empty { display: none; }
+#screen-nav::-webkit-scrollbar { display: none; }
+.screen-preview {
+  --screen-columns: 4;
+  --screen-rows: 2;
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 1.7rem;
+  padding: .18rem;
+  grid-template-columns: repeat(var(--screen-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--screen-rows), minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: .38rem;
+  background: var(--surface);
+  cursor: pointer;
+}
+.screen-preview:hover { border-color: var(--muted); background: var(--surface-raised); }
+.screen-preview[aria-current="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 3px 10px var(--accent-glow);
+}
+.screen-preview-window {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 1px;
+  background: var(--muted);
+  opacity: .5;
+}
+.screen-preview[aria-current="true"] .screen-preview-window { background: var(--accent); opacity: .82; }
 .menu-button {
   display: inline-flex;
   align-items: center;

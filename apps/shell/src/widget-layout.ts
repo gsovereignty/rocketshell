@@ -362,7 +362,8 @@ export interface WidgetGridController {
 export const createWidgetGrid = (
   container: HTMLElement,
   reducedMotion: MediaQueryList = window.matchMedia("(prefers-reduced-motion: reduce)"),
-  storage: LayoutStorage = window.localStorage
+  storage: LayoutStorage = window.localStorage,
+  screenNavigation?: HTMLElement
 ): WidgetGridController => {
   let profile = profileForWidth(container.getBoundingClientRect().width);
   const storedLayouts = readStoredLayouts(storage);
@@ -378,6 +379,97 @@ export const createWidgetGrid = (
   snapTargets.className = "window-snap-targets";
   snapTargets.setAttribute("aria-hidden", "true");
   container.append(preview, snapTargets);
+  const scrollPosition = { y: window.scrollY };
+  let scrollTween: gsap.core.Tween | null = null;
+  let activePageFrame = 0;
+
+  const updateActivePage = (): void => {
+    activePageFrame = 0;
+    if (!screenNavigation) return;
+    const barHeight = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar-height")) || 0;
+    const targets = Array.from(snapTargets.children) as HTMLElement[];
+    const activeIndex = targets.reduce((closest, target, index) =>
+      Math.abs(target.getBoundingClientRect().top - barHeight) <
+        Math.abs((targets[closest]?.getBoundingClientRect().top ?? 0) - barHeight) ? index : closest, 0);
+    screenNavigation.querySelectorAll<HTMLButtonElement>(".screen-preview").forEach((button, index) => {
+      if (index === activeIndex) button.setAttribute("aria-current", "true");
+      else button.removeAttribute("aria-current");
+    });
+  };
+
+  const scheduleActivePageUpdate = (): void => {
+    if (!activePageFrame) activePageFrame = window.requestAnimationFrame(updateActivePage);
+  };
+
+  const scrollToPage = (page: number): void => {
+    const target = snapTargets.children[page];
+    if (!(target instanceof HTMLElement)) return;
+    const barHeight = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar-height")) || 0;
+    const destination = Math.max(0, window.scrollY + target.getBoundingClientRect().top - barHeight);
+    scrollTween?.kill();
+    if (reducedMotion.matches) {
+      window.scrollTo(0, destination);
+      scheduleActivePageUpdate();
+      return;
+    }
+    scrollPosition.y = window.scrollY;
+    document.documentElement.dataset.screenScrolling = "true";
+    scrollTween = gsap.to(scrollPosition, {
+      y: destination,
+      duration: .46,
+      ease: "power4.out",
+      overwrite: true,
+      onUpdate: () => window.scrollTo(0, scrollPosition.y),
+      onComplete: () => {
+        delete document.documentElement.dataset.screenScrolling;
+        window.scrollTo(0, destination);
+        scrollTween = null;
+        scheduleActivePageUpdate();
+      },
+      onInterrupt: () => {
+        delete document.documentElement.dataset.screenScrolling;
+        scrollTween = null;
+      }
+    });
+  };
+
+  const onScreenNavigationClick = (event: MouseEvent): void => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>(".screen-preview") : null;
+    if (!button || !screenNavigation?.contains(button)) return;
+    scrollToPage(Number(button.dataset.page));
+  };
+
+  const syncScreenNavigation = (pageRows: readonly number[], rowsPerPage: number): void => {
+    if (!screenNavigation) return;
+    const entries = [...rects];
+    const buttons = pageRows.map((pageRow, page) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "screen-preview";
+      button.dataset.page = String(page);
+      button.style.setProperty("--screen-columns", String(profile.columns));
+      button.style.setProperty("--screen-rows", String(rowsPerPage));
+      const pageEnd = pageRow + rowsPerPage;
+      const visible = entries.filter(([, rect]) => rect.row < pageEnd && rect.row + rect.height > pageRow);
+      const titles = visible.map(([element]) =>
+        element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || "Napplet");
+      button.setAttribute("aria-label", `Screen ${page + 1}${titles.length ? `: ${titles.join(", ")}` : ""}`);
+      button.title = button.getAttribute("aria-label") ?? "";
+      for (const [, rect] of visible) {
+        const miniature = document.createElement("span");
+        const clippedStart = Math.max(rect.row, pageRow);
+        const clippedEnd = Math.min(rect.row + rect.height, pageEnd);
+        miniature.className = "screen-preview-window";
+        miniature.style.gridColumn = `${rect.column + 1} / span ${rect.width}`;
+        miniature.style.gridRow = `${clippedStart - pageRow + 1} / span ${clippedEnd - clippedStart}`;
+        miniature.setAttribute("aria-hidden", "true");
+        button.append(miniature);
+      }
+      return button;
+    });
+    screenNavigation.replaceChildren(...buttons);
+    scheduleActivePageUpdate();
+  };
 
   const syncSnapTargets = (): void => {
     const rowsPerPage = profile.name === "mobile" ? 1 : 2;
@@ -386,10 +478,11 @@ export const createWidgetGrid = (
     pageRows.forEach((row, index) => {
       const target = targets[index] ?? document.createElement("span");
       target.className = "window-snap-target";
-      target.style.gridRow = String(row + 1);
+      target.style.gridRow = `${row + 1} / span ${rowsPerPage}`;
       if (!target.parentElement) snapTargets.append(target);
     });
     targets.slice(pageRows.length).forEach((target) => target.remove());
+    syncScreenNavigation(pageRows, rowsPerPage);
   };
 
   const occupiedExcept = (element: HTMLElement): WidgetRect[] =>
@@ -954,6 +1047,9 @@ export const createWidgetGrid = (
   container.addEventListener("pointerup", endDrag);
   container.addEventListener("pointercancel", endDrag);
   container.addEventListener("keydown", onKeyDown);
+  screenNavigation?.addEventListener("click", onScreenNavigationClick);
+  window.addEventListener("scroll", scheduleActivePageUpdate, { passive: true });
+  window.addEventListener("resize", scheduleActivePageUpdate);
   sync();
 
   return {
@@ -966,6 +1062,13 @@ export const createWidgetGrid = (
       container.removeEventListener("pointerup", endDrag);
       container.removeEventListener("pointercancel", endDrag);
       container.removeEventListener("keydown", onKeyDown);
+      screenNavigation?.removeEventListener("click", onScreenNavigationClick);
+      window.removeEventListener("scroll", scheduleActivePageUpdate);
+      window.removeEventListener("resize", scheduleActivePageUpdate);
+      if (activePageFrame) window.cancelAnimationFrame(activePageFrame);
+      scrollTween?.kill();
+      delete document.documentElement.dataset.screenScrolling;
+      screenNavigation?.replaceChildren();
       preview.remove();
       snapTargets.remove();
       rects.clear();
