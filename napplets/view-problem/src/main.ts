@@ -4,7 +4,7 @@
   FORM: User-pinned problem-detail composition extended from sibling tracker UI.
   FINISH: Operate mode; responsive sandbox controls, visible state, restrained motion.
 */
-import { identity, inc, intent, outbox, type OutboxSubscription, type RelayEventResult, type Subscription } from "@napplet/sdk";
+import { identity, inc, intent, outbox, resource, type OutboxSubscription, type RelayEventResult, type Subscription } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
@@ -12,6 +12,7 @@ import {
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
+import { profileFromEvents, type ProfileData } from "./profile";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -30,6 +31,8 @@ let intentSubscription: Subscription | undefined;
 let busy = false;
 let liveMessage = "";
 let intentReceived = false;
+const profiles = new Map<string, ProfileData>();
+const avatarHandles = new Map<string, { url: string; revoke(): void }>();
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => ({
@@ -61,6 +64,14 @@ function showSetup(message = "") {
 const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
 const commentEvents = () => comments.filter(({ event }) => !event.tags.some((tag) => tag[0] === "claim" || tag[0] === "patched"));
 
+const authorName = (author: string) => profiles.get(author)?.name ?? shortKey(author);
+const authorAvatar = (author: string) => {
+  const profile = profiles.get(author);
+  const handle = avatarHandles.get(author);
+  if (profile?.picture && handle) return `<img class="avatar" src="${escapeHtml(handle.url)}" alt="">`;
+  return `<span class="avatar" style="--avatar-hue:${pubkeyAvatarHue(author)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(authorName(author)))}</span>`;
+};
+
 function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
@@ -84,8 +95,8 @@ function render() {
     <section class="discussion" aria-labelledby="discussion-title">
       <h2 id="discussion-title">Discussion · ${discussion.length}</h2>
       <ol>${discussion.length ? discussion.map(({ event }) => `<li>
-        <span class="avatar" style="--avatar-hue:${pubkeyAvatarHue(event.pubkey)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(event.pubkey))}</span>
-        <div><header><strong title="${escapeHtml(event.pubkey)}">${escapeHtml(shortKey(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}">${new Date(event.created_at * 1000).toLocaleDateString()}</time></header><p>${escapeHtml(event.content)}</p></div>
+        ${authorAvatar(event.pubkey)}
+        <div><header><strong title="${escapeHtml(event.pubkey)}">${escapeHtml(authorName(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}">${new Date(event.created_at * 1000).toLocaleDateString()}</time></header><p>${escapeHtml(event.content)}</p></div>
       </li>`).join("") : `<li class="empty">No comments yet. Start discussion.</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>
@@ -158,6 +169,25 @@ function receiveDiscussion(result: RelayEventResult) {
   collection.push(result);
   if (problem) related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
   render();
+  if (result.event.kind === COMMENT_KIND && !profiles.has(result.event.pubkey)) void loadProfiles([result.event.pubkey]);
+}
+
+async function loadProfiles(authors: string[]) {
+  const missing = [...new Set(authors)].filter((author) => !profiles.has(author));
+  if (!missing.length) return;
+  missing.forEach((author) => profiles.set(author, { name: shortKey(author) }));
+  try {
+    const response = await outbox.query({ kinds: [0], authors: missing, limit: missing.length }, { limit: missing.length, timeoutMs: 8000 });
+    for (const author of missing) {
+      const profile = profileFromEvents(author, response.events.map(({ event }) => event));
+      if (!profile) continue;
+      profiles.set(author, profile);
+      if (profile.picture) avatarHandles.set(author, resource.bytesAsObjectURL(profile.picture));
+    }
+    if (problem) render();
+  } catch {
+    // Pubkey fallback remains usable when metadata or image access is unavailable.
+  }
 }
 
 async function loadProblem(value: string) {
@@ -176,6 +206,7 @@ async function loadProblem(value: string) {
     discussionSubscription = outbox.subscribe(filters, { timeoutMs: 8000 });
     discussionSubscription.on("event", receiveDiscussion);
     render();
+    void loadProfiles(comments.map(({ event }) => event.pubkey));
   } catch (error) { showSetup(error instanceof Error ? error.message : "Problem could not be loaded."); }
 }
 
@@ -223,5 +254,6 @@ async function start() {
 
 addEventListener("beforeunload", () => {
   discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close();
+  avatarHandles.forEach((handle) => handle.revoke());
 });
 void start();
