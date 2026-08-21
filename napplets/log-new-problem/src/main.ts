@@ -1,5 +1,5 @@
 import { identity, inc, outbox } from "@napplet/sdk";
-import type { Subscription } from "@napplet/sdk";
+import type { OutboxSubscription, RelayEventResult, Subscription } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
@@ -74,6 +74,9 @@ let pubkey = "";
 let parent: ParentContext | undefined;
 let childRequestPending = false;
 let intentSubscription: Subscription | undefined;
+let parentSubscription: OutboxSubscription | undefined;
+let parentEvents: RelayEventResult[] = [];
+let parentLoadGeneration = 0;
 
 const animate = (target: gsap.TweenTarget, vars: gsap.TweenVars) => {
   if (reducedMotion) return;
@@ -85,7 +88,35 @@ function setStatus(message: string, state: "idle" | "busy" | "error" | "success"
   statusLine.dataset.state = state;
 }
 
+function stopParentSubscription() {
+  parentLoadGeneration += 1;
+  parentSubscription?.close();
+  parentSubscription = undefined;
+  parentEvents = [];
+}
+
+function receiveParentRevision(problemIdValue: string, result: RelayEventResult) {
+  if (parentEvents.some(({ event }) => event.id === result.event.id)) return;
+  parentEvents.push(result);
+  if (!parent || parent.problemId !== problemIdValue) return;
+  try {
+    const previous = parent;
+    const next = resolveParent(problemIdValue, parentEvents);
+    if (next.revisionId === previous.revisionId) return;
+    parent = next;
+    parentTitle.textContent = next.title;
+    const problemStatus = document.querySelector<HTMLSelectElement>("#status")!;
+    if (problemStatus.value === previous.defaultChildStatus) problemStatus.value = next.defaultChildStatus;
+    setStatus("Parent updated live. Ready to publish child.");
+  } catch (error) {
+    console.warn("Live parent revision could not become current", { problemId: problemIdValue, eventId: result.event.id, error });
+    setStatus(error instanceof Error ? error.message : "Live parent revision could not be applied.", "error");
+  }
+}
+
 async function loadParent(problemIdValue: string) {
+  stopParentSubscription();
+  const generation = parentLoadGeneration;
   childRequestPending = true;
   parent = undefined;
   mode.textContent = "Child";
@@ -96,8 +127,26 @@ async function loadParent(problemIdValue: string) {
   setStatus("Looking up parent problem…", "busy");
   animate(parentCard, {});
   try {
+    const buffered: RelayEventResult[] = [];
+    let hydrated = false;
+    const subscription = outbox.subscribe({ kinds: [31971], "#d": [problemIdValue] }, { timeoutMs: 8000 });
+    parentSubscription = subscription;
+    subscription.on("event", (result) => {
+      if (parentSubscription !== subscription) return;
+      if (hydrated) receiveParentRevision(problemIdValue, result);
+      else buffered.push(result);
+    });
+    subscription.on("closed", (reason) => {
+      if (parentSubscription !== subscription) return;
+      parentSubscription = undefined;
+      console.warn("Live parent problem subscription closed", { problemId: problemIdValue, reason });
+      setStatus("Live parent updates stopped. Reopen composer to reconnect.", "error");
+    });
     const response = await outbox.query({ kinds: [31971], "#d": [problemIdValue], limit: 200 }, { limit: 200, timeoutMs: 8000 });
-    parent = resolveParent(problemIdValue, response.events);
+    if (generation !== parentLoadGeneration) return;
+    parentEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
+    parent = resolveParent(problemIdValue, parentEvents);
+    hydrated = true;
     parentTitle.textContent = parent.title;
     parentId.textContent = parent.problemId;
     const status = document.querySelector<HTMLSelectElement>("#status")!;
@@ -106,6 +155,9 @@ async function loadParent(problemIdValue: string) {
     publishButton.disabled = !pubkey;
     setStatus("Parent resolved. Ready to publish child.");
   } catch (error) {
+    if (generation !== parentLoadGeneration) return;
+    console.error("Parent problem load failed", { problemId: problemIdValue, error });
+    stopParentSubscription();
     childRequestPending = false;
     parentTitle.textContent = "Parent unavailable";
     setStatus(error instanceof Error ? error.message : "Parent lookup failed.", "error");
@@ -192,5 +244,5 @@ async function start() {
   }
 }
 
-addEventListener("beforeunload", () => intentSubscription?.close());
+addEventListener("beforeunload", () => { parentSubscription?.close(); intentSubscription?.close(); });
 void start();
