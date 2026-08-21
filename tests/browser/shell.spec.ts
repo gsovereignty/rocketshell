@@ -172,6 +172,27 @@ test("moves widgets by toolbar drag and keeps resize handles independent", async
   await expect.poll(() => page.locator(".napplet-window").first().evaluate((element) => element.style.gridColumn)).toBe(persistedFirstColumn);
 });
 
+test("restores saved geometry when only one window is open", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");
+  await page.evaluate(() => {
+    localStorage.setItem("shell.widget-layout.v1", JSON.stringify({
+      version: 1,
+      profiles: {
+        laptop: {
+          "platform-fixture#0": { column: 1, row: 1, width: 2, height: 1 }
+        }
+      }
+    }));
+  });
+
+  await page.reload();
+
+  const window = page.locator(".napplet-window").first();
+  await expect(window).toHaveCSS("grid-column", "2 / span 2");
+  await expect(window).toHaveCSS("grid-row", "2 / span 1");
+});
+
 test("settles intent result before caller navigation unmounts it", async ({ page }) => {
   await page.goto("./");
   const frame = page.frameLocator('iframe[title="platform-fixture"]');

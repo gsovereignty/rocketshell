@@ -459,10 +459,6 @@ export const createWidgetGrid = (
     for (const element of elements) decorate(element);
     for (const element of [...rects.keys()]) if (!elements.includes(element)) rects.delete(element);
     if (rects.size === 0) {
-      if (elements.length === 1) {
-        reset(true);
-        return;
-      }
       const saved = storedLayouts.profiles[profile.name];
       const keys = widgetKeys(elements);
       let restored = 0;
