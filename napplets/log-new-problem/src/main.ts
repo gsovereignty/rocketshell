@@ -29,8 +29,8 @@ root.innerHTML = `
       </div>
       <div class="field">
         <label for="description">What is happening?</label>
-        <textarea id="description" name="description" rows="8" maxlength="12000" required placeholder="Describe current behavior, impact, and enough context to understand the problem."></textarea>
-        <span class="hint"><output id="count">0</output> / 12,000</span>
+        <textarea id="description" name="description" rows="12" required placeholder="Describe current behavior, impact, and enough context to understand the problem."></textarea>
+        <span class="hint"><output id="count">0</output> characters</span>
       </div>
       <details id="advanced">
         <summary><span>Protocol options</span><span class="summary-note">Optional</span></summary>
