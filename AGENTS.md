@@ -30,6 +30,17 @@
   have a cited authoritative specification. If no standard exists, say so and
   use an existing standards-aligned mechanism; do not create an ad hoc field
   such as `["icon", "https://example.com/icon.png"]`.
+- This prohibition also covers host-only and implementation-internal values
+  that change protocol meaning: permission or grant tokens, wildcard and
+  scheme-wide matching, capability semantics, policy identifiers, fallback
+  conventions, and interpretations of public API fields. Before implementing
+  any such value or behavior, cite the current governing specification or the
+  public API documentation that defines its exact syntax and semantics. An
+  internal detail is not exempt when it affects what a napplet may request or
+  what the shell accepts. If no authoritative mechanism supports the required
+  behavior, stop that implementation, report the standards gap, and propose an
+  upstream specification or public-API change. Never create a local convention
+  as a compatibility shortcut.
 - Packaged napplet code belongs under `napplets/<napplet>/`. It must remain
   independently buildable and deployable, and may depend only on public
   napplet SDKs and platform contracts. It must not import shell source, host
