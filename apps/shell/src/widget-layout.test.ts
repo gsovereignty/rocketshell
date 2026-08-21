@@ -13,6 +13,7 @@ describe("widget grid profiles", () => {
 describe("default widget layouts", () => {
   it("fills width with one window", () => {
     expect(defaultWidgetRects(1, 6)).toEqual([{ column: 0, row: 0, width: 6, height: 2 }]);
+    expect(defaultWidgetRects(1, 1)).toEqual([{ column: 0, row: 0, width: 1, height: 2 }]);
   });
 
   it("places two windows side by side", () => {

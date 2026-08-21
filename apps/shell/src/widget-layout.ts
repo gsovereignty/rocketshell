@@ -36,10 +36,10 @@ export const profileForWidth = (width: number): GridProfile => {
 
 export const defaultWidgetRects = (count: number, columns: number): readonly WidgetRect[] => {
   if (count <= 0) return [];
+  if (count === 1) return [{ column: 0, row: 0, width: columns, height: 2 }];
   if (columns === 1) {
     return Array.from({ length: count }, (_, row) => ({ column: 0, row, width: 1, height: 1 }));
   }
-  if (count === 1) return [{ column: 0, row: 0, width: columns, height: 2 }];
   const half = Math.floor(columns / 2);
   if (count === 2) {
     return [
@@ -459,6 +459,10 @@ export const createWidgetGrid = (
     for (const element of elements) decorate(element);
     for (const element of [...rects.keys()]) if (!elements.includes(element)) rects.delete(element);
     if (rects.size === 0) {
+      if (elements.length === 1) {
+        reset(true);
+        return;
+      }
       const saved = storedLayouts.profiles[profile.name];
       const keys = widgetKeys(elements);
       let restored = 0;
