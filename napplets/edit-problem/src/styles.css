@@ -1,0 +1,42 @@
+:root { color-scheme:light dark; --bg:#f2efe8; --fg:#17221f; --accent:#e34d2f; --surface:color-mix(in srgb,var(--bg) 91%,var(--fg)); --line:color-mix(in srgb,var(--fg) 18%,transparent); --muted:color-mix(in srgb,var(--fg) 62%,transparent); font-family:Inter,ui-sans-serif,system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+* { box-sizing:border-box; }
+html,body,#app { min-height:100%; margin:0; background:var(--bg); color:var(--fg); }
+button,input,textarea,select { font:inherit; }
+button,input,textarea,select { border-radius:0; }
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent); outline-offset:2px; }
+.eyebrow,.step { margin:0; color:var(--accent); font-size:.72rem; font-weight:800; letter-spacing:.16em; }
+code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:.78rem; }
+.waiting { min-height:100vh; display:grid; place-content:center; grid-template-columns:minmax(80px,130px) minmax(0,520px); gap:clamp(24px,6vw,70px); padding:clamp(24px,8vw,90px); }
+.waiting h1 { margin:.3rem 0 .65rem; max-width:12ch; font:700 clamp(2.2rem,8vw,6.5rem)/.9 Georgia,serif; letter-spacing:-.06em; }
+.waiting p:not(.eyebrow) { color:var(--muted); line-height:1.6; }
+.mark { display:grid; align-content:center; gap:9px; }
+.mark span { display:block; height:7px; background:var(--fg); transform-origin:left; }
+.mark span:nth-child(1){width:72%}.mark span:nth-child(2){width:100%;background:var(--accent)}.mark span:nth-child(3){width:45%}
+.editor-shell { width:min(1240px,100%); min-height:100vh; margin:auto; padding:clamp(18px,4vw,48px); }
+.masthead { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--line); padding-bottom:18px; }
+.masthead code { display:block; margin-top:7px; color:var(--muted); }
+.authority { padding:8px 12px; border:1px solid var(--line); font-size:.76rem; font-weight:750; }
+.authority.allowed { border-color:color-mix(in srgb,var(--accent) 48%,var(--line)); }
+.authority.denied { color:var(--muted); }
+.workspace { display:grid; grid-template-columns:minmax(210px,.7fr) minmax(0,1.8fr); gap:clamp(32px,7vw,100px); padding-top:clamp(32px,7vw,78px); }
+aside { align-self:start; position:sticky; top:32px; }
+aside h2 { margin:.55rem 0 2rem; font:700 clamp(1.8rem,4vw,3.35rem)/.98 Georgia,serif; letter-spacing:-.045em; text-wrap:balance; }
+dl { border-top:1px solid var(--line); }
+dl div { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }
+dt { color:var(--muted); } dd { margin:0; }
+.note { margin-top:24px; color:var(--muted); font-size:.85rem; line-height:1.55; }
+.section-title h1 { margin:.35rem 0 2.4rem; font:700 clamp(2.5rem,6vw,5.5rem)/.88 Georgia,serif; letter-spacing:-.065em; }
+.field { display:grid; gap:8px; margin-bottom:22px; }
+.field label { font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.field input,.field textarea,.field select { width:100%; border:1px solid var(--line); background:var(--surface); color:var(--fg); padding:14px 15px; }
+.field input { font:650 clamp(1.1rem,2vw,1.35rem)/1.25 Georgia,serif; }
+.field textarea { min-height:220px; resize:vertical; line-height:1.6; }
+.field-row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+footer { display:flex; align-items:center; justify-content:space-between; gap:24px; border-top:1px solid var(--line); padding-top:22px; }
+footer button { border:0; background:var(--accent); color:white; padding:15px 22px; font-weight:800; cursor:pointer; }
+button:disabled { opacity:.46; cursor:not-allowed; }
+.status { min-height:1.3em; margin:0; color:var(--muted); font-size:.84rem; }
+.status[data-error="true"] { color:#c43f31; }
+@media(max-width:680px){.waiting{grid-template-columns:1fr;align-content:center}.mark{width:82px}.workspace{grid-template-columns:1fr}.masthead{gap:16px}aside{position:static}.field-row{grid-template-columns:1fr}footer{align-items:stretch;flex-direction:column}footer button{width:100%;min-height:50px}.section-title h1{margin-bottom:1.7rem}}
+@media(max-width:360px){.editor-shell{padding:14px}.authority{max-width:110px;text-align:center}.workspace{gap:26px}.waiting{padding:18px}.waiting h1{font-size:2.2rem}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
