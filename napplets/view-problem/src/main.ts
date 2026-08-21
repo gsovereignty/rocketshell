@@ -8,7 +8,7 @@ import { identity, inc, intent, outbox, resource, type OutboxSubscription, type 
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, parseCoordinate, relatedCoordinates, selectProblem, shortKey,
+  COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, hasClaimRequest, parseCoordinate, relatedCoordinates, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -77,7 +77,8 @@ const authorAvatar = (author: string) => {
 function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
-  const canClaim = problem.status === "open" && Boolean(pubkey);
+  const claimPending = Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
+  const canClaim = problem.status === "open" && Boolean(pubkey) && !claimPending;
   app.innerHTML = `<article class="problem-view">
     <header class="topbar"><button id="change-problem" type="button">Change problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></header>
     <section class="problem-copy" aria-labelledby="problem-title">
@@ -85,8 +86,8 @@ function render() {
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
       <p class="description">${escapeHtml(problem.description)}</p>
       <div class="actions">
-        <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
-        <span>${problem.claim ? `Claimed by ${escapeHtml(shortKey(problem.claim.claimant))}${problem.claim.height ? ` at block ${escapeHtml(problem.claim.height)}` : ""}` : "Claim opens a 144-block response window after acceptance."}</span>
+        <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
+        <span>${problem.claim ? `Claimed by ${escapeHtml(shortKey(problem.claim.claimant))}${problem.claim.height ? ` at block ${escapeHtml(problem.claim.height)}` : ""}` : claimPending ? "Awaiting maintainer acceptance." : "Claim opens a 144-block response window after acceptance."}</span>
       </div>
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
     </section>
@@ -139,8 +140,13 @@ async function publishAction(content: string, action?: "claim") {
   busy = true;
   render();
   try {
-    await outbox.publish(buildWorkflowTemplate(problem, content, action), { toInboxes: [problem.owner] });
-    setLiveStatus(action ? "Claim request published." : "Comment published.");
+    const result = await outbox.publish(buildWorkflowTemplate(problem, content, action), { toInboxes: [problem.owner] });
+    const acceptedRelays = Object.entries(result.relays ?? {}).filter(([, accepted]) => accepted).map(([relay]) => relay);
+    if (!result.event || (!result.ok && acceptedRelays.length === 0)) {
+      throw new Error(result.error ?? "Shell could not publish the event.");
+    }
+    receiveDiscussion({ event: result.event, sidecar: { relayHints: acceptedRelays } });
+    setLiveStatus(action ? "Claim request published; awaiting maintainer acceptance." : "Comment published.");
   } catch (error) {
     setLiveStatus(error instanceof Error ? error.message : "Event could not be published.");
   } finally {

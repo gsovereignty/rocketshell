@@ -68,6 +68,14 @@ export function buildWorkflowTemplate(problem: ProblemView, content: string, act
   return { kind: COMMENT_KIND, content: content.trim(), tags, created_at: Math.floor(Date.now() / 1000) };
 }
 
+export function hasClaimRequest(problem: ProblemView, results: RelayEventResult[], claimant?: string) {
+  return results.some(({ event }) => event.kind === COMMENT_KIND &&
+    (!claimant || event.pubkey === claimant) &&
+    event.tags.some((item) => item[0] === "claim") &&
+    event.tags.some((item) => item[0] === "A" && item[1] === problem.coordinate) &&
+    event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));
+}
+
 export function relatedCoordinates(problem: ProblemView, results: RelayEventResult[]) {
   const coordinates = new Set<string>();
   for (const { event } of results) {

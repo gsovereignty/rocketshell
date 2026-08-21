@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, coordinateFromProblemEvent, parseCoordinate, relatedCoordinates, selectProblem } from "./problem";
+import { buildWorkflowTemplate, coordinateFromProblemEvent, hasClaimRequest, parseCoordinate, relatedCoordinates, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -18,6 +18,15 @@ describe("problem view", () => {
     const template = buildWorkflowTemplate(selectProblem(coordinate, [result]), "I can take this", "claim");
     expect(template.tags).toContainEqual(["claim"]);
     expect(template.tags).toContainEqual(["k", "31971"]);
+  });
+  it("finds a pending claim for the current revision", () => {
+    const problem = selectProblem(coordinate, [result]);
+    const claim = { event: {
+      id: "e".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
+      tags: [["A", coordinate], ["e", revision], ["claim"]]
+    } } as never;
+    expect(hasClaimRequest(problem, [claim], owner)).toBe(true);
+    expect(hasClaimRequest({ ...problem, revisionId: "0".repeat(64) }, [claim], owner)).toBe(false);
   });
   it("finds distinct mentioned problem coordinates", () => {
     const other = `31971:${"e".repeat(64)}:${"f".repeat(64)}`;
