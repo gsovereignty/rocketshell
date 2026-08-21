@@ -128,7 +128,8 @@ for protocol data. Input and action stack below 760px.
 ### Navigation
 
 Tree nodes show title, unique descendant count, and fork state. Current node uses
-solid blue. Child rows expose selection and a separate external-open action.
+solid blue. Activating any tree node or child row opens that problem in the
+focused default problem viewer; explicit open controls preserve discoverability.
 
 ## Do's and Don'ts
 

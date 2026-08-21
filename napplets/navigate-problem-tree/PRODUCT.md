@@ -36,9 +36,9 @@ hardcoded before release; until then, users provide it at startup.
 - Reads NIP-1971 kind `31971` events through shell-owned outbox access.
 - Uses uppercase `A` root tags and lowercase unmarked `a` parent tags as defined
   by the local NIP-1971 draft.
-- Opens selected current revisions through NAP-INTENT using the registered `note`
-  archetype and `napplet:note/open` convention in a reusable peer window, keeping
-  the DAG visible while making user activation visible. Shell owns default-handler choice.
+- Opens every activated current revision through NAP-INTENT using the registered
+  `note` archetype and `napplet:note/open` convention. The shell focuses a reusable
+  default-handler window; the navigator never names a specific viewer.
 - Does not render problem descriptions or import shell implementation.
 - Uses no direct network access, signer, browser storage, or environment variables.
 

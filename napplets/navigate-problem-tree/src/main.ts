@@ -189,6 +189,7 @@ function bindWorkspace() {
       selected = selectButton.dataset.select;
       activeFilter = "all";
       renderApp();
+      void openProblem(selected);
     } else if (filterButton?.dataset.filter) {
       activeFilter = filterButton.dataset.filter;
       renderList();
@@ -235,6 +236,10 @@ async function openProblem(coordinate: string) {
   const node = dag?.nodes.get(coordinate);
   const status = document.querySelector<HTMLOutputElement>("#app-status");
   if (!node || !status || problemViewerBusy) return;
+  if (!noteHandlerAvailable) {
+    status.textContent = "Problem viewer is not installed.";
+    return;
+  }
   problemViewerBusy = true;
   renderList();
   status.textContent = `Opening ${node.title}…`;
