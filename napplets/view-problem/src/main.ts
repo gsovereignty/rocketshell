@@ -28,6 +28,7 @@ let relatedEvents: RelayEventResult[] = [];
 let related: string[] = [];
 let pubkey = "";
 let discussionSubscription: OutboxSubscription | undefined;
+let loadGeneration = 0;
 let identitySubscription: { close(): void } | undefined;
 let intentSubscription: Subscription | undefined;
 let busy = false;
@@ -44,7 +45,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => (
 })[character]!);
 
 function showSetup(message = "") {
-  discussionSubscription?.close();
+  stopDiscussionSubscription();
   if (countdownTimer) clearInterval(countdownTimer);
   app.innerHTML = `<section class="setup" aria-labelledby="setup-title">
     <div class="setup-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -64,6 +65,12 @@ function showSetup(message = "") {
     open();
   });
   if (!reducedMotion) gsap.fromTo(".setup > *", { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .07, ease: "expo.out" });
+}
+
+function stopDiscussionSubscription() {
+  loadGeneration += 1;
+  discussionSubscription?.close();
+  discussionSubscription = undefined;
 }
 
 const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
@@ -230,6 +237,14 @@ function receiveDiscussion(result: RelayEventResult) {
   const collection = result.event.kind === COMMENT_KIND ? comments : relatedEvents;
   if (collection.some(({ event }) => event.id === result.event.id)) return;
   collection.push(result);
+  if (problem && result.event.kind === 31971) {
+    try {
+      problem = selectProblem(problem.coordinate, relatedEvents);
+    } catch (error) {
+      console.warn("Live problem revision could not become current", { coordinate: problem.coordinate, eventId: result.event.id, error });
+      liveMessage = error instanceof Error ? error.message : "Live problem revision could not be applied.";
+    }
+  }
   if (problem) related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
   render();
   if (result.event.kind === COMMENT_KIND && !profiles.has(result.event.pubkey)) void loadProfiles([result.event.pubkey]);
@@ -288,23 +303,52 @@ async function loadProfiles(authors: string[]) {
 
 async function loadProblem(value: string) {
   const status = document.querySelector<HTMLOutputElement>("#setup-status");
+  let generation = loadGeneration;
   try {
     const target = parseCoordinate(value);
     if (status) status.textContent = "Loading current revision and discussion…";
-    discussionSubscription?.close();
-    const problemResponse = await outbox.query({ kinds: [31971], "#d": [target.problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 });
-    problem = selectProblem(target.coordinate, problemResponse.events);
-    const filters = [{ kinds: [COMMENT_KIND], "#A": [target.coordinate] }, { kinds: [31971], "#a": [target.coordinate] }];
-    const response = await outbox.query(filters, { limit: 300, timeoutMs: 8000 });
-    comments = response.events.filter(({ event }) => event.kind === COMMENT_KIND);
-    relatedEvents = [...problemResponse.events, ...response.events.filter(({ event }) => event.kind === 31971)];
+    stopDiscussionSubscription();
+    generation = loadGeneration;
+    const filters = [
+      { kinds: [31971], "#d": [target.problemId] },
+      { kinds: [COMMENT_KIND], "#A": [target.coordinate] },
+      { kinds: [31971], "#a": [target.coordinate] }
+    ];
+    const buffered: RelayEventResult[] = [];
+    let hydrated = false;
+    const subscription = outbox.subscribe(filters, { timeoutMs: 8000 });
+    discussionSubscription = subscription;
+    subscription.on("event", (result) => {
+      if (discussionSubscription !== subscription) return;
+      if (hydrated) receiveDiscussion(result);
+      else buffered.push(result);
+    });
+    subscription.on("closed", (reason) => {
+      if (discussionSubscription !== subscription) return;
+      discussionSubscription = undefined;
+      console.warn("Live problem subscription closed", { coordinate: target.coordinate, reason });
+      setLiveStatus("Live updates stopped. Reopen problem to reconnect.");
+    });
+    const [problemResponse, response] = await Promise.all([
+      outbox.query({ kinds: [31971], "#d": [target.problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 }),
+      outbox.query(filters.slice(1), { limit: 300, timeoutMs: 8000 })
+    ]);
+    if (generation !== loadGeneration) return;
+    const allResults = [...problemResponse.events, ...response.events, ...buffered];
+    const uniqueResults = Array.from(new Map(allResults.map((result) => [result.event.id, result])).values());
+    relatedEvents = uniqueResults.filter(({ event }) => event.kind === 31971);
+    problem = selectProblem(target.coordinate, relatedEvents);
+    comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
-    discussionSubscription = outbox.subscribe(filters, { timeoutMs: 8000 });
-    discussionSubscription.on("event", receiveDiscussion);
+    hydrated = true;
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments);
     void loadProfiles([...comments.map(({ event }) => event.pubkey), ...(effectiveClaim ? [effectiveClaim.claimant] : [])]);
-  } catch (error) { showSetup(error instanceof Error ? error.message : "Problem could not be loaded."); }
+  } catch (error) {
+    if (generation !== loadGeneration) return;
+    console.error("Problem load failed", { value, error });
+    showSetup(error instanceof Error ? error.message : "Problem could not be loaded.");
+  }
 }
 
 function isNoteOpenPayload(payload: unknown): payload is { target: { type: "event"; id: string } } {

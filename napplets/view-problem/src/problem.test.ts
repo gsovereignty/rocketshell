@@ -12,6 +12,20 @@ const result = { event: { id: revision, pubkey: owner, kind: 31971, created_at: 
 describe("problem view", () => {
   it("validates coordinates", () => expect(parseCoordinate(coordinate).problemId).toBe(id));
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
+  it("selects a newly received revision as current", () => {
+    const next = { event: {
+      ...(result as unknown as { event: Record<string, unknown> }).event,
+      id: "e".repeat(64), created_at: 2, content: "Updated body",
+      tags: [
+        ["d", id], ["title", "Wallet setup is fast"], ["status", "open"],
+        ["a", coordinate, "", "origin"], ["e", revision, "", "previous"]
+      ]
+    } } as never;
+    const selected = selectProblem(coordinate, [result, next]);
+    expect(selected.revisionId).toBe("e".repeat(64));
+    expect(selected.title).toBe("Wallet setup is fast");
+    expect(selected.description).toBe("Updated body");
+  });
   it("allows only owner or current maintainer to edit", () => {
     const maintainer = "e".repeat(64);
     const baseEvent = (result as unknown as { event: { tags: string[][] } }).event;
