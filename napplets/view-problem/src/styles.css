@@ -1,0 +1,58 @@
+:root { font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; color: #171a21; background: #fff; font-synthesis: none; --blue:#145cff; --blue-dark:#0846cf; --muted:#6d7280; --line:#dfe1e7; --open:#08744d; --open-bg:#e0f3e9; }
+* { box-sizing: border-box; }
+html, body, #app { min-width: 280px; min-height: 100%; margin: 0; }
+button, input, textarea { font: inherit; }
+button { color: inherit; }
+::selection { color: #fff; background: var(--blue); }
+:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+.setup { display:grid; grid-template-columns:minmax(180px,.7fr) minmax(300px,1.3fr); gap:clamp(34px,8vw,110px); align-content:center; width:min(1040px,100%); min-height:100vh; margin:auto; padding:clamp(28px,7vw,96px); }
+.setup-glyph { position:relative; min-height:240px; border-left:1px solid var(--line); }
+.setup-glyph span { position:absolute; left:28%; width:62%; height:1px; background:var(--line); transform-origin:left; }
+.setup-glyph span::before { position:absolute; left:-6px; top:-6px; width:13px; height:13px; border-radius:50%; background:var(--blue); content:""; }
+.setup-glyph span:nth-child(1){top:20%;transform:rotate(14deg)} .setup-glyph span:nth-child(2){top:50%;transform:rotate(-10deg)} .setup-glyph span:nth-child(3){top:80%;transform:rotate(7deg)}
+.setup h1 { max-width:8ch; margin:0; font-size:clamp(3rem,7vw,5.8rem); line-height:.94; letter-spacing:-.04em; }
+.setup p { max-width:48ch; color:var(--muted); line-height:1.6; }
+.coordinate-entry { grid-column:2; }
+.coordinate-entry label { display:block; margin-bottom:9px; font-size:.76rem; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+.coordinate-entry > div { display:flex; gap:8px; }
+.coordinate-entry input { min-width:0; width:100%; min-height:52px; border:1px solid #b8bbc4; padding:0 14px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:.78rem; caret-color:var(--blue); }
+.coordinate-entry button,.primary { border:0; color:#fff; background:var(--blue); font-weight:750; cursor:pointer; }
+.coordinate-entry button { flex:none; padding:0 20px; }
+.coordinate-entry button:hover,.primary:hover:not(:disabled){background:var(--blue-dark)}
+.coordinate-entry output { display:block; min-height:1.4em; margin-top:10px; color:#a32b2b; font-size:.8rem; }
+.problem-view { width:min(1060px,100%); margin:auto; padding:0 clamp(20px,6vw,72px) 42px; }
+.topbar { display:flex; justify-content:space-between; align-items:center; min-height:72px; border-bottom:1px solid var(--line); }
+.topbar button,.related-action { border:0; padding:8px 0; color:var(--blue); background:transparent; text-decoration:underline; text-underline-offset:4px; cursor:pointer; }
+.topbar code { color:var(--muted); font-size:.74rem; }
+.problem-copy { padding:48px 0 38px; }
+.state-line { margin-bottom:24px; }
+.status { display:inline-flex; gap:8px; align-items:center; border-radius:99px; padding:7px 13px; color:var(--open); background:var(--open-bg); font-size:.82rem; font-weight:700; }
+.status i { width:7px; height:7px; border-radius:50%; background:currentColor; }
+.status-claimed { color:#8a5a00; background:#fff0ce; }.status-patched{color:#5e3fa3;background:#ede5ff}.status-closed{color:#59606e;background:#e8e9ed}
+.problem-copy h1 { max-width:22ch; margin:0; font-size:clamp(2.35rem,5.4vw,4.5rem); line-height:1.02; letter-spacing:-.035em; text-wrap:balance; }
+.description { max-width:72ch; margin:24px 0 0; color:#3d414c; font-size:clamp(1rem,1.8vw,1.22rem); line-height:1.65; white-space:pre-wrap; }
+.actions { display:flex; align-items:center; gap:24px; margin-top:32px; }
+.primary { min-height:52px; border-radius:10px; padding:0 24px; }
+.primary:disabled { color:#858995; background:#e4e5e9; cursor:not-allowed; }
+.actions span { max-width:42ch; color:var(--muted); font-size:.86rem; line-height:1.45; }
+.related-action { margin-top:15px; }
+.related,.discussion { border-top:1px solid var(--line); padding-top:28px; }
+.related h2,.discussion h2 { margin:0 0 18px; color:#555b68; font-size:.76rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+.related { padding-bottom:30px; }
+.related p { color:var(--muted); }
+.related ul,.discussion ol { margin:0; padding:0; list-style:none; }
+.related li { border-bottom:1px solid var(--line); }
+.related li button { display:flex; justify-content:space-between; width:100%; border:0; padding:14px 4px; background:transparent; text-align:left; cursor:pointer; }
+.related li button:hover { background:#f7f7f9; }.related code{color:var(--muted);font-size:.72rem}
+.discussion li { display:grid; grid-template-columns:48px minmax(0,1fr); gap:18px; padding:20px 0; border-bottom:1px solid var(--line); }
+.avatar { display:grid; place-items:center; align-self:start; width:42px; height:42px; border-radius:50%; color:#fff; background:#d37022; font-size:.76rem; font-weight:750; }
+.discussion li:nth-child(even) .avatar { background:#2f8cdb; }
+.discussion header { display:flex; gap:10px; align-items:baseline; }.discussion time{color:#9296a1;font-size:.76rem}.discussion li p{margin:7px 0 0;line-height:1.55;white-space:pre-wrap}
+.discussion .empty { display:block; color:var(--muted); }
+.comment-entry { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; margin-top:20px; }
+.comment-entry textarea { min-height:54px; resize:vertical; border:1px solid #c8cbd2; border-radius:12px; padding:15px 17px; line-height:1.45; caret-color:var(--blue); }
+.comment-entry button { min-width:94px; border:0; border-radius:12px; color:#fff; background:var(--blue); font-weight:750; cursor:pointer; }.comment-entry button:disabled{color:#858995;background:#e4e5e9;cursor:not-allowed}
+#app-status { display:block; min-height:1.4em; margin-top:14px; color:var(--muted); font-size:.8rem; }
+@media(max-width:680px){.setup{grid-template-columns:1fr;align-content:start}.setup-glyph{min-height:130px}.coordinate-entry{grid-column:1}.coordinate-entry>div{flex-direction:column}.coordinate-entry button{min-height:50px}.problem-view{padding-inline:18px}.problem-copy{padding-top:34px}.actions{align-items:stretch;flex-direction:column;gap:12px}.primary{width:100%}.related li button{align-items:flex-start;flex-direction:column;gap:6px}.comment-entry{grid-template-columns:1fr}.comment-entry button{min-height:48px}.discussion li{grid-template-columns:38px minmax(0,1fr);gap:12px}.avatar{width:36px;height:36px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important}}
