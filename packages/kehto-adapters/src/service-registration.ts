@@ -34,8 +34,9 @@ export function createOutboxRelayPool(readRelays: readonly string[], writeRelays
       const outcomes = await relayPool.publish(selected, event, { retries: false, timeout: DEFAULT_PUBLISH_TIMEOUT_MS });
       for (const outcome of outcomes) telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
       if (!outcomes.some((outcome) => outcome.ok)) telemetry.record("publication.failed", 1, { relayCount: selected.length });
-      const accepted = outcomes.find((outcome) => outcome.ok);
-      if (accepted) ingress.admit(event, accepted.from);
+      for (const outcome of outcomes) {
+        if (outcome.ok) ingress.admit(event, outcome.from);
+      }
       return Object.fromEntries(outcomes.map((outcome) => [outcome.from, outcome.ok]));
     },
     isAvailable: () => readRelays.length > 0 || writeRelays.length > 0

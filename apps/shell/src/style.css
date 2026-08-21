@@ -240,7 +240,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #signed-event-dialog::backdrop { background: rgba(0, 0, 0, .58); backdrop-filter: blur(5px); }
 .signed-event-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .75rem .7rem 1rem; border-bottom: 1px solid var(--hairline); }
 .signed-event-dialog-header h2 { margin: 0; overflow: hidden; font-size: .88rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-#signed-event-dialog pre { max-height: calc(100dvh - 6rem); margin: 0; padding: 1rem; overflow: auto; background: var(--surface); scrollbar-color: var(--accent) transparent; }
+.signed-event-relays { padding: .8rem 1rem; border-bottom: 1px solid var(--hairline); background: var(--panel-bg); }
+.signed-event-relays h3 { margin: 0 0 .45rem; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.signed-event-relays ul { display: flex; flex-wrap: wrap; gap: .38rem; margin: 0; padding: 0; list-style: none; }
+.signed-event-relays li { min-width: 0; padding: .28rem .48rem; border-radius: .4rem; background: var(--surface); color: var(--text-soft); }
+.signed-event-relays code { font: .68rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.signed-event-relays p { margin: 0; color: var(--muted); font-size: .72rem; }
+#signed-event-dialog pre { max-height: calc(100dvh - 10rem); margin: 0; padding: 1rem; overflow: auto; background: var(--surface); scrollbar-color: var(--accent) transparent; }
 #signed-event-code { color: var(--text-soft); font: .75rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .account-popover {

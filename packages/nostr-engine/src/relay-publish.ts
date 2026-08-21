@@ -22,7 +22,9 @@ export function createRelayPublisher(target: PublishTarget, accounts: AccountCon
     for (const outcome of outcomes) telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
     const accepted = outcomes.filter((outcome) => outcome.ok).length;
     if (accepted < minimumAccepted) { telemetry.record("publication.failed", 1, { relayCount: relays.length }); throw new Error("publish-rejected"); }
-    ingress.admit(event, outcomes.find((outcome) => outcome.ok)?.from ?? "local:publish");
+    for (const outcome of outcomes) {
+      if (outcome.ok) ingress.admit(event, outcome.from);
+    }
     return { event, outcomes, accepted };
   };
   return {

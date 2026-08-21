@@ -55,6 +55,15 @@ describe("shared services", () => {
     expect(eventStore.getReplaceable(0, newest.pubkey)?.id).toBe(newest.id);
     shutdownNostrServices();
   });
+  it("returns sorted relay provenance for stored events", async () => {
+    const { eventStore, getSeenRelaysForEvent, ingress, shutdownNostrServices } = await freshServices();
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "seen", tags: [] }, generateSecretKey());
+    ingress.admit(event, "wss://two.example"); ingress.admit(event, "wss://one.example");
+    expect(getSeenRelaysForEvent(event.id)).toEqual(["wss://one.example", "wss://two.example"]);
+    expect(getSeenRelaysForEvent("missing")).toEqual([]);
+    expect(eventStore.getEvent(event.id)?.id).toBe(event.id);
+    shutdownNostrServices();
+  });
   it("removes deleted events and refuses already-expired events", async () => {
     const { eventStore, ingress, shutdownNostrServices } = await freshServices();
     const key = generateSecretKey();

@@ -7,7 +7,7 @@
  * services and the account list editor.
  */
 export {
-  activePubkey$, activeProfile$, mailboxes$, ownBlossomServers$, normalizeMediaServer, signedEvents$
+  activePubkey$, activeProfile$, getSeenRelaysForEvent, mailboxes$, ownBlossomServers$, normalizeMediaServer, signedEvents$
 } from "@platform/nostr-engine";
 
 import { relayPolicy } from "@platform/nostr-engine";

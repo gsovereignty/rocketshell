@@ -20,6 +20,8 @@ interface SignedEventsElements {
   readonly empty: HTMLElement;
   readonly dialog: HTMLDialogElement;
   readonly dialogTitle: HTMLElement;
+  readonly relayList: HTMLUListElement;
+  readonly relayEmpty: HTMLElement;
   readonly code: HTMLElement;
   readonly dialogClose: HTMLButtonElement;
 }
@@ -34,7 +36,8 @@ export function createSignedEventsView(
   elements: SignedEventsElements,
   events$: Observable<readonly SignedEvent[]>,
   reducedMotion: MediaQueryList,
-  beforeOpen?: () => void
+  beforeOpen?: () => void,
+  seenRelaysForEvent: (eventId: string) => readonly string[] = () => []
 ): { close(): void; destroy(): void } {
   let open = false;
   let events: readonly SignedEvent[] = [];
@@ -60,7 +63,16 @@ export function createSignedEventsView(
       button.append(heading, id, time);
       button.addEventListener("click", () => {
         returnFocus = button;
+        const relays = seenRelaysForEvent(event.id);
         elements.dialogTitle.textContent = `${eventLabel(event)} · ${shortId(event.id)}`;
+        elements.relayList.replaceChildren(...relays.map((relay) => {
+          const item = document.createElement("li");
+          const code = document.createElement("code");
+          code.textContent = relay;
+          item.append(code);
+          return item;
+        }));
+        elements.relayEmpty.hidden = relays.length !== 0;
         elements.code.textContent = JSON.stringify(event, null, 2);
         elements.dialog.showModal();
         if (!reducedMotion.matches) {

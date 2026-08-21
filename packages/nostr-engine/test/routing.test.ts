@@ -3,6 +3,7 @@ import type { NostrEvent } from "applesauce-core/helpers/event";
 import { finalizeEvent, generateSecretKey, verifyEvent } from "nostr-tools/pure";
 import { describe, expect, it, vi } from "vitest";
 import { createEventIngress, createRelayPublisher } from "../src/index.js";
+import { getSeenRelays } from "applesauce-core/helpers";
 import { createPlatformTelemetry } from "@project/platform-nap-contract";
 
 describe("publication", () => {
@@ -24,6 +25,18 @@ describe("publication", () => {
     const publisher = createRelayPublisher({ publish: async () => [{ ok: false, from: "wss://relay.example", message: "no" }] }, { sign: async () => event } as never, ingress, 1, telemetry);
     await expect(publisher.publishTemplate(["wss://relay.example"], { kind: 1, created_at: 1, content: "publish", tags: [] })).rejects.toThrow("publish-rejected");
     expect(telemetry.snapshot().map((record) => record.name)).toEqual(["publication.outcome", "publication.failed"]);
+    store.dispose();
+  });
+  it("records every relay that accepted a publication", async () => {
+    const store = new EventStore({ verifyEvent }); const ingress = createEventIngress(store, verifyEvent);
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
+    const publisher = createRelayPublisher({ publish: async () => [
+      { ok: true, from: "wss://one.example" },
+      { ok: false, from: "wss://blocked.example", message: "blocked" },
+      { ok: true, from: "wss://two.example" }
+    ] }, { sign: async () => event } as never, ingress);
+    await publisher.publishSigned(["wss://one.example", "wss://blocked.example", "wss://two.example"], event);
+    expect([...getSeenRelays(store.getEvent(event.id)!)!].sort()).toEqual(["wss://one.example", "wss://two.example"]);
     store.dispose();
   });
   it("reports a relay publication timeout as failure", async () => {

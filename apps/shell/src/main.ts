@@ -2,7 +2,7 @@ import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
 import { createShellSettingsStore } from "@platform/host-services";
 import { connectedRelayCount$ } from "@platform/nostr-engine";
-import { activePubkey$, activeProfile$, signedEvents$ } from "./nostr.js";
+import { activePubkey$, activeProfile$, getSeenRelaysForEvent, signedEvents$ } from "./nostr.js";
 import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
@@ -45,6 +45,8 @@ const signedEventsList = document.querySelector<HTMLUListElement>("#signed-event
 const signedEventsEmpty = document.querySelector<HTMLElement>("#signed-events-empty");
 const signedEventDialog = document.querySelector<HTMLDialogElement>("#signed-event-dialog");
 const signedEventDialogTitle = document.querySelector<HTMLElement>("#signed-event-dialog-title");
+const signedEventRelaysList = document.querySelector<HTMLUListElement>("#signed-event-relays-list");
+const signedEventRelaysEmpty = document.querySelector<HTMLElement>("#signed-event-relays-empty");
 const signedEventCode = document.querySelector<HTMLElement>("#signed-event-code");
 const signedEventDialogClose = document.querySelector<HTMLButtonElement>("#signed-event-dialog-close");
 const spotlightPanel = document.querySelector<HTMLElement>("#spotlight-panel");
@@ -68,12 +70,13 @@ let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
 let settingsView: SettingsView | null = null;
-const signedEventsView = signedEventsTrigger && signedEventsCount && signedEventsPanel && signedEventsClose && signedEventsList && signedEventsEmpty && signedEventDialog && signedEventDialogTitle && signedEventCode && signedEventDialogClose
+const signedEventsView = signedEventsTrigger && signedEventsCount && signedEventsPanel && signedEventsClose && signedEventsList && signedEventsEmpty && signedEventDialog && signedEventDialogTitle && signedEventRelaysList && signedEventRelaysEmpty && signedEventCode && signedEventDialogClose
   ? createSignedEventsView({
     trigger: signedEventsTrigger, count: signedEventsCount, panel: signedEventsPanel, close: signedEventsClose,
     list: signedEventsList, empty: signedEventsEmpty, dialog: signedEventDialog,
-    dialogTitle: signedEventDialogTitle, code: signedEventCode, dialogClose: signedEventDialogClose
-  }, signedEvents$, reducedMotion, () => { closeAccountMenu(); closeSpotlight(); closeSettings(); })
+    dialogTitle: signedEventDialogTitle, relayList: signedEventRelaysList, relayEmpty: signedEventRelaysEmpty,
+    code: signedEventCode, dialogClose: signedEventDialogClose
+  }, signedEvents$, reducedMotion, () => { closeAccountMenu(); closeSpotlight(); closeSettings(); }, getSeenRelaysForEvent)
   : null;
 let dockHideTimer: number | undefined;
 

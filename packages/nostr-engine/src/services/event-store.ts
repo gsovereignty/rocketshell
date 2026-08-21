@@ -1,4 +1,5 @@
 import { EventStore } from "applesauce-core/event-store";
+import { getSeenRelays } from "applesauce-core/helpers";
 // Imported for its side effects: `applesauce-common` augments the store prototype with
 // `blossomServers()`, `mutes()` and friends. Without this they are undefined at runtime,
 // with no type error to warn us.
@@ -15,3 +16,9 @@ import { isEventWithinLimits } from "../event-limits.js";
 export const eventStore = new EventStore({
   verifyEvent: (event) => isEventWithinLimits(event) && verifyEvent(event)
 });
+
+/** Relay provenance recorded by Applesauce for one canonical stored event. */
+export const getSeenRelaysForEvent = (eventId: string): readonly string[] => {
+  const event = eventStore.getEvent(eventId);
+  return event ? [...(getSeenRelays(event) ?? [])].sort() : [];
+};

@@ -2,6 +2,7 @@ import type { Runtime, ServiceHandler } from "@kehto/runtime";
 import { describe, expect, it, vi } from "vitest";
 import { freshAdapters } from "./fresh.js";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
+import { getSeenRelays } from "applesauce-core/helpers";
 
 describe("core service lifecycle", () => {
   it("bounds oversized NIP-65 relay categories", async () => {
@@ -45,6 +46,18 @@ describe("core service lifecycle", () => {
     const invalid = { ...event, content: "tampered" };
     await expect(pool.publish(invalid, ["wss://one.example/"])).rejects.toThrow("invalid-event");
     expect(publish).toHaveBeenCalledOnce();
+    engine.shutdownNostrServices();
+  });
+  it("records every relay accepting an outbox publication", async () => {
+    const { engine, adapters } = await freshAdapters();
+    vi.spyOn(engine.relayPool, "publish").mockResolvedValue([
+      { from: "wss://one.example/", ok: true, message: "saved" },
+      { from: "wss://two.example/", ok: true, message: "saved" }
+    ]);
+    const pool = adapters.createOutboxRelayPool([], ["wss://one.example/", "wss://two.example/"]);
+    const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
+    await pool.publish(event, ["wss://one.example/", "wss://two.example/"]);
+    expect([...getSeenRelays(engine.eventStore.getEvent(event.id)!)!].sort()).toEqual(["wss://one.example/", "wss://two.example/"]);
     engine.shutdownNostrServices();
   });
   it("rejects excessive outbox filters before opening relay work", async () => {
