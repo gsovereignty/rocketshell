@@ -7,7 +7,7 @@ export default defineConfig({
     nappletType: "view-problem",
     title: "View Problem",
     description: "View, claim, discuss, and follow one NIP-1971 problem.",
-    requires: ["identity", "outbox", "intent", "inc"],
+    requires: ["identity", "outbox", "intent", "inc", "common", "resource"],
     archetypes: [{ slug: "note", convention: "napplet:note/open" }],
     artifactMode: "single-file"
   })],

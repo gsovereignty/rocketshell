@@ -4,13 +4,14 @@
   FORM: User-pinned problem-detail composition extended from sibling tracker UI.
   FINISH: Operate mode; responsive sandbox controls, visible state, restrained motion.
 */
-import { identity, inc, intent, outbox, type OutboxSubscription, type RelayEventResult, type Subscription } from "@napplet/sdk";
+import { common, identity, inc, intent, outbox, resource, type OutboxSubscription, type RelayEventResult, type Subscription } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, parseCoordinate, relatedCoordinates, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
+import { profileDisplayName, profileInitials } from "./profile";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -30,6 +31,9 @@ let busy = false;
 let liveMessage = "";
 let intentReceived = false;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const profiles = new Map<string, { name: string; picture?: string }>();
+const profileLoads = new Set<string>();
+const avatarHandles = new Map<string, { url: string; revoke(): void }>();
 
 const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
@@ -59,6 +63,36 @@ function showSetup(message = "") {
 
 const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
 const commentEvents = () => comments.filter(({ event }) => !event.tags.some((tag) => tag[0] === "claim" || tag[0] === "patched"));
+const authorName = (pubkey: string) => profiles.get(pubkey)?.name ?? shortKey(pubkey);
+const authorInitials = (pubkey: string) => profileInitials(authorName(pubkey));
+
+async function loadCommentProfiles(pubkeys: string[]) {
+  const missing = Array.from(new Set(pubkeys)).filter((pubkey) => !profiles.has(pubkey) && !profileLoads.has(pubkey));
+  if (!missing.length) return;
+  missing.forEach((pubkey) => profileLoads.add(pubkey));
+  await Promise.all(missing.map(async (pubkey) => {
+    try {
+      const result = await common.getProfile(pubkey);
+      const profile = result.profile;
+      const name = profileDisplayName(profile, pubkey);
+      let picture: string | undefined;
+      if (profile?.picture) {
+        try {
+          const handle = resource.bytesAsObjectURL(profile.picture);
+          avatarHandles.get(pubkey)?.revoke();
+          avatarHandles.set(pubkey, handle);
+          picture = handle.url;
+        } catch { /* Keep initials when shell resource loading rejects the image. */ }
+      }
+      profiles.set(pubkey, { name, picture });
+    } catch {
+      profiles.set(pubkey, { name: shortKey(pubkey) });
+    } finally {
+      profileLoads.delete(pubkey);
+    }
+  }));
+  if (problem) render();
+}
 
 function render() {
   if (!problem) return;
@@ -83,8 +117,8 @@ function render() {
     <section class="discussion" aria-labelledby="discussion-title">
       <h2 id="discussion-title">Discussion · ${discussion.length}</h2>
       <ol>${discussion.length ? discussion.map(({ event }) => `<li>
-        <span class="avatar" aria-hidden="true">${event.pubkey.slice(0, 2).toUpperCase()}</span>
-        <div><header><strong>${escapeHtml(shortKey(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}">${new Date(event.created_at * 1000).toLocaleDateString()}</time></header><p>${escapeHtml(event.content)}</p></div>
+        <span class="avatar" aria-hidden="true">${profiles.get(event.pubkey)?.picture ? `<img src="${escapeHtml(profiles.get(event.pubkey)!.picture!)}" alt="">` : escapeHtml(authorInitials(event.pubkey))}</span>
+        <div><header><strong title="${escapeHtml(event.pubkey)}">${escapeHtml(authorName(event.pubkey))}</strong><time datetime="${new Date(event.created_at * 1000).toISOString()}">${new Date(event.created_at * 1000).toLocaleDateString()}</time></header><p>${escapeHtml(event.content)}</p></div>
       </li>`).join("") : `<li class="empty">No comments yet. Start discussion.</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>
@@ -95,6 +129,7 @@ function render() {
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
+  void loadCommentProfiles(discussion.map(({ event }) => event.pubkey));
   if (!reducedMotion) gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
 }
 
@@ -220,5 +255,8 @@ async function start() {
   if (!intentReceived && !problem) showSetup();
 }
 
-addEventListener("beforeunload", () => { discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close(); });
+addEventListener("beforeunload", () => {
+  discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close();
+  avatarHandles.forEach((handle) => handle.revoke());
+});
 void start();

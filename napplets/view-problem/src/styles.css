@@ -46,9 +46,11 @@ button { color: inherit; }
 .related li button { display:flex; justify-content:space-between; width:100%; border:0; padding:14px 4px; background:transparent; text-align:left; cursor:pointer; }
 .related li button:hover { background:#f7f7f9; }.related code{color:var(--muted);font-size:.72rem}
 .discussion li { display:grid; grid-template-columns:48px minmax(0,1fr); gap:18px; padding:20px 0; border-bottom:1px solid var(--line); }
+.discussion li > div { min-width:0; }
 .avatar { display:grid; place-items:center; align-self:start; width:42px; height:42px; border-radius:50%; color:#fff; background:#d37022; font-size:.76rem; font-weight:750; }
+.avatar img { width:100%; height:100%; border-radius:inherit; object-fit:cover; }
 .discussion li:nth-child(even) .avatar { background:#2f8cdb; }
-.discussion header { display:flex; gap:10px; align-items:baseline; }.discussion time{color:#9296a1;font-size:.76rem}.discussion li p{margin:7px 0 0;line-height:1.55;white-space:pre-wrap}
+.discussion header { display:flex; gap:10px; align-items:baseline; }.discussion header strong{min-width:0;overflow-wrap:anywhere}.discussion time{flex:none;color:#9296a1;font-size:.76rem}.discussion li p{margin:7px 0 0;overflow-wrap:anywhere;line-height:1.55;white-space:pre-wrap}
 .discussion .empty { display:block; color:var(--muted); }
 .comment-entry { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; margin-top:20px; }
 .comment-entry textarea { min-height:54px; resize:vertical; border:1px solid #c8cbd2; border-radius:12px; padding:15px 17px; line-height:1.45; caret-color:var(--blue); }

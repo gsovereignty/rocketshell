@@ -6,7 +6,7 @@
   "napplet": {
     "dTag": "view-problem",
     "title": "View Problem",
-    "requires": ["identity", "outbox", "intent", "inc"],
+    "requires": ["identity", "outbox", "intent", "inc", "common", "resource"],
     "archetypes": [
       {
         "slug": "note",

@@ -208,7 +208,10 @@ Top bar is a 72px-high horizontal rule with an underlined change action at left 
 
 ### Discussion Ledger
 
-Each comment aligns a circular two-letter avatar with author, date, and comment body. Alternating avatar hues create scan anchors without changing hierarchy. Entries stay separated by ledger rules and never become cards.
+Each comment aligns the author's shell-resolved profile picture and display name
+with date and comment body. When metadata or image loading is unavailable, the
+same circle falls back to initials and alternating ledger hues. Entries stay
+separated by ledger rules and never become cards.
 
 ### Motion
 
