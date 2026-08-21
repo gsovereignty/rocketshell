@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { freshAdapters } from "./fresh.js";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { getSeenRelays } from "applesauce-core/helpers";
+import type { StreamingOutboxRouter } from "@kehto/services";
 
 describe("core service lifecycle", () => {
   it("bounds oversized NIP-65 relay categories", async () => {
@@ -58,6 +59,33 @@ describe("core service lifecycle", () => {
     const event = finalizeEvent({ kind: 1, created_at: 1, content: "publish", tags: [] }, generateSecretKey());
     await pool.publish(event, ["wss://one.example/", "wss://two.example/"]);
     expect([...getSeenRelays(engine.eventStore.getEvent(event.id)!)!].sort()).toEqual(["wss://one.example/", "wss://two.example/"]);
+    engine.shutdownNostrServices();
+  });
+  it("delivers successful local publications without relay echo", async () => {
+    const { engine, adapters } = await freshAdapters();
+    vi.spyOn(engine.relayPool, "publish").mockResolvedValue([
+      { from: "wss://one.example/", ok: true, message: "saved" }
+    ]);
+    const relaySubscription = { close: vi.fn() };
+    const relayRouter = {
+      subscribe: vi.fn(() => relaySubscription),
+      query: vi.fn(), queryStream: vi.fn(), publish: vi.fn(), resolveRelays: vi.fn()
+    } as unknown as StreamingOutboxRouter;
+    const sink = { event: vi.fn(), closed: vi.fn() };
+    const subscription = adapters.createStoreAwareOutboxRouter(relayRouter, engine.eventStore)
+      .subscribe([{ kinds: [31971] }], undefined, sink);
+    const pool = adapters.createOutboxRelayPool([], ["wss://one.example/"]);
+    const revision = finalizeEvent({ kind: 31971, created_at: 1, content: "updated", tags: [] }, generateSecretKey());
+
+    await pool.publish(revision, ["wss://one.example/"]);
+
+    expect(sink.event).toHaveBeenCalledOnce();
+    expect(sink.event).toHaveBeenCalledWith({
+      event: expect.objectContaining({ id: revision.id, content: "updated", kind: 31971 }),
+      sidecar: { relayHints: ["wss://one.example/"] }
+    });
+    subscription.close();
+    expect(relaySubscription.close).toHaveBeenCalledOnce();
     engine.shutdownNostrServices();
   });
   it("rejects excessive outbox filters before opening relay work", async () => {
