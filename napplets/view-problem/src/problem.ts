@@ -115,6 +115,11 @@ export function problemRevisionHistory(coordinate: string, results: RelayEventRe
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
 }
 
+export function problemEdits(revisions: ProblemRevision[]): ProblemRevision[] {
+  const loadedIds = new Set(revisions.map(({ id }) => id));
+  return revisions.filter(({ previousIds }) => previousIds.some((id) => loadedIds.has(id)));
+}
+
 export function compareProblemRevisions(previous: ProblemRevision | undefined, current: ProblemRevision): ProblemRevisionChange[] {
   const fields = [
     ["Title", previous?.title, current.title],

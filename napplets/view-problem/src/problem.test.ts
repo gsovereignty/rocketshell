@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemEdits, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -42,6 +42,14 @@ describe("problem view", () => {
     const history = problemRevisionHistory(coordinate, [result, next]);
     expect(history.map(({ id }) => id)).toEqual(["e".repeat(64), revision]);
     expect(history[0]).toMatchObject({ author: "f".repeat(64), status: "closed", previousIds: [revision] });
+  });
+  it("counts only revisions with a loaded predecessor as edits", () => {
+    const initial = problemRevisionHistory(coordinate, [result])[0];
+    const orphan = { ...initial, id: "e".repeat(64), previousIds: ["f".repeat(64)] };
+    const edit = { ...initial, id: "1".repeat(64), previousIds: [initial.id] };
+    expect(problemEdits([initial])).toEqual([]);
+    expect(problemEdits([orphan, initial])).toEqual([]);
+    expect(problemEdits([edit, initial])).toEqual([edit]);
   });
   it("reports fields changed by a revision", () => {
     const history = problemRevisionHistory(coordinate, [result]);

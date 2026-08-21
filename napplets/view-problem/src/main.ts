@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
-  mayEditProblem, problemRevisionAuthors, problemRevisionHistory, selectEffectiveClaim, selectProblem, shortKey,
+  mayEditProblem, problemEdits, problemRevisionAuthors, problemRevisionHistory, selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -110,8 +110,9 @@ function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
   const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
+  const edits = problemEdits(revisions);
   const activity = [
-    ...revisions.map((revision) => ({ type: "revision" as const, createdAt: revision.createdAt, revision })),
+    ...edits.map((revision) => ({ type: "revision" as const, createdAt: revision.createdAt, revision })),
     ...discussion.map((result) => ({ type: "comment" as const, createdAt: result.event.created_at, result }))
   ].sort((a, b) => a.createdAt - b.createdAt);
   const effectiveClaim = selectEffectiveClaim(problem, comments, revisions);
@@ -144,7 +145,7 @@ function render() {
       ${related.length ? `<ul>${related.map((coordinate) => `<li><button type="button" data-related="${coordinate}"><span>Problem ${escapeHtml(shortKey(coordinate.split(":")[2]))}</span><code>${escapeHtml(shortKey(coordinate))}</code></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
     </section>
     <section class="discussion" aria-labelledby="discussion-title">
-      <h2 id="discussion-title">Discussion · ${discussion.length} comment${discussion.length === 1 ? "" : "s"} · ${revisions.length} edit${revisions.length === 1 ? "" : "s"}</h2>
+      <h2 id="discussion-title">Discussion · ${discussion.length} comment${discussion.length === 1 ? "" : "s"}${edits.length ? ` · ${edits.length} edit${edits.length === 1 ? "" : "s"}` : ""}</h2>
       <ol>${activity.length ? activity.map((item) => item.type === "revision" ? `<li class="revision-entry${item.revision.id === problem?.revisionId ? " current" : ""}">
         ${authorAvatar(item.revision.author)}
         <details${item.revision.id === problem?.revisionId ? " open" : ""}><summary><span class="history-summary"><span><strong class="activity-kind">Edit</strong><span class="status status-${escapeHtml(item.revision.status)}"><i></i>${escapeHtml(statusLabel(item.revision.status))}</span>${item.revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</span><strong>${escapeHtml(item.revision.title)}</strong><small><span title="${escapeHtml(item.revision.author)}">${escapeHtml(authorName(item.revision.author))}</span><time datetime="${new Date(item.revision.createdAt * 1000).toISOString()}" title="${new Date(item.revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(item.revision.createdAt)}</time><code title="${item.revision.id}">${shortKey(item.revision.id)}</code></small></span></summary>

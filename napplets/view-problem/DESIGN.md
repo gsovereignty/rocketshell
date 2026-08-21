@@ -213,9 +213,10 @@ Top bar is a 72px-high horizontal rule with an underlined change action at left 
 ### Discussion Ledger
 
 Each comment aligns its author avatar and pubkey with date and body. Problem edits
-appear inline by timestamp with the same author treatment, plus status, revision
-identifier, and expandable field diff. Entries stay separated by ledger rules
-and never become cards.
+appear inline by timestamp only when their predecessor revision is also loaded,
+using the same author treatment plus status, revision identifier, and expandable
+field diff. Initial publication never appears as edit history. Entries stay
+separated by ledger rules and never become cards.
 
 ### Motion
 
