@@ -9,6 +9,13 @@
 
 - Do not use environment variables.
 
+## Deployment requirements
+
+- No backend is permitted in this project. Do not add or depend on servers,
+  server-side APIs, serverless functions, backend proxies, native host services,
+  or other non-browser execution environments. Keep the shell and all napplets
+  independently deployable as static browser assets.
+
 ## Shell and packaged napplet boundary
 
 - Treat packaged napplets and the shell as separate products with a strict
