@@ -1,10 +1,20 @@
 export const PROBLEM_CHILD_ARCHETYPE = "composer";
 export const PROBLEM_CHILD_ACTION = "problem-child";
 export const PROBLEM_CHILD_CONVENTION = "napplet:composer/problem-child";
+export const PROBLEM_VIEWER_ARCHETYPE = "note";
+export const PROBLEM_VIEWER_DTAG = "view-problem";
+export const PROBLEM_VIEWER_CONVENTION = "napplet:note/open";
 
 interface IntentCandidateLike {
+  dTag?: string;
   actions: readonly string[];
   conventions: readonly string[];
+}
+
+export function hasProblemViewer(availability: IntentAvailabilityLike | undefined): boolean {
+  return availability?.available === true && availability.candidates.some((candidate) =>
+    candidate.dTag === PROBLEM_VIEWER_DTAG && candidate.actions.includes("open") &&
+    candidate.conventions.includes(PROBLEM_VIEWER_CONVENTION));
 }
 
 interface IntentAvailabilityLike {

@@ -13,7 +13,9 @@ import {
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
 import {
-  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION, hasProblemChildComposer
+  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION,
+  PROBLEM_VIEWER_ARCHETYPE, PROBLEM_VIEWER_CONVENTION, PROBLEM_VIEWER_DTAG,
+  hasProblemChildComposer, hasProblemViewer
 } from "./problem-child-intent";
 import { mergeProblemEvents } from "./problem-events";
 
@@ -139,7 +141,7 @@ function renderList() {
         <span class="status status-${node.status}">${statusLabel(node.status)}</span>
       </button>
       <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable ? "" : "disabled"}
-        aria-label="Open ${escapeHtml(node.title)} in note viewer" title="${noteHandlerAvailable ? "Open in note viewer" : "No note viewer available"}">${externalIcon}</button>
+        aria-label="Open ${escapeHtml(node.title)} in problem viewer" title="${noteHandlerAvailable ? "Open problem details" : "Problem viewer is not installed"}">${externalIcon}</button>
     </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
   gsap.fromTo(".problem-row", { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
 }
@@ -222,11 +224,11 @@ async function openProblem(coordinate: string) {
   if (!node || !status) return;
   status.textContent = "Opening selected problem…";
   try {
-    const result = await intent.open("note", { target: { type: "event", id: node.revisionId } }, {
-      convention: "napplet:note/open", behavior: { focus: true, reuse: true }
+    const result = await intent.open(PROBLEM_VIEWER_ARCHETYPE, { target: { type: "event", id: node.revisionId } }, {
+      convention: PROBLEM_VIEWER_CONVENTION, handler: PROBLEM_VIEWER_DTAG, behavior: { focus: true, reuse: true }
     });
-    if (!result.ok || !result.handled) throw new Error(result.error ?? "No note viewer accepted this problem.");
-    status.textContent = "Problem opened in note viewer.";
+    if (!result.ok || !result.handled) throw new Error(result.error ?? "View Problem did not accept this problem.");
+    status.textContent = "Problem opened in View Problem.";
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : "Problem could not be opened.";
   }
@@ -262,7 +264,7 @@ async function loadDag(value: string) {
     problemEvents = mergeProblemEvents(problemEvents, events).events;
     dag = buildProblemDag(coordinate, problemEvents);
     selected = coordinate;
-    noteHandlerAvailable = noteAvailability?.available === true;
+    noteHandlerAvailable = hasProblemViewer(noteAvailability);
     problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
     renderApp();
   } catch (error) {

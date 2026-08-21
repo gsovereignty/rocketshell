@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, parseCoordinate, relatedCoordinates, selectProblem } from "./problem";
+import { buildWorkflowTemplate, coordinateFromProblemEvent, parseCoordinate, relatedCoordinates, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -12,6 +12,8 @@ const result = { event: { id: revision, pubkey: owner, kind: 31971, created_at: 
 describe("problem view", () => {
   it("validates coordinates", () => expect(parseCoordinate(coordinate).problemId).toBe(id));
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
+  it("resolves intent event targets to logical coordinates", () =>
+    expect(coordinateFromProblemEvent((result as { event: never }).event)).toBe(coordinate));
   it("builds NIP-22 workflow tags", () => {
     const template = buildWorkflowTemplate(selectProblem(coordinate, [result]), "I can take this", "claim");
     expect(template.tags).toContainEqual(["claim"]);

@@ -4,11 +4,11 @@
   FORM: User-pinned problem-detail composition extended from sibling tracker UI.
   FINISH: Operate mode; responsive sandbox controls, visible state, restrained motion.
 */
-import { identity, intent, outbox, type OutboxSubscription, type RelayEventResult } from "@napplet/sdk";
+import { identity, inc, intent, outbox, type OutboxSubscription, type RelayEventResult, type Subscription } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, parseCoordinate, relatedCoordinates, selectProblem, shortKey,
+  COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, parseCoordinate, relatedCoordinates, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 
@@ -25,8 +25,10 @@ let related: string[] = [];
 let pubkey = "";
 let discussionSubscription: OutboxSubscription | undefined;
 let identitySubscription: { close(): void } | undefined;
+let intentSubscription: Subscription | undefined;
 let busy = false;
 let liveMessage = "";
+let intentReceived = false;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => ({
@@ -176,7 +178,38 @@ async function loadProblem(value: string) {
   } catch (error) { showSetup(error instanceof Error ? error.message : "Problem could not be loaded."); }
 }
 
+function isNoteOpenPayload(payload: unknown): payload is { target: { type: "event"; id: string } } {
+  if (typeof payload !== "object" || payload === null) return false;
+  const target = (payload as { target?: unknown }).target;
+  return typeof target === "object" && target !== null &&
+    (target as { type?: unknown }).type === "event" &&
+    typeof (target as { id?: unknown }).id === "string" && /^[0-9a-f]{64}$/.test((target as { id: string }).id);
+}
+
+async function openProblemRevision(revisionId: string) {
+  try {
+    const response = await outbox.query({ ids: [revisionId], kinds: [31971], limit: 1 }, { limit: 1, timeoutMs: 8000 });
+    const selected = response.events.find(({ event }) => event.id === revisionId)?.event;
+    if (!selected) throw new Error("Selected problem revision was not found.");
+    await loadProblem(coordinateFromProblemEvent(selected));
+  } catch (error) {
+    showSetup(error instanceof Error ? error.message : "Selected problem could not be opened.");
+  }
+}
+
 async function start() {
+  try {
+    intentSubscription = inc.on("napplet:note/open", (event) => {
+      intentReceived = true;
+      if (!isNoteOpenPayload(event.payload)) {
+        showSetup("Incoming problem-open request has an invalid event target.");
+        return;
+      }
+      void openProblemRevision(event.payload.target.id);
+    });
+  } catch {
+    liveMessage = "Shell intent delivery unavailable. Paste a problem coordinate to continue.";
+  }
   try {
     pubkey = await identity.getPublicKey();
     identitySubscription = identity.onChanged((next) => { pubkey = next; if (problem) render(); });
@@ -184,8 +217,8 @@ async function start() {
     pubkey = "";
     liveMessage = "Shell identity unavailable. Viewing remains available; publishing is disabled.";
   }
-  showSetup();
+  if (!intentReceived && !problem) showSetup();
 }
 
-addEventListener("beforeunload", () => { discussionSubscription?.close(); identitySubscription?.close(); });
+addEventListener("beforeunload", () => { discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close(); });
 void start();

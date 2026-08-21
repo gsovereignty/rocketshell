@@ -6,7 +6,13 @@
   "napplet": {
     "dTag": "view-problem",
     "title": "View Problem",
-    "requires": ["identity", "outbox", "intent"]
+    "requires": ["identity", "outbox", "intent", "inc"],
+    "archetypes": [
+      {
+        "slug": "note",
+        "convention": "napplet:note/open"
+      }
+    ]
   },
   "scripts": {
     "dev": "vite build --watch",

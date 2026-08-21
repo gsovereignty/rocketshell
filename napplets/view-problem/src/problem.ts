@@ -28,6 +28,13 @@ export function parseCoordinate(value: string) {
   return { coordinate: value.trim(), owner: match[1], problemId: match[2] };
 }
 
+export function coordinateFromProblemEvent(event: NostrEvent) {
+  if (event.kind !== PROBLEM_KIND || !HEX_64.test(event.id)) throw new Error("Selected event is not a valid problem revision.");
+  const coordinate = tagValue(event, "a", "origin");
+  if (!coordinate) throw new Error("Selected problem revision has no origin coordinate.");
+  return parseCoordinate(coordinate).coordinate;
+}
+
 export function selectProblem(coordinate: string, results: RelayEventResult[]): ProblemView {
   const { owner, problemId } = parseCoordinate(coordinate);
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
