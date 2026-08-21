@@ -37,7 +37,6 @@ export function createPolicyFetch(policy: ResourcePolicy): (url: string, init: {
     const timeout = setTimeout(abort, timeoutMs);
     try {
       let current = validateUrl(raw, policy.allowHttpLocalhost ?? false);
-      const grantedOrigin = current.origin;
       for (let redirects = 0; redirects <= 5; redirects += 1) {
         const headers = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([name]) => !["authorization", "cookie", "proxy-authorization"].includes(name.toLowerCase())));
         const response = await fetch(current, { method: init.method ?? "GET", headers, signal: controller.signal, redirect: "manual", credentials: "omit", referrerPolicy: "no-referrer" });
@@ -45,7 +44,6 @@ export function createPolicyFetch(policy: ResourcePolicy): (url: string, init: {
           const location = response.headers.get("location");
           if (!location || redirects === 5) throw new ResourceServiceError("blocked-by-policy", "Resource redirect denied");
           const redirected = validateUrl(new URL(location, current).toString(), policy.allowHttpLocalhost ?? false);
-          if (redirected.origin !== grantedOrigin) throw new ResourceServiceError("blocked-by-policy", "Cross-origin resource redirect denied");
           current = redirected; continue;
         }
         if (!response.ok || !response.body) throw new ResourceServiceError("network-error", "Resource request failed");

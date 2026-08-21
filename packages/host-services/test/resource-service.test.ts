@@ -20,10 +20,14 @@ describe("resource policy fetch", () => {
     await expect(createPolicyFetch({ allowHttpLocalhost: true })("http://remote.example/a", { signal: new AbortController().signal })).rejects.toThrow("scheme denied");
     expect(fetchMock).not.toHaveBeenCalled();
   });
-  it("does not let a redirect leave the granted origin", async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location: "https://other.example/private" } }));
+  it("follows a cross-origin HTTPS image redirect", async () => {
+    const image = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 301, headers: { location: "https://image.example/avatar.jpg" } }))
+      .mockResolvedValueOnce(new Response(image));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(createPolicyFetch({})("https://media.example/a", { signal: new AbortController().signal })).rejects.toThrow("Cross-origin resource redirect denied");
-    expect(fetchMock).toHaveBeenCalledOnce();
+    const response = await createPolicyFetch({})("https://media.example/a", { signal: new AbortController().signal });
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, new URL("https://image.example/avatar.jpg"), expect.objectContaining({ redirect: "manual" }));
   });
 });
