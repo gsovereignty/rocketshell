@@ -17,6 +17,14 @@
   `https://github.com/napplet/naps` for relevant requirements and examples.
   Base napplet design, implementation, and protocol decisions on those current
   references rather than memory, local conventions, or invented patterns.
+- For protocol audits, identify and read the current governing specification
+  before evaluating implementation details. Treat referenced specifications as
+  dependencies only: apply their rules solely where the governing specification
+  explicitly incorporates them. When summaries, linked documents, current text,
+  or revision history conflict, resolve the conflict against the latest living
+  governing text and its relevant revisions before reporting any finding. Never
+  infer that adopting another specification's fields, tags, algorithms, or
+  structure also adopts its event kinds, identifier limits, or unrelated rules.
 - Never invent or present new Napplet, Nostr, NIP, NAP, manifest, event-tag, or
   wire-format conventions as standards. Every protocol field and tag shape must
   have a cited authoritative specification. If no standard exists, say so and
