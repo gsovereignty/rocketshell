@@ -13,10 +13,6 @@ export interface ResourcePolicy {
 }
 
 export const resourceGrantKey = (publisher: string, dTag: string, hash: string): string => `${publisher}\0${dTag}\0${hash}`;
-export const isResourceOriginGranted = (origin: string, grants: readonly string[]): boolean => {
-  if (grants.includes(origin)) return true;
-  try { return grants.includes(new URL(origin).protocol); } catch { return false; }
-};
 export const resolveResourceGrants = (policy: Pick<ResourcePolicy, "grants" | "resolvePublisher">, dTag: string, hash: string): readonly string[] => {
   const publisher = policy.resolvePublisher?.(dTag, hash);
   return publisher ? policy.grants.get(resourceGrantKey(publisher, dTag, hash)) ?? [] : [];
@@ -84,7 +80,7 @@ export function registerResourceService(runtime: Runtime, policy: ResourcePolicy
   const info: ResourceInfo = { schemes: [{ scheme: "https", enabled: true }, { scheme: "http", enabled: policy.allowHttpLocalhost ?? false }], maxBytes: policy.maximumBytes ?? 8 * 1024 * 1024, maxUrls: 8 };
   runtime.registerService("resource", createResourceService({
     fetch: createPolicyFetch(policy),
-    isOriginGranted: isResourceOriginGranted,
+    isOriginGranted: (origin, grants) => grants.includes(origin),
     getConnectGrants: (dTag, hash) => resolveResourceGrants(policy, dTag, hash),
     resolveIdentity: (windowId) => {
       const entry = runtime.sessionRegistry.getEntryByWindowId(windowId);

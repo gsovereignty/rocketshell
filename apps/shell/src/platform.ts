@@ -132,12 +132,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   const resourceGrants = new Map<string, readonly string[]>();
   const resourcePublishers = new Map<string, string>();
   const resourceIdentityKey = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
-  const registerResourcePolicy = (installation: Awaited<ReturnType<typeof packageStore.getActive>>): void => {
+  const registerResourcePublisher = (installation: Awaited<ReturnType<typeof packageStore.getActive>>): void => {
     if (!installation) return;
     resourcePublishers.set(resourceIdentityKey(installation.dTag, installation.aggregateHash), installation.manifestEvent.pubkey);
-    if (installation.manifest.requires.includes("resource")) {
-      resourceGrants.set(resourceGrantKey(installation.manifestEvent.pubkey, installation.dTag, installation.aggregateHash), ["https:"]);
-    }
   };
   registerResourceService(shell.runtime, {
     grants: resourceGrants,
@@ -237,7 +234,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     : undefined;
   const builtInDTags = await installBuiltInNapplets(packageStore, import.meta.env.BASE_URL);
   for (const installation of await packageStore.listActive()) {
-    registerResourcePolicy(installation);
+    registerResourcePublisher(installation);
     if (installation.dTag === fixtureDTag) {
       resourceGrants.set(resourceGrantKey(installation.manifestEvent.pubkey, installation.dTag, installation.aggregateHash), [new URL(fixtureResourceUrl).origin]);
     }
@@ -278,7 +275,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     async installAndOpen(coordinate) {
       const event = await resolveManifest(coordinate);
       const installation = await installRemotePackage(packageStore, event, { allowHttpLocalhost: allowLocalPlaintext });
-      registerResourcePolicy(installation);
+      registerResourcePublisher(installation);
       for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
       const managed = await windows.create(installation.dTag);
       return { dTag: installation.dTag, title: installation.manifest.title ?? installation.dTag, windowId: managed.identity.windowId };
