@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-21T00:00:00.000Z",
+  "generatedAt": "2026-08-21T08:38:30.000Z",
   "title": "Design System: View Problem",
   "extensions": {
     "colorMeta": {
@@ -48,7 +48,7 @@
       "name": "Link Action",
       "kind": "button",
       "description": "Low-emphasis navigation or related-problem action.",
-      "html": "<button class=\"ds-link-action\" type=\"button\">+ Report a related problem</button>",
+      "html": "<button class=\"ds-link-action\" type=\"button\">+ Log new problem under this one</button>",
       "css": ".ds-link-action { border: 0; padding: 8px 0; color: #145cff; background: transparent; font: 400 1rem/1.2 'Avenir Next', Avenir, 'Segoe UI', sans-serif; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; } .ds-link-action:hover { color: #0846cf; } .ds-link-action:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; } .ds-link-action:active { color: #0846cf; }"
     },
     {
@@ -58,6 +58,13 @@
       "description": "Compact text-and-dot workflow state.",
       "html": "<span class=\"ds-status-open\"><i aria-hidden=\"true\"></i>Open</span>",
       "css": ".ds-status-open { display: inline-flex; gap: 8px; align-items: center; border-radius: 99px; padding: 7px 13px; color: #08744d; background: #e0f3e9; font: 700 .82rem/1.2 'Avenir Next', Avenir, 'Segoe UI', sans-serif; } .ds-status-open i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }"
+    },
+    {
+      "name": "Claimed Work Summary",
+      "kind": "custom",
+      "description": "Ruled claimant identity and tabular PR countdown shown during an active 24-hour claim.",
+      "html": "<div class=\"ds-claim-summary\"><span class=\"ds-claim-avatar\" aria-hidden=\"true\">AD</span><div><span>Claimed by</span><strong>Ada</strong></div><div class=\"ds-claim-deadline\"><span>Time left for PR</span><time datetime=\"PT23H42M16S\">23:42:16</time></div></div>",
+      "css": ".ds-claim-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; max-width: 620px; border-block: 1px solid #dfe1e7; padding: 16px 0; color: #171a21; font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif; } .ds-claim-summary > div { display: grid; min-width: 0; gap: 3px; } .ds-claim-summary span:not(.ds-claim-avatar) { color: #6d7280; font-size: .76rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; } .ds-claim-avatar { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: #fff; background: #2f8cdb; font-size: .76rem; font-weight: 750; } .ds-claim-deadline { justify-items: end; text-align: right; } .ds-claim-deadline time { color: #8a5a00; font: 750 1rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: .03em; }"
     },
     {
       "name": "Coordinate Field",
