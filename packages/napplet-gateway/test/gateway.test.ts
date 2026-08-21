@@ -195,8 +195,11 @@ describe("package gateway", () => {
     const manager = new NappletWindowManager(store, {
       register: vi.fn(), waitUntilReady: vi.fn(async () => {}), unregister: vi.fn()
     }, { append: vi.fn() } as unknown as HTMLElement, "/shell/");
+    const windowsChanged = vi.fn();
+    manager.onWindowsChanged(windowsChanged);
     const first = await manager.create("hello/world", false);
     const second = await manager.create("hello/world", false);
+    expect(windowsChanged).toHaveBeenCalledTimes(2);
 
     manager.focus(first.identity.windowId);
     expect(elements.map(({ hidden }) => hidden)).toEqual([false, true]);
@@ -204,6 +207,7 @@ describe("package gateway", () => {
     manager.focus(second.identity.windowId);
     expect(elements.map(({ hidden }) => hidden)).toEqual([true, false]);
     expect(iframes[1]?.focus).toHaveBeenCalledOnce();
+    expect(windowsChanged).toHaveBeenCalledTimes(2);
 
     manager.close(); vi.unstubAllGlobals();
   });

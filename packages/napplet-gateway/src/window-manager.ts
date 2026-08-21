@@ -60,7 +60,6 @@ export class NappletWindowManager {
     this.#focusedWindowId = windowId;
     for (const [candidateId, candidate] of this.#windows) candidate.element.hidden = candidateId !== windowId;
     target.iframe.focus();
-    this.#notifyWindowsChanged();
   }
 
   #notifyWindowsChanged(): void {
