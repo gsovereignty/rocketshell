@@ -28,6 +28,7 @@ const input = document.querySelector<HTMLInputElement>("#coordinate");
 const button = form?.querySelector<HTMLButtonElement>("button[type=submit]");
 const loaderStatus = document.querySelector<HTMLElement>("#loader-status");
 const connectAccount = document.querySelector<HTMLButtonElement>("#connect-account");
+const connectEphemeral = document.querySelector<HTMLButtonElement>("#connect-ephemeral");
 const signOut = document.querySelector<HTMLButtonElement>("#sign-out");
 const accountStatus = document.querySelector<HTMLElement>("#account-status");
 const profileTrigger = document.querySelector<HTMLButtonElement>("#profile-menu-trigger");
@@ -396,6 +397,7 @@ void bootstrap().then(async (platform) => {
   const renderIdentity = (pubkey: string | undefined, profile: { name?: string | undefined; displayName?: string | undefined; picture?: string | undefined } | undefined): void => {
     if (accountStatus) accountStatus.textContent = pubkey ? `Active: ${pubkey.slice(0, 12)}…${pubkey.slice(-8)}` : "No active identity";
     if (connectAccount) connectAccount.hidden = Boolean(pubkey);
+    if (connectEphemeral) connectEphemeral.hidden = Boolean(pubkey);
     if (signOut) signOut.hidden = !pubkey;
     if (!pubkey) {
       if (profileLabel) profileLabel.textContent = "Not connected";
@@ -419,6 +421,7 @@ void bootstrap().then(async (platform) => {
     .subscribe(([pubkey, profile]) => renderIdentity(pubkey, profile));
   window.addEventListener("pagehide", () => identitySubscription.unsubscribe(), { once: true });
   if (connectAccount) connectAccount.disabled = false;
+  if (connectEphemeral) connectEphemeral.disabled = false;
   connectAccount?.addEventListener("click", () => {
     connectAccount.disabled = true;
     if (accountStatus) accountStatus.textContent = "Waiting for Nostr extension…";
@@ -427,6 +430,15 @@ void bootstrap().then(async (platform) => {
         if (accountStatus) accountStatus.textContent = error instanceof Error ? error.message : "Unable to connect Nostr extension";
       })
       .finally(() => { connectAccount.disabled = false; });
+  });
+  connectEphemeral?.addEventListener("click", () => {
+    connectEphemeral.disabled = true;
+    if (accountStatus) accountStatus.textContent = "Creating ephemeral identity…";
+    void platform.connectEphemeral()
+      .catch((error: unknown) => {
+        if (accountStatus) accountStatus.textContent = error instanceof Error ? error.message : "Unable to create ephemeral identity";
+      })
+      .finally(() => { connectEphemeral.disabled = false; });
   });
   signOut?.addEventListener("click", () => { platform.signOut(); closeMenus(); });
 

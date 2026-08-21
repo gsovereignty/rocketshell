@@ -61,6 +61,7 @@ class BrowserWindowBridge implements WindowBridge {
 export interface BrowserPlatform {
   readonly windows: NappletWindowManager;
   connectExtension(): Promise<string>;
+  connectEphemeral(): Promise<string>;
   signOut(): void;
   dockLaunchers(): Promise<readonly DockLauncher[]>;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
@@ -251,6 +252,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   return {
     windows,
     connectExtension: () => accounts.connectExtension(),
+    connectEphemeral: () => accounts.connectEphemeral(),
     signOut: () => accounts.signOut(),
     async dockLaunchers() {
       return (await packageStore.listActive())

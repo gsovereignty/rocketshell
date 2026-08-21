@@ -18,6 +18,19 @@ describe("account controller", () => {
     controller.close();
   });
 
+  it("creates a signing account that is removed on sign out", async () => {
+    const manager = new AccountManager();
+    const controller = createAccountController(manager);
+    const pubkey = await controller.connectEphemeral();
+    expect(pubkey).toMatch(/^[0-9a-f]{64}$/);
+    await expect(controller.sign({ kind: 1, created_at: 1, content: "ephemeral", tags: [] }))
+      .resolves.toMatchObject({ pubkey, content: "ephemeral" });
+    expect(manager.accounts).toHaveLength(1);
+    controller.signOut();
+    expect(manager.accounts).toHaveLength(0);
+    controller.close();
+  });
+
   it("invalidates signing work when active account is removed", async () => {
     const manager = new AccountManager();
     let finish: ((event: NostrEvent) => void) | undefined;

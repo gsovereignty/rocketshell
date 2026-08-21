@@ -1,5 +1,5 @@
 import type { AccountManager, IAccount } from "applesauce-accounts";
-import { ExtensionAccount } from "applesauce-accounts/accounts";
+import { ExtensionAccount, PrivateKeyAccount } from "applesauce-accounts/accounts";
 import type { EventTemplate, NostrEvent } from "applesauce-core/helpers/event";
 import { failure } from "@project/platform-nap-contract";
 import { validateEventTemplate } from "./event-limits.js";
@@ -15,6 +15,7 @@ export interface AccountController {
   nip44Encrypt(pubkey: string, plaintext: string): Promise<string>;
   nip44Decrypt(pubkey: string, ciphertext: string): Promise<string>;
   connectExtension(): Promise<string>;
+  connectEphemeral(): Promise<string>;
   signOut(): void;
   close(): void;
 }
@@ -65,7 +66,22 @@ export function createAccountController(manager: AccountManager, onSigned?: (eve
       manager.setActive(account.id);
       return account.pubkey;
     },
-    signOut() { manager.clearActive(); },
+    async connectEphemeral() {
+      const account = PrivateKeyAccount.generateNew();
+      ephemeralAccounts.add(account);
+      manager.addAccount(account as never);
+      manager.setActive(account.id);
+      return account.pubkey;
+    },
+    signOut() {
+      const account = manager.active;
+      if (account && ephemeralAccounts.has(account)) manager.removeAccount(account);
+      else manager.clearActive();
+    },
     close() { if (closed) return; closed = true; subscription.unsubscribe(); }
   };
 }
+
+const ephemeralAccounts = new WeakSet<object>();
+
+export const isEphemeralAccount = (account: IAccount): boolean => ephemeralAccounts.has(account);

@@ -1,7 +1,7 @@
 import { AccountManager } from "applesauce-accounts";
 import { ReadonlyAccount, registerCommonAccountTypes } from "applesauce-accounts/accounts";
 import { describe, expect, it, vi } from "vitest";
-import { createPersistentAccountManager, PRIVATE_ACCOUNT_DATABASE_NAME, type AccountSnapshot, type AccountSnapshotStore } from "../src/index.js";
+import { createAccountController, createPersistentAccountManager, PRIVATE_ACCOUNT_DATABASE_NAME, type AccountSnapshot, type AccountSnapshotStore } from "../src/index.js";
 
 describe("private account persistence", () => {
   it("uses the isolated private database namespace", () => {
@@ -28,5 +28,22 @@ describe("private account persistence", () => {
     expect(snapshots.at(-1)).toMatchObject({ activeAccountId: second.id });
     expect(snapshots.at(-1)?.accounts.map((account) => account.id)).toEqual([first.id, second.id]);
     expect(store.close).toHaveBeenCalledOnce();
+  });
+
+  it("never persists an ephemeral account or active selection", async () => {
+    const snapshots: AccountSnapshot[] = [];
+    const store: AccountSnapshotStore = {
+      load: vi.fn(async () => undefined),
+      save: vi.fn(async (snapshot) => { snapshots.push(structuredClone(snapshot)); }),
+      close: vi.fn()
+    };
+    const manager = new AccountManager();
+    registerCommonAccountTypes(manager);
+    const persistent = await createPersistentAccountManager(store, manager);
+    const controller = createAccountController(manager);
+    await controller.connectEphemeral();
+    await persistent.close();
+    expect(snapshots.at(-1)).toEqual({ accounts: [] });
+    controller.close();
   });
 });

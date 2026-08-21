@@ -1,4 +1,5 @@
 import type { AccountManager, SerializedAccount } from "applesauce-accounts";
+import { isEphemeralAccount } from "./accounts.js";
 import { Subscription } from "rxjs";
 import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 
@@ -79,8 +80,8 @@ export async function createPersistentAccountManager(store: AccountSnapshotStore
   let pending = Promise.resolve(); let persistenceError: unknown; let closed = false;
   const save = (): void => {
     const snapshot: AccountSnapshot = {
-      accounts: manager.toJSON(),
-      ...(manager.active ? { activeAccountId: manager.active.id } : {})
+      accounts: manager.accounts.filter((account) => !isEphemeralAccount(account)).map((account) => account.toJSON()),
+      ...(manager.active && !isEphemeralAccount(manager.active) ? { activeAccountId: manager.active.id } : {})
     };
     pending = pending.then(() => store.save(snapshot)).catch((error: unknown) => { persistenceError = error; });
   };
