@@ -211,8 +211,16 @@ describe("package gateway", () => {
     expect(windowsChanged).toHaveBeenCalledTimes(3);
     elements[0]!.style.gridColumn = "1 / span 2";
     elements[0]!.style.gridRow = "2 / span 3";
+    elements[1]!.style.gridColumn = "3 / span 2";
+    elements[1]!.style.gridRow = "2 / span 3";
     elements[2]!.style.gridColumn = "3 / span 2";
     elements[2]!.style.gridRow = "1 / span 1";
+
+    manager.show(second.identity.windowId);
+    expect(elements.map(({ hidden }) => hidden)).toEqual([false, false, false]);
+    expect(elements[0]!.style).toEqual({ gridColumn: "1 / span 2", gridRow: "2 / span 3" });
+    expect(elements[1]!.style).toEqual({ gridColumn: "3 / span 2", gridRow: "2 / span 3" });
+    expect(iframes[1]?.focus).not.toHaveBeenCalled();
 
     manager.focus(second.identity.windowId, first.identity.windowId);
     expect(elements.map(({ hidden }) => hidden)).toEqual([true, false, false]);

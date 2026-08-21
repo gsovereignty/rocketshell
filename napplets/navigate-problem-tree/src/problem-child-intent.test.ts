@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
-  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_BEHAVIOR, PROBLEM_VIEWER_CONVENTION,
-  hasProblemChildComposer, hasProblemViewer
+  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_CONVENTION,
+  hasProblemChildComposer, hasProblemViewer, openProblemViewer
 } from "./problem-child-intent";
 
 describe("problem child intent", () => {
@@ -22,8 +22,15 @@ describe("problem child intent", () => {
 });
 
 describe("problem viewer intent", () => {
-  it("shows a reusable viewer without replacing the DAG", () => {
-    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: false, reuse: true });
+  it("dispatches the selected revision without replacing the DAG", async () => {
+    const open = vi.fn().mockResolvedValue({ ok: true, handled: true });
+    await openProblemViewer({ open }, "a".repeat(64));
+    expect(open).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledWith(
+      "note",
+      { target: { type: "event", id: "a".repeat(64) } },
+      { convention: PROBLEM_VIEWER_CONVENTION, behavior: { focus: false, reuse: true } }
+    );
   });
 
   it("requires an open handler for the note convention", () => {

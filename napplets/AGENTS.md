@@ -35,6 +35,24 @@
   intent routing without a browser confirmation. If a confirmation appears, fix
   shell intent policy or the sender's unnecessary explicit-handler request; do not
   add a napplet-local workaround.
+- Treat dispatch and focus as separate behavior. A user request to open or update
+  another napplet does not imply permission to replace the caller's surface.
+- In this shell, `behavior.focus: true` moves the target into the caller's layout
+  slot and hides the caller. For navigation surfaces that update an adjacent or
+  already-visible peer, use `{ focus: false, reuse: true }` unless the user
+  explicitly requests replacement navigation.
+- Before changing `focus`, `reuse`, or `newWindow`, inspect the current living
+  NAP-INTENT specification and host window-manager semantics. Do not infer these
+  flags from their names.
+- Cross-napplet regression tests must invoke the production dispatch helper and
+  assert the actual intent payload and behavior options. A test that only compares
+  an exported constant is insufficient.
+- For adjacent-peer navigation, test with caller and target both visible. Assert
+  that activation updates the reused target while both surfaces remain visible;
+  keep the host window-manager visibility test green alongside napplet tests.
+- Refresh is part of every window-placement regression. Preserve caller/target
+  ordering and stored grid coordinates across session persistence and restore;
+  a passing pre-refresh interaction alone is insufficient.
 
 ## Sandboxed form controls
 

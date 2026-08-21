@@ -29,6 +29,28 @@ const session: WindowSession = {
 };
 
 describe("window session store", () => {
+  it("preserves adjacent DAG and viewer order across refresh", () => {
+    const storage = memoryStorage();
+    const adjacent: WindowSession = {
+      version: 2,
+      windows: [
+        { windowId: "tree-1", dTag: "navigate-problem-tree", launch: { type: "direct", coordinate: "tree-coordinate" }, hidden: false },
+        {
+          windowId: "viewer-1", dTag: "problem-viewer", hidden: false,
+          launch: {
+            type: "intent", sender: "navigate-problem-tree", convention: "napplet:note/open",
+            payload: { target: { type: "event", id: "problem-id" } }
+          }
+        }
+      ]
+    };
+    createWindowSessionStore(storage).set(adjacent);
+    expect(createWindowSessionStore(storage).get()).toEqual(adjacent);
+    expect(createWindowSessionStore(storage).get().windows.map(({ dTag }) => dTag)).toEqual([
+      "navigate-problem-tree", "problem-viewer"
+    ]);
+  });
+
   it("persists direct and intent-created windows with focus state", () => {
     const storage = memoryStorage();
     createWindowSessionStore(storage).set(session);

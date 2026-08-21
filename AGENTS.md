@@ -4,6 +4,17 @@
 
 - For UI motion, animation, and transitions, always use GSAP whenever
   technically possible. Prefer GSAP over CSS animations and transitions.
+- Treat intent dispatch, window visibility, focus, replacement, and layout as
+  separate behaviors. Do not infer one from another or change more than the user
+  requested.
+- In the current window manager, focusing a target with a caller replaces the
+  caller's grid slot and hides the caller. Showing a target preserves all window
+  visibility and geometry. Verify this host behavior before choosing intent
+  `focus`, `reuse`, or `newWindow` options.
+- Window-placement changes require regression coverage with caller and target
+  both visible, plus a persistence/restore check proving refresh preserves their
+  order, visibility, and grid coordinates. Constant-only assertions and mocked
+  dispatch success are not sufficient.
 
 ## Configuration requirements
 
