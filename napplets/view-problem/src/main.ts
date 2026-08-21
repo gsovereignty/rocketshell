@@ -333,24 +333,30 @@ async function loadProblem(value: string) {
       return subscription;
     };
     let subscription = subscribe([target.owner]);
+    const problemFilter = { kinds: [31971], "#d": [target.problemId], limit: 200 };
     const [problemResponse, response] = await Promise.all([
-      outbox.query({ kinds: [31971], "#d": [target.problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 }),
+      outbox.query(problemFilter, { authors: [target.owner], limit: 200, timeoutMs: 8000 }),
       outbox.query(filters.slice(1), { limit: 300, timeoutMs: 8000 })
     ]);
     if (generation !== loadGeneration) return;
-    const allResults = [...problemResponse.events, ...response.events, ...buffered];
+    let problemResults = problemResponse.events;
+    const initialProblem = selectProblem(target.coordinate, problemResults);
+    const routedAuthors = problemRevisionAuthors(initialProblem);
+    if (routedAuthors.some((author) => author !== target.owner)) {
+      const previousSubscription = subscription;
+      subscription = subscribe(routedAuthors);
+      previousSubscription.close();
+      const routedResponse = await outbox.query(problemFilter, { authors: routedAuthors, limit: 200, timeoutMs: 8000 });
+      if (generation !== loadGeneration) return;
+      problemResults = [...problemResults, ...routedResponse.events];
+    }
+    const allResults = [...problemResults, ...response.events, ...buffered];
     const uniqueResults = Array.from(new Map(allResults.map((result) => [result.event.id, result])).values());
     relatedEvents = uniqueResults.filter(({ event }) => event.kind === 31971);
     problem = selectProblem(target.coordinate, relatedEvents);
     comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
     hydrated = true;
-    const routedAuthors = problemRevisionAuthors(problem);
-    if (routedAuthors.some((author) => author !== target.owner)) {
-      const previousSubscription = subscription;
-      subscription = subscribe(routedAuthors);
-      previousSubscription.close();
-    }
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments);
     void loadProfiles([...comments.map(({ event }) => event.pubkey), ...(effectiveClaim ? [effectiveClaim.claimant] : [])]);
