@@ -8,7 +8,12 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
   const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
   const source = { postMessage: vi.fn() };
   const target = { identity: { dTag: "viewer-app", windowId: "target-1", source }, iframe: { focus: vi.fn() }, ready: Promise.resolve() };
-  const windows = { findByDTag: vi.fn(() => target), create: vi.fn(async () => target), focus: vi.fn() } as unknown as NappletWindowManager;
+  const caller = { identity: { dTag: "runtime-attested-sender", windowId: "caller-1", source: {} } };
+  const windows = {
+    findByDTag: vi.fn((dTag: string) => dTag === caller.identity.dTag ? caller : target),
+    create: vi.fn(async () => target),
+    focus: vi.fn()
+  } as unknown as NappletWindowManager;
   const store = { listActive: vi.fn(async () => [{
     dTag: "viewer-app", manifest: {
       dTag: "viewer-app", aggregateHash: "a".repeat(64), entrypoint: "index.html", requires: [], artifacts: [],
@@ -20,7 +25,7 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
     resolveDTag: () => "runtime-attested-sender", listWindowIds: () => ["sender-1"],
     hasCapability: () => true, sendToEligibleNapplet: () => true
   } as ServiceRuntimeContext);
-  return { handler: handler!, windows, source, target, store };
+  return { handler: handler!, windows, source, target, caller, store };
 }
 
 describe("intent host boundary", () => {
@@ -69,8 +74,9 @@ describe("intent host boundary", () => {
       }
     } as never, send);
     await vi.waitFor(() => expect(send).toHaveBeenCalled());
-    expect(windows.findByDTag).not.toHaveBeenCalled();
-    expect(windows.create).toHaveBeenCalledWith("viewer-app", false);
+    expect(windows.findByDTag).toHaveBeenCalledWith("runtime-attested-sender");
+    expect(windows.findByDTag).not.toHaveBeenCalledWith("viewer-app");
+    expect(windows.create).toHaveBeenCalledWith("viewer-app", false, { deferLayout: false });
     expect(windows.focus).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       type: "intent.invoke.result",
@@ -90,7 +96,7 @@ describe("intent host boundary", () => {
     await vi.waitFor(() => expect(send).toHaveBeenCalled());
     expect(getDefaultHandler).toHaveBeenCalledWith("viewer");
     expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer");
-    expect(windows.focus).toHaveBeenCalledWith("target-1");
+    expect(windows.focus).toHaveBeenCalledWith("target-1", "caller-1");
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "alternate-viewer" }) }));
   });
 
@@ -135,6 +141,21 @@ describe("intent host boundary", () => {
     expect(authorizeExplicitHandler).toHaveBeenCalledWith("runtime-attested-sender", "viewer-app");
     expect(windows.create).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "viewer-app" }) }));
+  });
+
+  it("defers cold target layout and replaces only its caller", async () => {
+    const { handler, windows } = setup();
+    (windows.findByDTag as ReturnType<typeof vi.fn>).mockImplementation((dTag: string) =>
+      dTag === "runtime-attested-sender"
+        ? { identity: { dTag, windowId: "caller-1", source: {} } }
+        : undefined);
+    const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "cold-replace", request: { archetype: "viewer" }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(windows.create).toHaveBeenCalledWith("viewer-app", true, { deferLayout: true });
+    expect(windows.focus).toHaveBeenCalledWith("target-1", "caller-1");
   });
 
   it("buffers concurrent cold payloads and delivers each exactly once", async () => {

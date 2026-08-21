@@ -6,6 +6,7 @@ import {
   rectsOverlap,
   resolveOpeningPlacement,
   resolveRelocation,
+  transferReplacementRect,
   visibleGridRange
 } from "./widget-layout.js";
 
@@ -50,6 +51,20 @@ describe("default widget layouts", () => {
 });
 
 describe("widget collision checks", () => {
+  it("transfers a caller slot without moving unrelated widgets", () => {
+    const caller = { id: "caller" };
+    const target = { id: "target" };
+    const peer = { id: "peer" };
+    const callerRect = { column: 0, row: 0, width: 2, height: 2 };
+    const peerRect = { column: 2, row: 0, width: 2, height: 2 };
+    const rects = new Map([[caller, callerRect], [peer, peerRect]]);
+
+    expect(transferReplacementRect(rects, target, caller)).toBe(callerRect);
+    expect(rects.get(target)).toBe(callerRect);
+    expect(rects.has(caller)).toBe(false);
+    expect(rects.get(peer)).toBe(peerRect);
+  });
+
   it("rejects overlap and out-of-grid placement", () => {
     const occupied = [{ column: 0, row: 0, width: 2, height: 2 }];
     expect(rectsOverlap(occupied[0]!, { column: 1, row: 1, width: 2, height: 1 })).toBe(true);

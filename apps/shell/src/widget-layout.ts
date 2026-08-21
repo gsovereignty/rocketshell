@@ -61,6 +61,18 @@ export const rectsOverlap = (a: WidgetRect, b: WidgetRect): boolean =>
   a.row < b.row + b.height &&
   a.row + a.height > b.row;
 
+export const transferReplacementRect = <T>(
+  rects: Map<T, WidgetRect>,
+  replacement: T,
+  replaced: T
+): WidgetRect | undefined => {
+  const rect = rects.get(replaced);
+  if (!rect) return undefined;
+  rects.delete(replaced);
+  rects.set(replacement, rect);
+  return rect;
+};
+
 export const canPlaceRect = (
   candidate: WidgetRect,
   columns: number,
@@ -294,7 +306,8 @@ export const resolveRelocation = (
 };
 
 const widgetElements = (container: HTMLElement): HTMLElement[] =>
-  Array.from(container.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains("napplet-window"));
+  Array.from(container.children).filter((child): child is HTMLElement => child instanceof HTMLElement &&
+    child.classList.contains("napplet-window") && !child.hidden && child.dataset.layoutPending !== "true");
 
 const widgetKeys = (elements: readonly HTMLElement[]): ReadonlyMap<HTMLElement, string> => {
   const occurrences = new Map<string, number>();
@@ -557,6 +570,19 @@ export const createWidgetGrid = (
     });
   };
 
+  const animateSurfaceReplacement = (elements: readonly HTMLElement[]): void => {
+    if (reducedMotion.matches || elements.length === 0) return;
+    gsap.fromTo(elements, { autoAlpha: .72, scale: .99, filter: "blur(2px)" }, {
+      autoAlpha: 1,
+      scale: 1,
+      filter: "blur(0px)",
+      duration: .2,
+      ease: "power4.out",
+      clearProps: "opacity,visibility,transform,filter",
+      overwrite: "auto"
+    });
+  };
+
   const currentVisibleRows = (): VisibleGridRange => {
     const containerRect = container.getBoundingClientRect();
     const styles = getComputedStyle(container);
@@ -627,6 +653,19 @@ export const createWidgetGrid = (
 
   const sync = (): void => {
     const elements = widgetElements(container);
+    const replacements = elements.flatMap((element) => {
+      const replacedWindowId = element.dataset.replacesWindowId;
+      if (!replacedWindowId) return [];
+      const replaced = [...rects.keys()].find((candidate) => candidate.dataset.windowId === replacedWindowId);
+      const rect = replaced ? transferReplacementRect(rects, element, replaced) : undefined;
+      delete element.dataset.replacesWindowId;
+      return rect && replaced ? [{ element, replaced, rect }] : [];
+    });
+    for (const { element, replaced, rect } of replacements) {
+      applyRect(element, rect);
+      updateHandleValues(element, rect);
+    }
+    animateSurfaceReplacement(replacements.map(({ element }) => element));
     const added = elements.filter((element) => !rects.has(element));
     for (const element of elements) decorate(element);
     for (const element of [...rects.keys()]) if (!elements.includes(element)) rects.delete(element);
@@ -864,7 +903,12 @@ export const createWidgetGrid = (
   };
 
   const mutationObserver = new MutationObserver(sync);
-  mutationObserver.observe(container, { childList: true });
+  mutationObserver.observe(container, {
+    childList: true,
+    attributes: true,
+    attributeFilter: ["data-layout-pending", "data-replaces-window-id"],
+    subtree: false
+  });
   const resizeObserver = new ResizeObserver(([entry]) => {
     if (!entry) return;
     const next = profileForWidth(entry.contentRect.width);

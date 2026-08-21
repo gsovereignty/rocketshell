@@ -26,7 +26,10 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
       async dispatch(params) {
         const startedAt = Date.now();
         const reuse = params.behavior?.newWindow !== true && params.behavior?.reuse !== false;
-        const target = (reuse ? windows.findByDTag(params.handler) : undefined) ?? await windows.create(params.handler, reuse);
+        const caller = windows.findByDTag(params.sender);
+        const existingTarget = reuse ? windows.findByDTag(params.handler) : undefined;
+        const replaceCaller = params.behavior?.focus !== false && caller !== undefined && caller.identity.dTag !== params.handler;
+        const target = existingTarget ?? await windows.create(params.handler, reuse, { deferLayout: replaceCaller });
         // Self-dispatch cannot await its own startup without deadlocking. Other
         // senders wait until target listeners are ready before delivery.
         if (target.identity.dTag !== params.sender) await target.ready;
@@ -34,7 +37,7 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
           type: "inc.event", topic: params.convention, sender: params.sender,
           ...(params.payload === undefined ? {} : { payload: params.payload })
         }, "*");
-        if (params.behavior?.focus !== false) windows.focus(target.identity.windowId);
+        if (params.behavior?.focus !== false) windows.focus(target.identity.windowId, caller?.identity.windowId);
         telemetry.record("intent.completed", Date.now() - startedAt, { handler: params.handler });
         return { windowId: target.identity.windowId };
       }

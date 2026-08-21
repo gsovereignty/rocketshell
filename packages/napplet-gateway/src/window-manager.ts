@@ -28,6 +28,10 @@ export interface ManagedNappletWindow {
   readonly ready: Promise<void>;
 }
 
+export interface CreateWindowOptions {
+  readonly deferLayout?: boolean;
+}
+
 export class NappletWindowManager {
   readonly #windows = new Map<string, ManagedNappletWindow>();
   readonly #creating = new Map<string, Promise<ManagedNappletWindow>>();
@@ -54,11 +58,23 @@ export class NappletWindowManager {
     return () => this.#changeListeners.delete(listener);
   }
 
-  focus(windowId: string): void {
+  focus(windowId: string, callerWindowId?: string): void {
     const target = this.#windows.get(windowId);
     if (!target) return;
     this.#focusedWindowId = windowId;
-    for (const [candidateId, candidate] of this.#windows) candidate.element.hidden = candidateId !== windowId;
+    if (callerWindowId && callerWindowId !== windowId) {
+      const caller = this.#windows.get(callerWindowId);
+      if (caller) {
+        target.element.style.gridColumn = caller.element.style.gridColumn;
+        target.element.style.gridRow = caller.element.style.gridRow;
+        target.element.dataset.replacesWindowId = callerWindowId;
+        caller.element.hidden = true;
+        target.element.hidden = false;
+        delete target.element.dataset.layoutPending;
+      }
+    } else if (!callerWindowId) {
+      for (const [candidateId, candidate] of this.#windows) candidate.element.hidden = candidateId !== windowId;
+    }
     target.iframe.focus();
   }
 
@@ -66,21 +82,22 @@ export class NappletWindowManager {
     for (const listener of this.#changeListeners) listener();
   }
 
-  async create(dTag: string, reusePending = true): Promise<ManagedNappletWindow> {
+  async create(dTag: string, reusePending = true, options: CreateWindowOptions = {}): Promise<ManagedNappletWindow> {
     if (this.#closed) throw new Error("Window manager closed");
     const pending = reusePending ? this.#creating.get(dTag) : undefined;
     if (pending) return pending;
-    const creating = this.#create(dTag);
+    const creating = this.#create(dTag, options);
     if (reusePending) this.#creating.set(dTag, creating);
     try { return await creating; }
     finally { if (reusePending && this.#creating.get(dTag) === creating) this.#creating.delete(dTag); }
   }
 
-  async #create(dTag: string): Promise<ManagedNappletWindow> {
+  async #create(dTag: string, options: CreateWindowOptions): Promise<ManagedNappletWindow> {
     const installation = await this.store.getActive(dTag);
     if (!installation) throw new Error("No active verified installation");
     const element = document.createElement("article");
     element.className = "napplet-window";
+    if (options.deferLayout) element.dataset.layoutPending = "true";
     const toolbar = document.createElement("header");
     toolbar.className = "napplet-window-toolbar";
     const title = document.createElement("span");
@@ -95,6 +112,7 @@ export class NappletWindowManager {
     iframe.setAttribute("sandbox", "allow-scripts");
     iframe.title = dTag;
     const windowId = crypto.randomUUID(); const nonce = crypto.randomUUID();
+    element.dataset.windowId = windowId;
     closeButton.dataset.windowId = windowId;
     closeButton.addEventListener("click", () => this.destroy(windowId));
     toolbar.append(title, closeButton);
@@ -148,10 +166,19 @@ export class NappletWindowManager {
     const managed = this.#windows.get(windowId);
     if (!managed) return;
     this.#windows.delete(windowId);
+    const replacedWindowId = managed.element.dataset.replacesWindowId;
+    const replaced = replacedWindowId ? this.#windows.get(replacedWindowId) : undefined;
+    if (replaced) {
+      replaced.element.style.gridColumn = managed.element.style.gridColumn;
+      replaced.element.style.gridRow = managed.element.style.gridRow;
+      replaced.element.dataset.replacesWindowId = windowId;
+      replaced.element.hidden = false;
+      delete replaced.element.dataset.layoutPending;
+    }
     managed.resources.close(); this.bridge.unregister(windowId); managed.element.remove();
     if (this.#focusedWindowId === windowId) {
-      this.#focusedWindowId = undefined;
-      for (const candidate of this.#windows.values()) candidate.element.hidden = false;
+      this.#focusedWindowId = replaced?.identity.windowId;
+      if (!replaced) for (const candidate of this.#windows.values()) candidate.element.hidden = false;
     }
     this.#notifyWindowsChanged();
     this.telemetry.record("window.active", -1, { dTag: managed.identity.dTag });

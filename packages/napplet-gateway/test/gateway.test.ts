@@ -139,7 +139,7 @@ describe("package gateway", () => {
   it("removes a registered window when bridge readiness fails", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const element = { append: vi.fn(), remove: vi.fn(), className: "" };
+    const element = { append: vi.fn(), remove: vi.fn(), className: "", dataset: {}, style: {}, hidden: false };
     const node = { append: vi.fn(), className: "", textContent: "" };
     const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
     const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
@@ -156,7 +156,7 @@ describe("package gateway", () => {
   it("shares one cold start across concurrent opens", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const element = { append: vi.fn(), remove: vi.fn(), className: "" };
+    const element = { append: vi.fn(), remove: vi.fn(), className: "", dataset: {}, style: {}, hidden: false };
     const node = { append: vi.fn(), className: "", textContent: "" };
     const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
     const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
@@ -174,14 +174,14 @@ describe("package gateway", () => {
     expect(document.createElement).toHaveBeenCalledTimes(5);
     manager.close(); vi.unstubAllGlobals();
   });
-  it("shows only the intent-focused window", async () => {
+  it("replaces only the intent caller without moving peers", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const elements: Array<{ append: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; className: string; hidden: boolean }> = [];
+    const elements: Array<{ append: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; className: string; hidden: boolean; dataset: Record<string, string>; style: { gridColumn: string; gridRow: string } }> = [];
     const iframes: Array<{ setAttribute: ReturnType<typeof vi.fn>; dataset: Record<string, string>; contentWindow: object; title: string; srcdoc: string; focus: ReturnType<typeof vi.fn> }> = [];
     vi.stubGlobal("document", { createElement: vi.fn((tag: string) => {
       if (tag === "article") {
-        const element = { append: vi.fn(), remove: vi.fn(), className: "", hidden: false };
+        const element = { append: vi.fn(), remove: vi.fn(), className: "", hidden: false, dataset: {} as Record<string, string>, style: { gridColumn: "", gridRow: "" } };
         elements.push(element); return element;
       }
       if (tag === "button") return { append: vi.fn(), className: "", textContent: "", dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
@@ -198,23 +198,32 @@ describe("package gateway", () => {
     const windowsChanged = vi.fn();
     manager.onWindowsChanged(windowsChanged);
     const first = await manager.create("hello/world", false);
-    const second = await manager.create("hello/world", false);
-    expect(windowsChanged).toHaveBeenCalledTimes(2);
+    const second = await manager.create("hello/world", false, { deferLayout: true });
+    await manager.create("hello/world", false);
+    expect(windowsChanged).toHaveBeenCalledTimes(3);
+    elements[0]!.style.gridColumn = "1 / span 2";
+    elements[0]!.style.gridRow = "2 / span 3";
+    elements[2]!.style.gridColumn = "3 / span 2";
+    elements[2]!.style.gridRow = "1 / span 1";
 
-    manager.focus(first.identity.windowId);
-    expect(elements.map(({ hidden }) => hidden)).toEqual([false, true]);
-    expect(iframes[0]?.focus).toHaveBeenCalledOnce();
-    manager.focus(second.identity.windowId);
-    expect(elements.map(({ hidden }) => hidden)).toEqual([true, false]);
+    manager.focus(second.identity.windowId, first.identity.windowId);
+    expect(elements.map(({ hidden }) => hidden)).toEqual([true, false, false]);
+    expect(elements[1]!.style).toEqual({ gridColumn: "1 / span 2", gridRow: "2 / span 3" });
+    expect(elements[1]!.dataset.layoutPending).toBeUndefined();
+    expect(elements[2]!.style).toEqual({ gridColumn: "3 / span 2", gridRow: "1 / span 1" });
     expect(iframes[1]?.focus).toHaveBeenCalledOnce();
-    expect(windowsChanged).toHaveBeenCalledTimes(2);
+
+    manager.destroy(second.identity.windowId);
+    expect(elements[0]!.hidden).toBe(false);
+    expect(elements[0]!.style).toEqual({ gridColumn: "1 / span 2", gridRow: "2 / span 3" });
+    expect(elements[2]!.hidden).toBe(false);
 
     manager.close(); vi.unstubAllGlobals();
   });
   it("tears down a cold start that misses readiness timeout", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const element = { append: vi.fn(), remove: vi.fn(), className: "" };
+    const element = { append: vi.fn(), remove: vi.fn(), className: "", dataset: {}, style: {}, hidden: false };
     const node = { append: vi.fn(), className: "", textContent: "" };
     const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
     const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "" };
