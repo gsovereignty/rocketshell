@@ -799,7 +799,7 @@ void bootstrap().then(async (platform) => {
     const windows = platform.windows.listWindowIds().flatMap((windowId) => {
       const managed = platform.windows.findByWindowId(windowId);
       if (!managed?.launch) return [];
-      const replacesWindowId = managed.element.dataset.replacesWindowId;
+      const replacesWindowId = managed.replacesWindowId;
       return [{
         windowId, dTag: managed.identity.dTag, launch: managed.launch, hidden: managed.element.hidden,
         ...(replacesWindowId ? { replacesWindowId } : {})

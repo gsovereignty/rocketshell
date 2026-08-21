@@ -27,6 +27,7 @@ export interface ManagedNappletWindow {
   readonly resources: SubscriptionRegistry;
   readonly ready: Promise<void>;
   launch?: WindowLaunchDescriptor;
+  replacesWindowId?: string;
 }
 
 export type WindowLaunchDescriptor =
@@ -89,6 +90,7 @@ export class NappletWindowManager {
       if (caller) {
         target.element.style.gridColumn = caller.element.style.gridColumn;
         target.element.style.gridRow = caller.element.style.gridRow;
+        target.replacesWindowId = callerWindowId;
         target.element.dataset.replacesWindowId = callerWindowId;
         caller.element.hidden = true;
         target.element.hidden = false;
@@ -205,7 +207,7 @@ export class NappletWindowManager {
     const managed = this.#windows.get(windowId);
     if (!managed) return;
     this.#windows.delete(windowId);
-    const replacedWindowId = managed.element.dataset.replacesWindowId;
+    const replacedWindowId = managed.replacesWindowId;
     const replaced = replacedWindowId ? this.#windows.get(replacedWindowId) : undefined;
     if (replaced) {
       replaced.element.style.gridColumn = managed.element.style.gridColumn;
