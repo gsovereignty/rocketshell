@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_CONVENTION,
+  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_BEHAVIOR, PROBLEM_VIEWER_CONVENTION,
   hasProblemChildComposer, hasProblemViewer
 } from "./problem-child-intent";
 
@@ -22,6 +22,10 @@ describe("problem child intent", () => {
 });
 
 describe("problem viewer intent", () => {
+  it("keeps the problem tree visible", () => {
+    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: false, reuse: true });
+  });
+
   it("requires an open handler for the note convention", () => {
     expect(hasProblemViewer({ available: true, candidates: [
       { actions: ["open"], conventions: [PROBLEM_VIEWER_CONVENTION] }

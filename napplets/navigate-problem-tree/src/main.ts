@@ -14,7 +14,7 @@ import {
 } from "./problem-dag";
 import {
   PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION,
-  PROBLEM_VIEWER_ARCHETYPE, PROBLEM_VIEWER_CONVENTION,
+  PROBLEM_VIEWER_ARCHETYPE, PROBLEM_VIEWER_BEHAVIOR, PROBLEM_VIEWER_CONVENTION,
   hasProblemChildComposer, hasProblemViewer
 } from "./problem-child-intent";
 import { mergeProblemEvents } from "./problem-events";
@@ -229,7 +229,7 @@ async function openProblem(coordinate: string) {
   status.textContent = "Opening selected problem…";
   try {
     const result = await intent.open(PROBLEM_VIEWER_ARCHETYPE, { target: { type: "event", id: node.revisionId } }, {
-      convention: PROBLEM_VIEWER_CONVENTION, behavior: { focus: true, reuse: true }
+      convention: PROBLEM_VIEWER_CONVENTION, behavior: PROBLEM_VIEWER_BEHAVIOR
     });
     if (!result.ok || !result.handled) throw new Error(result.error ?? "View Problem did not accept this problem.");
     status.textContent = "Problem opened in View Problem.";
