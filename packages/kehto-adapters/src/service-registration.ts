@@ -10,6 +10,7 @@ import { castUser } from "applesauce-common/casts";
 import { createIdentityProviders } from "./identity-providers.js";
 import type { IdentityProviders } from "./identity-providers.js";
 import { limitServiceSubscriptions } from "./subscription-limit.js";
+import { createStoreAwareOutboxRouter } from "./store-aware-outbox-router.js";
 
 /** How long to wait for another user's NIP-65 list before routing without it. */
 const RELAY_LIST_TIMEOUT_MS = 4_000;
@@ -79,7 +80,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     getBadges: (pubkey) => identityProviders.getBadges(pubkey)
   }));
   const outboxPool = createOutboxRelayPool(readRelays, writeRelays);
-  const outboxRouter = createRelayPoolOutboxRouter({
+  const relayOutboxRouter = createRelayPoolOutboxRouter({
     relayPool: outboxPool,
     // Freshness, deduplication and the network fetch all live in the event store and its loader
     // now; this used to be a hand-rolled TTL cache with its own discovery query.
@@ -100,6 +101,7 @@ export function registerCoreServices(shell: Pick<ShellBridge, "runtime" | "publi
     isRelayAllowed: (url) => { try { relayPolicy.normalize(url, "explicit"); return true; } catch { return false; } },
     defaultTimeoutMs: 4_000
   });
+  const outboxRouter = createStoreAwareOutboxRouter(relayOutboxRouter, eventStore);
   const outboxService = limitServiceSubscriptions(createOutboxService({ router: outboxRouter }), {
     subscribe: "outbox.subscribe", close: "outbox.close", closed: "outbox.closed"
   });

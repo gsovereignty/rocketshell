@@ -6,4 +6,5 @@ export * from "./relay-configuration.js";
 export * from "./service-registration.js";
 export * from "./shell-adapter.js";
 export * from "./subscription-limit.js";
+export * from "./store-aware-outbox-router.js";
 export * from "./worker-relay.js";
