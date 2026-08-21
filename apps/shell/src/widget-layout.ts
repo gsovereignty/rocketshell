@@ -138,6 +138,12 @@ export interface VisibleGridRange {
   readonly endRow: number;
 }
 
+export const snapPageStartRows = (rects: readonly WidgetRect[], rowsPerPage: number): readonly number[] => {
+  if (rowsPerPage < 1 || rects.length === 0) return [];
+  const occupiedRows = rects.reduce((last, rect) => Math.max(last, rect.row + rect.height), 0);
+  return Array.from({ length: Math.ceil(occupiedRows / rowsPerPage) }, (_, page) => page * rowsPerPage);
+};
+
 export const visibleGridRange = (
   containerTop: number,
   viewportTop: number,
@@ -368,7 +374,23 @@ export const createWidgetGrid = (
   const preview = document.createElement("div");
   preview.className = "napplet-pack-preview-layer";
   preview.setAttribute("aria-hidden", "true");
-  container.append(preview);
+  const snapTargets = document.createElement("div");
+  snapTargets.className = "window-snap-targets";
+  snapTargets.setAttribute("aria-hidden", "true");
+  container.append(preview, snapTargets);
+
+  const syncSnapTargets = (): void => {
+    const rowsPerPage = profile.name === "mobile" ? 1 : 2;
+    const pageRows = snapPageStartRows([...rects.values()], rowsPerPage);
+    const targets = Array.from(snapTargets.children) as HTMLElement[];
+    pageRows.forEach((row, index) => {
+      const target = targets[index] ?? document.createElement("span");
+      target.className = "window-snap-target";
+      target.style.gridRow = String(row + 1);
+      if (!target.parentElement) snapTargets.append(target);
+    });
+    targets.slice(pageRows.length).forEach((target) => target.remove());
+  };
 
   const occupiedExcept = (element: HTMLElement): WidgetRect[] =>
     [...rects].filter(([candidate]) => candidate !== element).map(([, rect]) => rect);
@@ -401,6 +423,7 @@ export const createWidgetGrid = (
       applyRect(element, rect);
       updateHandleValues(element, rect);
     }
+    syncSnapTargets();
     return true;
   };
 
@@ -944,6 +967,7 @@ export const createWidgetGrid = (
       container.removeEventListener("pointercancel", endDrag);
       container.removeEventListener("keydown", onKeyDown);
       preview.remove();
+      snapTargets.remove();
       rects.clear();
     }
   };

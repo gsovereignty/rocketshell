@@ -6,6 +6,7 @@ import {
   rectsOverlap,
   resolveOpeningPlacement,
   resolveRelocation,
+  snapPageStartRows,
   transferReplacementRect,
   visibleGridRange
 } from "./widget-layout.js";
@@ -47,6 +48,24 @@ describe("default widget layouts", () => {
       { column: 0, row: 1, width: 1, height: 1 },
       { column: 0, row: 2, width: 1, height: 1 }
     ]);
+  });
+});
+
+describe("viewport snap pages", () => {
+  it("creates one desktop snap point for every two occupied rows", () => {
+    expect(snapPageStartRows([
+      { column: 0, row: 0, width: 2, height: 2 },
+      { column: 0, row: 2, width: 2, height: 1 },
+      { column: 2, row: 4, width: 2, height: 1 }
+    ], 2)).toEqual([0, 2, 4]);
+  });
+
+  it("creates one mobile snap point per occupied row", () => {
+    expect(snapPageStartRows([
+      { column: 0, row: 0, width: 1, height: 1 },
+      { column: 0, row: 1, width: 1, height: 2 }
+    ], 1)).toEqual([0, 1, 2]);
+    expect(snapPageStartRows([], 1)).toEqual([]);
   });
 });
 
