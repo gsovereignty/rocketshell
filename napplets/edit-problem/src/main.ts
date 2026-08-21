@@ -2,6 +2,7 @@ import { identity, inc, outbox, themeGet, themeOnChanged, type Subscription, typ
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
+import { revisionPublishMessage } from "./publish-result";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("App root is missing.");
@@ -95,18 +96,20 @@ async function publishRevision(): Promise<void> {
   const description = document.querySelector<HTMLTextAreaElement>("#description")?.value ?? "";
   const selectedStatus = document.querySelector<HTMLSelectElement>("#problem-status")?.value as ProblemStatus;
   const childValue = document.querySelector<HTMLSelectElement>("#child-status")?.value;
+  let relayOutcomes: Readonly<Record<string, boolean>> | undefined;
   try {
     busy = true;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = true; publishButton.textContent = "Publishing…"; }
     status("Publishing complete revision…");
     const template = buildRevisionTemplate(current, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000));
-    const result = await outbox.publish(template);
-    if (!result.ok || !result.event) throw new Error(result.error ?? "Revision publish failed.");
-    status("Revision published. Loading confirmed head…");
+    const result = await outbox.publish(template, current.relay ? { relays: [current.relay] } : undefined);
+    relayOutcomes = result.relays;
+    const publishedMessage = revisionPublishMessage(result);
+    status(`${publishedMessage} Loading confirmed head…`);
     await loadProblem(current.problemId);
   } catch (error) {
-    console.error("Problem revision publish failed", { problemId: current.problemId, previousRevisionId: current.event.id, error });
+    console.error("Problem revision publish failed", { problemId: current.problemId, previousRevisionId: current.event.id, relayOutcomes, error });
     busy = false;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = false; publishButton.textContent = "Publish revision"; }
