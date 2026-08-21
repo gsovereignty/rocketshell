@@ -32,6 +32,7 @@ export class NappletWindowManager {
   readonly #windows = new Map<string, ManagedNappletWindow>();
   readonly #creating = new Map<string, Promise<ManagedNappletWindow>>();
   readonly #changeListeners = new Set<() => void>();
+  #focusedWindowId: string | undefined;
   #closed = false;
 
   constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string, private readonly telemetry: PlatformTelemetry = NOOP_TELEMETRY, private readonly readyTimeoutMs = 10_000) {}
@@ -51,6 +52,15 @@ export class NappletWindowManager {
   onWindowsChanged(listener: () => void): () => void {
     this.#changeListeners.add(listener);
     return () => this.#changeListeners.delete(listener);
+  }
+
+  focus(windowId: string): void {
+    const target = this.#windows.get(windowId);
+    if (!target) return;
+    this.#focusedWindowId = windowId;
+    for (const [candidateId, candidate] of this.#windows) candidate.element.hidden = candidateId !== windowId;
+    target.iframe.focus();
+    this.#notifyWindowsChanged();
   }
 
   #notifyWindowsChanged(): void {
@@ -139,8 +149,12 @@ export class NappletWindowManager {
     const managed = this.#windows.get(windowId);
     if (!managed) return;
     this.#windows.delete(windowId);
-    this.#notifyWindowsChanged();
     managed.resources.close(); this.bridge.unregister(windowId); managed.element.remove();
+    if (this.#focusedWindowId === windowId) {
+      this.#focusedWindowId = undefined;
+      for (const candidate of this.#windows.values()) candidate.element.hidden = false;
+    }
+    this.#notifyWindowsChanged();
     this.telemetry.record("window.active", -1, { dTag: managed.identity.dTag });
     this.telemetry.record("subscription.cleanup", 1, { operation: "window-destroy" });
   }

@@ -1,4 +1,4 @@
-import { identity, inc, outbox, themeGet, themeOnChanged, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
+import { identity, inc, intent, outbox, themeGet, themeOnChanged, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
@@ -122,7 +122,7 @@ function renderEditor(problem: EditableProblem): void {
   }
 }
 
-async function loadProblem(problemId: string): Promise<void> {
+async function loadProblem(problemId: string): Promise<boolean> {
   stopProblemSubscription();
   const generation = loadGeneration;
   renderWaiting("Loading problem…");
@@ -143,22 +143,25 @@ async function loadProblem(problemId: string): Promise<void> {
       status("Live updates stopped. Reopen editor to reconnect.", true);
     });
     const response = await outbox.query({ kinds: [31971], "#d": [problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 });
-    if (generation !== loadGeneration) return;
+    if (generation !== loadGeneration) return false;
     problemEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
     current = selectEditableProblem(problemId, problemEvents, pubkey);
     hydrated = true;
     renderEditor(current);
+    return true;
   } catch (error) {
-    if (generation !== loadGeneration) return;
+    if (generation !== loadGeneration) return false;
     console.error("Problem revision load failed", { problemId, error });
     stopProblemSubscription();
     renderWaiting("Problem unavailable");
     status(error instanceof Error ? error.message : "Problem could not be loaded.", true);
+    return false;
   }
 }
 
 async function publishRevision(): Promise<void> {
   if (!current || !current.mayEdit || busy) return;
+  const publishingProblem = current;
   const title = document.querySelector<HTMLInputElement>("#title")?.value ?? "";
   const description = document.querySelector<HTMLTextAreaElement>("#description")?.value ?? "";
   const selectedStatus = document.querySelector<HTMLSelectElement>("#problem-status")?.value as ProblemStatus;
@@ -169,14 +172,22 @@ async function publishRevision(): Promise<void> {
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = true; publishButton.textContent = "Publishing…"; }
     status("Publishing complete revision…");
-    const template = buildRevisionTemplate(current, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000));
-    const result = await outbox.publish(template, current.relay ? { relays: [current.relay] } : undefined);
+    const template = buildRevisionTemplate(publishingProblem, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000));
+    const result = await outbox.publish(template, publishingProblem.relay ? { relays: [publishingProblem.relay] } : undefined);
     relayOutcomes = result.relays;
     const publishedMessage = revisionPublishMessage(result);
     status(`${publishedMessage} Loading confirmed head…`);
-    await loadProblem(current.problemId);
+    if (!await loadProblem(publishingProblem.problemId)) return;
+    const confirmedRevision = current;
+    if (!confirmedRevision) throw new Error("Published revision could not be confirmed.");
+    status(`${publishedMessage} Returning to problem…`);
+    const returnResult = await intent.invoke({
+      archetype: "note", action: "open", convention: "napplet:note/open",
+      payload: { target: { type: "event", id: confirmedRevision.event.id } }, behavior: { focus: true, reuse: true }
+    });
+    if (!returnResult.ok || !returnResult.handled) throw new Error(returnResult.error ?? "No compatible problem viewer is available.");
   } catch (error) {
-    console.error("Problem revision publish failed", { problemId: current.problemId, previousRevisionId: current.event.id, relayOutcomes, error });
+    console.error("Problem revision publish or return failed", { problemId: publishingProblem.problemId, previousRevisionId: publishingProblem.event.id, relayOutcomes, error });
     busy = false;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = false; publishButton.textContent = "Publish revision"; }

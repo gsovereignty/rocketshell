@@ -6,7 +6,7 @@
   "napplet": {
     "dTag": "edit-problem",
     "title": "Edit Problem",
-    "requires": ["identity", "outbox", "inc"],
+    "requires": ["identity", "outbox", "intent", "inc"],
     "archetypes": [{ "slug": "composer", "convention": "napplet:composer/problem-edit" }]
   },
   "scripts": {

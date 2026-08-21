@@ -34,7 +34,7 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
           type: "inc.event", topic: params.convention, sender: params.sender,
           ...(params.payload === undefined ? {} : { payload: params.payload })
         }, "*");
-        if (params.behavior?.focus !== false) target.iframe.focus();
+        if (params.behavior?.focus !== false) windows.focus(target.identity.windowId);
         telemetry.record("intent.completed", Date.now() - startedAt, { handler: params.handler });
         return { windowId: target.identity.windowId };
       }

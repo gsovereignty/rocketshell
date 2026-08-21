@@ -174,6 +174,39 @@ describe("package gateway", () => {
     expect(document.createElement).toHaveBeenCalledTimes(5);
     manager.close(); vi.unstubAllGlobals();
   });
+  it("shows only the intent-focused window", async () => {
+    const store = new MemoryPackageStore(); const input = await fixture();
+    await new PackageInstaller(store, () => true).install(input.event, input.inputs);
+    const elements: Array<{ append: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; className: string; hidden: boolean }> = [];
+    const iframes: Array<{ setAttribute: ReturnType<typeof vi.fn>; dataset: Record<string, string>; contentWindow: object; title: string; srcdoc: string; focus: ReturnType<typeof vi.fn> }> = [];
+    vi.stubGlobal("document", { createElement: vi.fn((tag: string) => {
+      if (tag === "article") {
+        const element = { append: vi.fn(), remove: vi.fn(), className: "", hidden: false };
+        elements.push(element); return element;
+      }
+      if (tag === "button") return { append: vi.fn(), className: "", textContent: "", dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
+      if (tag === "iframe") {
+        const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
+        iframes.push(iframe); return iframe;
+      }
+      return { append: vi.fn(), className: "", textContent: "" };
+    }) });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    const manager = new NappletWindowManager(store, {
+      register: vi.fn(), waitUntilReady: vi.fn(async () => {}), unregister: vi.fn()
+    }, { append: vi.fn() } as unknown as HTMLElement, "/shell/");
+    const first = await manager.create("hello/world", false);
+    const second = await manager.create("hello/world", false);
+
+    manager.focus(first.identity.windowId);
+    expect(elements.map(({ hidden }) => hidden)).toEqual([false, true]);
+    expect(iframes[0]?.focus).toHaveBeenCalledOnce();
+    manager.focus(second.identity.windowId);
+    expect(elements.map(({ hidden }) => hidden)).toEqual([true, false]);
+    expect(iframes[1]?.focus).toHaveBeenCalledOnce();
+
+    manager.close(); vi.unstubAllGlobals();
+  });
   it("tears down a cold start that misses readiness timeout", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);

@@ -372,6 +372,7 @@ p { margin: 0; }
   background: var(--surface);
   box-shadow: var(--shadow-window);
 }
+.napplet-window[hidden] { display: none; }
 .napplet-window-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.4rem; padding: 0 .45rem 0 .8rem; cursor: grab; touch-action: none; }
 .napplet-window-toolbar:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .napplet-window-title { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: .76rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }

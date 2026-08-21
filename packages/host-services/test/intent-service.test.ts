@@ -8,7 +8,7 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
   const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
   const source = { postMessage: vi.fn() };
   const target = { identity: { dTag: "viewer-app", windowId: "target-1", source }, iframe: { focus: vi.fn() }, ready: Promise.resolve() };
-  const windows = { findByDTag: vi.fn(() => target), create: vi.fn(async () => target) } as unknown as NappletWindowManager;
+  const windows = { findByDTag: vi.fn(() => target), create: vi.fn(async () => target), focus: vi.fn() } as unknown as NappletWindowManager;
   const store = { listActive: vi.fn(async () => [{
     dTag: "viewer-app", manifest: {
       dTag: "viewer-app", aggregateHash: "a".repeat(64), entrypoint: "index.html", requires: [], artifacts: [],
@@ -71,6 +71,7 @@ describe("intent host boundary", () => {
     await vi.waitFor(() => expect(send).toHaveBeenCalled());
     expect(windows.findByDTag).not.toHaveBeenCalled();
     expect(windows.create).toHaveBeenCalledWith("viewer-app", false);
+    expect(windows.focus).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       type: "intent.invoke.result",
       result: expect.objectContaining({ ok: true, handler: "viewer-app", windowId: "target-1" })
@@ -89,6 +90,7 @@ describe("intent host boundary", () => {
     await vi.waitFor(() => expect(send).toHaveBeenCalled());
     expect(getDefaultHandler).toHaveBeenCalledWith("viewer");
     expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer");
+    expect(windows.focus).toHaveBeenCalledWith("target-1");
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "alternate-viewer" }) }));
   });
 

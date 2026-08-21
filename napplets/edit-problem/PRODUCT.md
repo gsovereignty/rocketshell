@@ -9,6 +9,8 @@ Payload shape is exactly `{ "problemId": "<64 lowercase hex>" }`.
 
 Normal reads and publishes use NAP-OUTBOX. Identity and authorization use
 NAP-IDENTITY. Intent delivery uses NAP-INC after shell archetype routing.
+After confirmed publication, NAP-INTENT focuses reused `note` handler with
+confirmed revision event target so problem view returns without private shell APIs.
 NAP-THEME is optional. No direct relay, browser network, or browser storage is
 used.
 
