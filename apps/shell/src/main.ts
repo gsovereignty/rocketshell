@@ -7,7 +7,7 @@ import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
 import { createWidgetGrid } from "./widget-layout.js";
-import { createOpenNappletsStore } from "./open-napplets-store.js";
+import { createWindowSessionStore, type WindowSession } from "./open-napplets-store.js";
 import { createDockStore } from "./dock-store.js";
 import type { DockLauncher } from "./dock-launchers.js";
 import { openDockIconStore, type DockIconOverride } from "./dock-icon-store.js";
@@ -427,8 +427,8 @@ void bootstrap().then(async (platform) => {
   });
   signOut?.addEventListener("click", () => { platform.signOut(); closeMenus(); });
 
-  const openedCoordinates = new Map<string, { coordinate: string; dTag: string }>();
-  const openNapplets = createOpenNappletsStore(localStorage);
+  const windowSessions = createWindowSessionStore(localStorage);
+  const initialSession = windowSessions.get();
   const dockStore = createDockStore(localStorage);
   const dockIconStore = await openDockIconStore();
   const iconOverrides = new Map<string, DockIconOverride>();
@@ -671,14 +671,11 @@ void bootstrap().then(async (platform) => {
     if (!(target instanceof Element)) return;
     const closeButton = target.closest<HTMLButtonElement>(".napplet-window-close");
     const windowId = closeButton?.dataset.windowId;
-    const opened = windowId ? openedCoordinates.get(windowId) : undefined;
     if (!windowId) return;
-    openedCoordinates.delete(windowId);
-    if (opened) openNapplets.remove(opened.coordinate);
     void renderDock();
   });
 
-  const openCoordinate = async (requestedCoordinate?: string, remember = true, installedDTag?: string): Promise<void> => {
+  const openCoordinate = async (requestedCoordinate?: string, installedDTag?: string): Promise<void> => {
     if (!input || !button) return;
     const coordinate = (requestedCoordinate ?? input.value).trim();
     if (!coordinate) return;
@@ -691,10 +688,9 @@ void bootstrap().then(async (platform) => {
       const opened = installedDTag
         ? await platform.openInstalled(installedDTag)
         : await platform.installAndOpen(coordinate);
-      openedCoordinates.set(opened.windowId, { coordinate, dTag: opened.dTag });
+      platform.windows.setLaunchDescriptor(opened.windowId, { type: "direct", coordinate });
       void renderDock();
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
-      if (remember) openNapplets.add(coordinate, opened.dTag);
       setLoaderStatus(`Opened ${opened.title}.`, "success");
       settleLoading("success");
       setTimeout(() => closeMenus(), 500);
@@ -778,7 +774,7 @@ void bootstrap().then(async (platform) => {
         if (longPressed) { longPressed = false; return; }
         dockButton.disabled = true;
         const stopOpeningAnimation = animateDockOpening(dockButton);
-        void openCoordinate(launcher.coordinate, true, launcher.dTag).finally(() => {
+        void openCoordinate(launcher.coordinate, launcher.dTag).finally(() => {
           stopOpeningAnimation();
           dockButton.disabled = false;
         });
@@ -795,23 +791,75 @@ void bootstrap().then(async (platform) => {
     }
   };
 
-  const unsubscribeDock = platform.windows.onWindowsChanged(() => { void renderDock(); });
-  window.addEventListener("pagehide", () => { unsubscribeDock(); dockIconStore.close(); }, { once: true });
+  let restoringSession = true;
+  const currentSession = (): WindowSession => {
+    const windows = platform.windows.listWindowIds().flatMap((windowId) => {
+      const managed = platform.windows.findByWindowId(windowId);
+      if (!managed?.launch) return [];
+      const replacesWindowId = managed.element.dataset.replacesWindowId;
+      return [{
+        windowId, dTag: managed.identity.dTag, launch: managed.launch, hidden: managed.element.hidden,
+        ...(replacesWindowId ? { replacesWindowId } : {})
+      }];
+    });
+    const focusedWindowId = platform.windows.focusedWindowId;
+    return {
+      version: 2, windows,
+      ...(focusedWindowId && windows.some((window) => window.windowId === focusedWindowId) ? { focusedWindowId } : {})
+    };
+  };
+  const unsubscribeWindows = platform.windows.onWindowsChanged(() => {
+    void renderDock();
+    if (!restoringSession) windowSessions.set(currentSession());
+  });
+  window.addEventListener("pagehide", () => { unsubscribeWindows(); dockIconStore.close(); }, { once: true });
   void renderDock();
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
   if (status) status.textContent = "Platform ready";
-  const initialNapplets = openNapplets.get();
-  if (initialNapplets.length > 0) {
-    void (async () => {
-      const launchers = await platform.dockLaunchers();
-      for (const napplet of initialNapplets) {
-        const dTag = napplet.dTag ?? launchers.find((launcher) => launcher.coordinate === napplet.coordinate)?.dTag;
-        if (dTag && !napplet.dTag) openNapplets.identify(napplet.coordinate, dTag);
-        await openCoordinate(napplet.coordinate, false, dTag);
+  void (async () => {
+    const restoredIds = new Map<string, string>();
+    const launchers = await platform.dockLaunchers();
+    for (const saved of initialSession.windows) {
+      try {
+        const launch = saved.launch;
+        const dTag = saved.dTag ?? (launch.type === "direct"
+          ? launchers.find((launcher) => launcher.coordinate === launch.coordinate)?.dTag
+          : undefined);
+        if (!dTag) throw new Error("Saved Napplet is no longer installed");
+        const opened = await platform.openInstalled(dTag);
+        restoredIds.set(saved.windowId, opened.windowId);
+        platform.windows.setLaunchDescriptor(opened.windowId, saved.launch);
+        const managed = platform.windows.findByWindowId(opened.windowId);
+        if (saved.launch.type === "intent" && managed) {
+          await managed.ready;
+          managed.identity.source.postMessage({
+            type: "inc.event", topic: saved.launch.convention, sender: saved.launch.sender,
+            ...(saved.launch.payload === undefined ? {} : { payload: saved.launch.payload })
+          }, "*");
+        }
+      } catch (error) {
+        console.error("Unable to restore saved Napplet window", { dTag: saved.dTag, error });
       }
-    })();
-  }
+    }
+    for (const saved of initialSession.windows) {
+      const targetId = restoredIds.get(saved.windowId);
+      const callerId = saved.replacesWindowId ? restoredIds.get(saved.replacesWindowId) : undefined;
+      if (targetId && callerId) platform.windows.focus(targetId, callerId);
+    }
+    for (const saved of initialSession.windows) {
+      const restoredId = restoredIds.get(saved.windowId);
+      const managed = restoredId ? platform.windows.findByWindowId(restoredId) : undefined;
+      if (managed) managed.element.hidden = saved.hidden;
+    }
+    const focusedId = initialSession.focusedWindowId ? restoredIds.get(initialSession.focusedWindowId) : undefined;
+    if (focusedId) platform.windows.findByWindowId(focusedId)?.iframe.focus();
+  })().catch((error: unknown) => {
+    console.error("Unable to restore saved Napplet session", error);
+  }).finally(() => {
+    restoringSession = false;
+    windowSessions.set(currentSession());
+  });
 }).catch((error: unknown) => {
   if (status) status.textContent = `Startup failed: ${error instanceof Error ? error.message : "unknown error"}`;
 });

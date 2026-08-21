@@ -219,6 +219,40 @@ test("settles intent result before caller navigation unmounts it", async ({ page
   await expect.poll(() => page.frames().some((candidate) => candidate !== page.mainFrame() && candidate.url() === "about:blank")).toBe(true);
 });
 
+test("restores intent-created problem window with its tree caller", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await page.getByRole("button", { name: "Open Navigate Problem Tree" }).click();
+  const tree = page.frameLocator('iframe[title="navigate-problem-tree"]');
+  await expect(tree.locator("#app")).toBeVisible();
+
+  const result = await tree.locator("html").evaluate(async () => window.napplet.intent.invoke({
+    archetype: "note", action: "open", convention: "napplet:note/open",
+    payload: { target: { type: "event", id: "0".repeat(64) } },
+    behavior: { focus: true, reuse: true }
+  }));
+  expect(result).toMatchObject({ ok: true, handled: true, handler: "view-problem" });
+  await expect(page.locator('iframe[title="view-problem"]')).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.map((window: { dTag: string }) => window.dTag);
+  })).toEqual(["navigate-problem-tree", "view-problem"]);
+
+  await page.reload();
+
+  await expect(page.locator('iframe[title="navigate-problem-tree"]')).toHaveCount(1);
+  await expect(page.locator('iframe[title="view-problem"]')).toHaveCount(1);
+  await expect(page.locator('iframe[title="navigate-problem-tree"]').locator("..")).toBeHidden();
+  await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+  expect(await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.find((window: { dTag: string }) => window.dTag === "view-problem")?.launch;
+  })).toMatchObject({
+    type: "intent", sender: "navigate-problem-tree", convention: "napplet:note/open",
+    payload: { target: { type: "event", id: "0".repeat(64) } }
+  });
+});
+
 test("mediates Blossom upload without exposing signer or server selection", async ({ page }) => {
   // The shell reads its media servers from the settings store, so point it at the mock server there.
   // Keys left out fall back to the shipped defaults.
@@ -364,7 +398,7 @@ test("coordinate loader reports malformed input without opening a window", async
   await expect(page.locator("#windows iframe")).toHaveCount(1);
 });
 
-test("coordinate loader animates pending work and stores open napplets", async ({ page }) => {
+test("coordinate loader animates pending work", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   await page.evaluate(() => {
@@ -390,21 +424,6 @@ test("coordinate loader animates pending work and stores open napplets", async (
   await page.locator("#coordinate").fill("35129:fixture:second");
   await page.getByRole("button", { name: "Open Napplet", exact: true }).click();
   await expect(page.locator("#loader-status")).toHaveText("Opened Animated Fixture.");
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]"))).toEqual([
-    { coordinate: "35129:fixture:animated", dTag: "animated-fixture" },
-    { coordinate: "35129:fixture:second", dTag: "animated-fixture" }
-  ]);
-  await page.evaluate(() => {
-    const close = document.createElement("button");
-    close.className = "napplet-window-close";
-    close.dataset.windowId = "animated-window-1";
-    document.querySelector("#windows")?.append(close);
-    close.click();
-    close.remove();
-  });
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]"))).toEqual([
-    { coordinate: "35129:fixture:second", dTag: "animated-fixture" }
-  ]);
 });
 
 test("refresh restores open installed napplets", async ({ page }) => {
@@ -415,7 +434,7 @@ test("refresh restores open installed napplets", async ({ page }) => {
   await page.reload();
   await page.getByRole("button", { name: "Open Log New Problem" }).click();
   await expect(page.locator(".napplet-window")).toHaveCount(2);
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("shell.open-napplets"))).not.toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("shell.window-session.v2"))).not.toBeNull();
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText("Platform ready");
@@ -432,8 +451,9 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
     button.click();
     return new Promise<string>((resolve) => {
       const poll = (): void => {
-        const saved = JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]") as { coordinate: string }[];
-        if (saved[0]?.coordinate) resolve(saved[0].coordinate);
+        const saved = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null") as { windows?: { launch?: { coordinate?: string } }[] } | null;
+        const coordinate = saved?.windows?.[0]?.launch?.coordinate;
+        if (coordinate) resolve(coordinate);
         else setTimeout(poll, 10);
       };
       poll();
@@ -443,7 +463,7 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
 
   await page.reload();
   await expect(page.locator(".napplet-window")).toHaveCount(2);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]")[0]?.dTag)).toBe("log-new-problem");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null")?.windows?.[0]?.dTag)).toBe("log-new-problem");
 });
 
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {

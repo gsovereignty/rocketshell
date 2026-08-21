@@ -1,5 +1,5 @@
 import type { Runtime, ServiceHandler, ServiceRuntimeContext } from "@kehto/runtime";
-import type { PackageStore, NappletWindowManager } from "@platform/napplet-gateway";
+import type { PackageStore, NappletWindowManager, WindowLaunchDescriptor } from "@platform/napplet-gateway";
 import { describe, expect, it, vi } from "vitest";
 import { registerIntentService } from "../src/index.js";
 
@@ -7,12 +7,16 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
   let handler: ServiceHandler | undefined;
   const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
   const source = { postMessage: vi.fn() };
-  const target = { identity: { dTag: "viewer-app", windowId: "target-1", source }, iframe: { focus: vi.fn() }, ready: Promise.resolve() };
+  const target = {
+    identity: { dTag: "viewer-app", windowId: "target-1", source }, iframe: { focus: vi.fn() },
+    ready: Promise.resolve(), launch: undefined as WindowLaunchDescriptor | undefined
+  };
   const caller = { identity: { dTag: "runtime-attested-sender", windowId: "caller-1", source: {} } };
   const windows = {
     findByDTag: vi.fn((dTag: string) => dTag === caller.identity.dTag ? caller : target),
     create: vi.fn(async () => target),
-    focus: vi.fn()
+    focus: vi.fn(),
+    setLaunchDescriptor: vi.fn()
   } as unknown as NappletWindowManager;
   const store = { listActive: vi.fn(async () => [{
     dTag: "viewer-app", manifest: {
@@ -39,7 +43,11 @@ describe("intent host boundary", () => {
   });
 
   it("supplies runtime-attested sender to INC delivery", async () => {
-    const { handler, source } = setup(); const send = vi.fn();
+    const { handler, windows, source } = setup(); const send = vi.fn();
+    (windows.findByDTag as ReturnType<typeof vi.fn>).mockImplementation((dTag: string) =>
+      dTag === "runtime-attested-sender"
+        ? { identity: { dTag, windowId: "caller-1", source: {} } }
+        : undefined);
     handler.handleMessage("sender-1", {
       type: "intent.invoke", id: "open", request: { archetype: "viewer", payload: { id: 1 } }
     } as never, send);
@@ -47,6 +55,19 @@ describe("intent host boundary", () => {
     expect(source.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: "inc.event", topic: "napplet:viewer/open", sender: "runtime-attested-sender", payload: { id: 1 }
     }), "*");
+    expect(windows.setLaunchDescriptor).toHaveBeenCalledWith("target-1", {
+      type: "intent", sender: "runtime-attested-sender", convention: "napplet:viewer/open", payload: { id: 1 }
+    });
+  });
+
+  it("does not replace direct launch provenance when reusing a target", async () => {
+    const { handler, windows, target } = setup(); const send = vi.fn();
+    target.launch = { type: "direct", coordinate: "installed-coordinate" };
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "reuse", request: { archetype: "viewer", payload: { id: 2 } }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(windows.setLaunchDescriptor).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported contracts before window work", async () => {

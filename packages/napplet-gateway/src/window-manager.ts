@@ -26,7 +26,12 @@ export interface ManagedNappletWindow {
   readonly iframe: HTMLIFrameElement;
   readonly resources: SubscriptionRegistry;
   readonly ready: Promise<void>;
+  launch?: WindowLaunchDescriptor;
 }
+
+export type WindowLaunchDescriptor =
+  | { readonly type: "direct"; readonly coordinate: string }
+  | { readonly type: "intent"; readonly sender: string; readonly convention: string; readonly payload?: unknown };
 
 export interface CreateWindowOptions {
   readonly deferLayout?: boolean;
@@ -53,6 +58,15 @@ export class NappletWindowManager {
     return Object.freeze([...this.#windows.keys()]);
   }
 
+  get focusedWindowId(): string | undefined { return this.#focusedWindowId; }
+
+  setLaunchDescriptor(windowId: string, launch: WindowLaunchDescriptor): void {
+    const managed = this.#windows.get(windowId);
+    if (!managed) return;
+    managed.launch = launch;
+    this.#notifyWindowsChanged();
+  }
+
   onWindowsChanged(listener: () => void): () => void {
     this.#changeListeners.add(listener);
     return () => this.#changeListeners.delete(listener);
@@ -76,6 +90,7 @@ export class NappletWindowManager {
       for (const [candidateId, candidate] of this.#windows) candidate.element.hidden = candidateId !== windowId;
     }
     target.iframe.focus();
+    this.#notifyWindowsChanged();
   }
 
   #notifyWindowsChanged(): void {
@@ -147,7 +162,7 @@ export class NappletWindowManager {
           timeout = setTimeout(() => reject(new Error("Napplet readiness timed out")), this.readyTimeoutMs);
         })
       ]).finally(() => { if (timeout !== undefined) clearTimeout(timeout); });
-      const managed = { identity, element, iframe, resources: new SubscriptionRegistry(), ready };
+      const managed: ManagedNappletWindow = { identity, element, iframe, resources: new SubscriptionRegistry(), ready };
       this.#windows.set(windowId, managed);
       this.#notifyWindowsChanged();
       this.telemetry.record("window.active", 1, { dTag: identity.dTag });

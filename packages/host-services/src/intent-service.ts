@@ -33,6 +33,12 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
         // Self-dispatch cannot await its own startup without deadlocking. Other
         // senders wait until target listeners are ready before delivery.
         if (target.identity.dTag !== params.sender) await target.ready;
+        if (!existingTarget || target.launch?.type === "intent") {
+          windows.setLaunchDescriptor(target.identity.windowId, {
+            type: "intent", sender: params.sender, convention: params.convention,
+            ...(params.payload === undefined ? {} : { payload: params.payload })
+          });
+        }
         target.identity.source.postMessage({
           type: "inc.event", topic: params.convention, sender: params.sender,
           ...(params.payload === undefined ? {} : { payload: params.payload })

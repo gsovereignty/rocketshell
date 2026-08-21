@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { createOpenNappletsStore } from "./open-napplets-store.js";
+import { describe, expect, it, vi } from "vitest";
+import { createWindowSessionStore, type WindowSession } from "./open-napplets-store.js";
 
 const memoryStorage = (): Storage => {
   const values = new Map<string, string>();
@@ -13,46 +13,74 @@ const memoryStorage = (): Storage => {
   };
 };
 
-describe("open napplets store", () => {
-  it("persists open coordinates in order, including duplicates", () => {
+const session: WindowSession = {
+  version: 2,
+  windows: [
+    { windowId: "tree-1", dTag: "navigate-problem-tree", launch: { type: "direct", coordinate: "tree-coordinate" }, hidden: true },
+    {
+      windowId: "viewer-1", dTag: "problem-viewer", hidden: false, replacesWindowId: "tree-1",
+      launch: {
+        type: "intent", sender: "navigate-problem-tree", convention: "napplet:note/open",
+        payload: { target: { type: "event", id: "problem-id" } }
+      }
+    }
+  ],
+  focusedWindowId: "viewer-1"
+};
+
+describe("window session store", () => {
+  it("persists direct and intent-created windows with focus state", () => {
     const storage = memoryStorage();
-    const store = createOpenNappletsStore(storage);
-    store.add("naddr1first", "first");
-    store.add("naddr1first", "first");
-    store.add("naddr1second", "second");
-    expect(createOpenNappletsStore(storage).get()).toEqual([
-      { coordinate: "naddr1first", dTag: "first" },
-      { coordinate: "naddr1first", dTag: "first" },
-      { coordinate: "naddr1second", dTag: "second" }
-    ]);
+    createWindowSessionStore(storage).set(session);
+    expect(createWindowSessionStore(storage).get()).toEqual(session);
   });
 
-  it("removes only one matching window", () => {
-    const store = createOpenNappletsStore(memoryStorage());
-    store.add("naddr1first", "first");
-    store.add("naddr1second", "second");
-    store.add("naddr1first", "first");
-    store.remove("naddr1first");
-    expect(store.get()).toEqual([
-      { coordinate: "naddr1second", dTag: "second" },
-      { coordinate: "naddr1first", dTag: "first" }
-    ]);
+  it("ignores corrupt session entries while retaining valid windows", () => {
+    const storage = memoryStorage();
+    storage.setItem("shell.window-session.v2", JSON.stringify({
+      version: 2,
+      windows: [session.windows[0], { windowId: "bad", dTag: 3, launch: null }],
+      focusedWindowId: "tree-1"
+    }));
+    expect(createWindowSessionStore(storage).get()).toEqual({
+      version: 2, windows: [session.windows[0]], focusedWindowId: "tree-1"
+    });
   });
 
-  it("ignores corrupt and invalid saved values", () => {
+  it("migrates legacy direct windows and removes legacy storage on save", () => {
     const storage = memoryStorage();
-    storage.setItem("shell.open-napplets", "not json");
-    expect(createOpenNappletsStore(storage).get()).toEqual([]);
-    storage.setItem("shell.open-napplets", JSON.stringify(["valid", 3, ""]));
-    expect(createOpenNappletsStore(storage).get()).toEqual([{ coordinate: "valid" }]);
+    storage.setItem("shell.open-napplets", JSON.stringify([
+      { coordinate: "tree-coordinate", dTag: "navigate-problem-tree" }
+    ]));
+    const store = createWindowSessionStore(storage);
+    expect(store.get()).toEqual({
+      version: 2,
+      windows: [{
+        windowId: "legacy-0", dTag: "navigate-problem-tree",
+        launch: { type: "direct", coordinate: "tree-coordinate" }, hidden: false
+      }]
+    });
+    store.set(store.get());
+    expect(storage.getItem("shell.open-napplets")).toBeNull();
   });
 
-  it("migrates coordinate-only saved values", () => {
+  it("retains coordinate-only legacy windows for launcher resolution", () => {
     const storage = memoryStorage();
-    storage.setItem("shell.open-napplets", JSON.stringify(["naddr1legacy"]));
-    const store = createOpenNappletsStore(storage);
-    expect(store.get()).toEqual([{ coordinate: "naddr1legacy" }]);
-    store.identify("naddr1legacy", "installed-napplet");
-    expect(store.get()).toEqual([{ coordinate: "naddr1legacy", dTag: "installed-napplet" }]);
+    storage.setItem("shell.open-napplets", JSON.stringify(["tree-coordinate"]));
+    expect(createWindowSessionStore(storage).get()).toEqual({
+      version: 2,
+      windows: [{
+        windowId: "legacy-0", launch: { type: "direct", coordinate: "tree-coordinate" }, hidden: false
+      }]
+    });
+  });
+
+  it("reports storage failures without breaking startup", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const storage = memoryStorage();
+    storage.getItem = () => { throw new Error("blocked"); };
+    expect(createWindowSessionStore(storage).get()).toEqual({ version: 2, windows: [] });
+    expect(warn).toHaveBeenCalledWith("Unable to read saved Napplet window session", expect.any(Error));
+    warn.mockRestore();
   });
 });
