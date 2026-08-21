@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemRevisionAuthors, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -29,6 +29,19 @@ describe("problem view", () => {
     expect(selected.revisionId).toBe("e".repeat(64));
     expect(selected.title).toBe("Wallet setup is fast");
     expect(selected.description).toBe("Updated body");
+  });
+  it("lists every known revision newest first", () => {
+    const next = { event: {
+      ...(result as unknown as { event: Record<string, unknown> }).event,
+      id: "e".repeat(64), pubkey: "f".repeat(64), created_at: 2, content: "Updated body",
+      tags: [
+        ["d", id], ["title", "Wallet setup is fast"], ["status", "closed"],
+        ["a", coordinate, "", "origin"], ["e", revision, "", "previous"]
+      ]
+    } } as never;
+    const history = problemRevisionHistory(coordinate, [result, next]);
+    expect(history.map(({ id }) => id)).toEqual(["e".repeat(64), revision]);
+    expect(history[0]).toMatchObject({ author: "f".repeat(64), status: "closed", previousIds: [revision] });
   });
   it("allows only owner or current maintainer to edit", () => {
     const maintainer = "e".repeat(64);

@@ -20,6 +20,16 @@ export interface ProblemView {
   claim?: { eventId: string; claimant: string };
 }
 
+export interface ProblemRevision {
+  id: string;
+  author: string;
+  createdAt: number;
+  title: string;
+  description: string;
+  status: string;
+  previousIds: string[];
+}
+
 export const problemRevisionAuthors = (problem: Pick<ProblemView, "owner" | "maintainers">): string[] =>
   [...new Set([problem.owner, ...problem.maintainers])];
 
@@ -73,6 +83,26 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
       .map((item) => item[1]),
     claim: claim?.[1] && claim[2] ? { eventId: claim[1], claimant: claim[2] } : undefined
   };
+}
+
+export function problemRevisionHistory(coordinate: string, results: RelayEventResult[]): ProblemRevision[] {
+  const { problemId } = parseCoordinate(coordinate);
+  return results
+    .map(({ event }) => event)
+    .filter((event) => event.kind === PROBLEM_KIND &&
+      tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate)
+    .map((event) => ({
+      id: event.id,
+      author: event.pubkey,
+      createdAt: event.created_at,
+      title: tagValue(event, "title") ?? "Untitled problem",
+      description: event.content,
+      status: tagValue(event, "status") ?? "open",
+      previousIds: event.tags
+        .filter((item) => item[0] === "e" && item[3] === "previous" && HEX_64.test(item[1] ?? ""))
+        .map((item) => item[1])
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
 }
 
 export function mayEditProblem(problem: ProblemView, currentPubkey: string) {

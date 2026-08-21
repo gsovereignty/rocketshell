@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
-  mayEditProblem, problemRevisionAuthors, selectEffectiveClaim, selectProblem, shortKey,
+  mayEditProblem, problemRevisionAuthors, problemRevisionHistory, selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -103,6 +103,7 @@ function render() {
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && Boolean(pubkey) && !effectiveClaim && !claimPending;
   const canEdit = mayEditProblem(problem, pubkey);
+  const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
     <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
@@ -122,6 +123,15 @@ function render() {
       </div>
       ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
+    </section>
+    <section class="history" aria-labelledby="history-title">
+      <h2 id="history-title">Edit history · ${revisions.length}</h2>
+      <ol>${revisions.map((revision) => `<li${revision.id === problem?.revisionId ? ' class="current"' : ""}>
+        <div><span class="status status-${escapeHtml(revision.status)}"><i></i>${escapeHtml(statusLabel(revision.status))}</span>${revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</div>
+        <h3>${escapeHtml(revision.title)}</h3>
+        <p>${escapeHtml(revision.description)}</p>
+        <footer><span title="${escapeHtml(revision.author)}">${escapeHtml(authorName(revision.author))}</span><time datetime="${new Date(revision.createdAt * 1000).toISOString()}" title="${new Date(revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(revision.createdAt)}</time><code title="${revision.id}">${shortKey(revision.id)}</code></footer>
+      </li>`).join("")}</ol>
     </section>
     <section class="related" aria-labelledby="related-title">
       <h2 id="related-title">Related · ${related.length}</h2>
@@ -143,7 +153,7 @@ function render() {
   </article>`;
   bind();
   syncClaimCountdown(effectiveClaim?.expiresAt, Boolean(effectiveClaim && !effectiveClaim.acknowledged));
-  if (!reducedMotion) gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+  if (!reducedMotion) gsap.fromTo(".problem-copy > *, .history, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
 }
 
 function syncClaimCountdown(deadline?: number, rerenderOnExpiry = false) {
@@ -369,7 +379,11 @@ async function loadProblem(value: string) {
     hydrated = true;
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments);
-    void loadProfiles([...comments.map(({ event }) => event.pubkey), ...(effectiveClaim ? [effectiveClaim.claimant] : [])]);
+    void loadProfiles([
+      ...comments.map(({ event }) => event.pubkey),
+      ...relatedEvents.filter(({ event }) => event.kind === 31971).map(({ event }) => event.pubkey),
+      ...(effectiveClaim ? [effectiveClaim.claimant] : [])
+    ]);
   } catch (error) {
     if (generation !== loadGeneration) return;
     console.error("Problem load failed", { value, error });

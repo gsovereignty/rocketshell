@@ -47,8 +47,20 @@ button { color: inherit; }
 .claim-deadline { justify-items:end; text-align:right; }
 .claim-deadline time { color:#8a5a00; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:1rem; font-variant-numeric:tabular-nums; font-weight:750; letter-spacing:.03em; }
 .related-action { margin-top:15px; }
-.related,.discussion { border-top:1px solid var(--line); padding-top:28px; }
-.related h2,.discussion h2 { margin:0 0 18px; color:#555b68; font-size:.76rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+.history,.related,.discussion { border-top:1px solid var(--line); padding-top:28px; }
+.history h2,.related h2,.discussion h2 { margin:0 0 18px; color:#555b68; font-size:.76rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+.history { padding-bottom:30px; }
+.history ol { display:grid; gap:0; margin:0; padding:0; list-style:none; }
+.history li { border-left:2px solid var(--line); padding:0 0 28px 20px; }
+.history li:last-child { padding-bottom:0; }
+.history li.current { border-left-color:var(--blue); }
+.history li > div { display:flex; align-items:center; gap:10px; }
+.history .status { padding:5px 10px; font-size:.72rem; }
+.current-label { color:var(--blue); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; }
+.history h3 { margin:12px 0 0; font-size:1rem; }
+.history p { display:-webkit-box; overflow:hidden; max-width:72ch; margin:7px 0 0; color:#555b68; line-height:1.5; white-space:pre-wrap; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+.history footer { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; color:var(--muted); font-size:.74rem; }
+.history code { margin-left:auto; }
 .related { padding-bottom:30px; }
 .related p { color:var(--muted); }
 .related ul,.discussion ol { margin:0; padding:0; list-style:none; }
