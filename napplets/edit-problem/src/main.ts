@@ -32,7 +32,7 @@ function renderWaiting(message = "Waiting for problem…"): void {
   current = undefined;
   app.innerHTML = `<section class="waiting" aria-labelledby="waiting-title">
     <div class="mark" aria-hidden="true"><span></span><span></span><span></span></div>
-    <div><p class="eyebrow">NIP-1971 · REVISION</p><h1 id="waiting-title">${escapeHtml(message)}</h1>
+    <div><h1 id="waiting-title">${escapeHtml(message)}</h1>
     <p>Launch this napplet through a compatible <code>${EDIT_CONVENTION}</code> intent.</p></div>
     <p id="status-message" class="status" role="status" aria-live="polite"></p>
   </section>`;
@@ -87,18 +87,18 @@ function renderEditor(problem: EditableProblem): void {
   const disabled = !problem.mayEdit || busy;
   app.innerHTML = `<article class="editor-shell">
     <header class="masthead">
-      <div><p class="eyebrow">EDIT PROBLEM</p><code title="${problem.problemId}">${shortKey(problem.problemId)}</code></div>
+      <div><strong>Edit problem</strong><code title="${problem.problemId}">${shortKey(problem.problemId)}</code></div>
       <span class="authority ${problem.mayEdit ? "allowed" : "denied"}">${problem.mayEdit ? "Authorized editor" : "Read-only identity"}</span>
     </header>
     <div class="workspace">
       <aside>
-        <p class="step">CURRENT HEAD</p>
-        <h2>${escapeHtml(problem.title || "Untitled problem")}</h2>
+        <h2>Current problem</h2>
+        <p class="current-title">${escapeHtml(problem.title || "Untitled problem")}</p>
         <dl><div><dt>Status</dt><dd>${escapeHtml(problem.status)}</dd></div><div><dt>Revision</dt><dd><code>${shortKey(problem.event.id)}</code></dd></div><div><dt>Owner</dt><dd><code>${shortKey(problem.owner)}</code></dd></div></dl>
         <p class="note">Publishing creates complete next snapshot and links current revision as previous.</p>
       </aside>
       <section class="edit-panel" aria-labelledby="editor-title">
-        <div class="section-title"><p class="step">NEXT REVISION</p><h1 id="editor-title">Shape problem.</h1></div>
+        <div class="section-title"><h1 id="editor-title">Next revision</h1><p>Update problem details, then publish complete snapshot.</p></div>
         <div class="field"><label for="title">Title</label><input id="title" maxlength="180" value="${escapeHtml(problem.title)}" ${disabled ? "disabled" : ""}></div>
         <div class="field grow"><label for="description">Description</label><textarea id="description" rows="10" ${disabled ? "disabled" : ""}>${escapeHtml(problem.description)}</textarea></div>
         <div class="field-row">
