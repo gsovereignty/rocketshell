@@ -15,6 +15,7 @@ import {
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
 import { profileFromEvents, type ProfileData } from "./profile";
 import { formatRelativeTime } from "./time";
+import { renderMarkdown } from "./markdown";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -133,7 +134,7 @@ function render() {
     <section class="problem-copy" aria-labelledby="problem-title">
       <div class="state-line"><span class="status status-${escapeHtml(displayedStatus)}"><i></i>${escapeHtml(statusLabel(displayedStatus))}</span></div>
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
-      <p class="description">${escapeHtml(problem.description)}</p>
+      <div class="description markdown-body">${renderMarkdown(problem.description)}</div>
       <div class="actions">
         <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
         <span>${hasChildren ? "Problems with children cannot be claimed." : claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
@@ -153,7 +154,7 @@ function render() {
         ${revisionChanges(item.revision, revisions)}</details>
       </li>` : `<li class="comment-entry-row">
         ${authorAvatar(item.result.event.pubkey)}
-        <div><header><strong title="${escapeHtml(item.result.event.pubkey)}">${escapeHtml(authorName(item.result.event.pubkey))}</strong><time datetime="${new Date(item.result.event.created_at * 1000).toISOString()}" title="${new Date(item.result.event.created_at * 1000).toLocaleString()}">${formatRelativeTime(item.result.event.created_at)}</time></header><p>${escapeHtml(item.result.event.content)}</p></div>
+        <div><header><strong title="${escapeHtml(item.result.event.pubkey)}">${escapeHtml(authorName(item.result.event.pubkey))}</strong><time datetime="${new Date(item.result.event.created_at * 1000).toISOString()}" title="${new Date(item.result.event.created_at * 1000).toLocaleString()}">${formatRelativeTime(item.result.event.created_at)}</time></header><div class="markdown-body comment-body">${renderMarkdown(item.result.event.content)}</div></div>
       </li>`).join("") : `<li class="empty">No discussion or edit history yet.</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>

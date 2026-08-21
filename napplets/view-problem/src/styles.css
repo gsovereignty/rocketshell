@@ -35,7 +35,24 @@ button { color: inherit; }
 .status i { width:7px; height:7px; border-radius:50%; background:currentColor; }
 .status-claimed { color:#8a5a00; background:#fff0ce; }.status-patched{color:#5e3fa3;background:#ede5ff}.status-closed{color:#59606e;background:#e8e9ed}
 .problem-copy h1 { max-width:22ch; margin:0; font-size:clamp(2.35rem,5.4vw,4.5rem); line-height:1.02; letter-spacing:-.035em; text-wrap:balance; }
-.description { max-width:72ch; margin:24px 0 0; color:#3d414c; font-size:clamp(1rem,1.8vw,1.22rem); line-height:1.65; white-space:pre-wrap; }
+.description { max-width:72ch; margin:24px 0 0; color:#3d414c; font-size:clamp(1rem,1.8vw,1.22rem); line-height:1.65; }
+.markdown-body { overflow-wrap:anywhere; }
+.markdown-body > :first-child { margin-top:0; }
+.markdown-body > :last-child { margin-bottom:0; }
+.markdown-body p { margin:0 0 .85em; }
+.markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4,.markdown-body h5,.markdown-body h6 { max-width:100%; margin:1.35em 0 .5em; font-size:1em; line-height:1.3; letter-spacing:0; text-wrap:wrap; }
+.markdown-body h1,.markdown-body h2 { font-size:1.25em; }
+.markdown-body ul,.markdown-body ol { margin:.7em 0 1em; padding-inline-start:1.5em; }
+.markdown-body li + li { margin-top:.3em; }
+.markdown-body blockquote { margin:1em 0; border-inline-start:1px solid var(--line); padding-inline-start:1em; color:var(--muted); }
+.markdown-body pre { max-width:100%; margin:1em 0; overflow:auto; border:1px solid var(--line); padding:14px 16px; background:#f7f7f9; font-size:.82em; line-height:1.55; }
+.markdown-body code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:.88em; }
+.markdown-body :not(pre) > code { padding:.12em .3em; background:#f0f1f4; }
+.markdown-body hr { height:1px; margin:1.4em 0; border:0; background:var(--line); }
+.markdown-body del { color:var(--muted); }
+.markdown-link { color:var(--blue); }
+.markdown-link code { margin-inline-start:.35em; color:var(--muted); font-size:.72em; }
+.markdown-image { color:var(--muted); font-style:italic; }
 .actions { display:flex; align-items:center; gap:24px; margin-top:32px; }
 .primary { min-height:52px; border-radius:10px; padding:0 24px; }
 .primary:disabled { color:#858995; background:#e4e5e9; cursor:not-allowed; }
@@ -76,7 +93,7 @@ button { color: inherit; }
 .discussion li { display:grid; grid-template-columns:48px minmax(0,1fr); gap:18px; padding:20px 0; border-bottom:1px solid var(--line); }
 .discussion li > div { min-width:0; }
 .avatar { display:grid; place-items:center; align-self:start; width:42px; height:42px; border-radius:50%; color:#fff; background:hsl(var(--avatar-hue) 58% 45%); font-size:.76rem; font-weight:750; object-fit:cover; }
-.discussion header { display:flex; gap:10px; align-items:baseline; }.discussion header strong{min-width:0;overflow-wrap:anywhere}.discussion time{flex:none;color:#9296a1;font-size:.76rem}.discussion li p{margin:7px 0 0;overflow-wrap:anywhere;line-height:1.55;white-space:pre-wrap}
+.discussion header { display:flex; gap:10px; align-items:baseline; }.discussion header strong{min-width:0;overflow-wrap:anywhere}.discussion time{flex:none;color:#9296a1;font-size:.76rem}.comment-body{margin-top:7px;line-height:1.55}
 .discussion .empty { display:block; color:var(--muted); }
 .comment-entry { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; margin-top:20px; }
 .comment-entry textarea { min-height:54px; resize:vertical; border:1px solid #c8cbd2; border-radius:12px; padding:15px 17px; line-height:1.45; caret-color:var(--blue); }
