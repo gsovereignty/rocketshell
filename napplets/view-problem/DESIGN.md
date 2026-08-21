@@ -208,9 +208,9 @@ Top bar is a 72px-high horizontal rule with an underlined change action at left 
 
 ### Discussion Ledger
 
-Each comment aligns the author's shell-resolved profile picture and display name
-with date and comment body. When metadata or image loading is unavailable, the
-same circle falls back to initials and alternating ledger hues. Entries stay
+Each comment aligns a deterministic generated avatar and shortened author pubkey
+with date and comment body. Avatar hue and two-character label derive from the
+pubkey, remaining stable without profile metadata or image loading. Entries stay
 separated by ledger rules and never become cards.
 
 ### Motion

@@ -30,8 +30,8 @@ current revision, workflow state, related problem references, and NIP-22 kind
   `napplet:composer/problem-child` convention through NAP-INTENT.
 - Registers the standard `note` archetype and accepts `napplet:note/open` event
   targets so problem navigators can open a selected revision in focused detail.
-- Resolves comment-author kind `0` metadata through shell profile lookup and
-  loads profile pictures through shell-mediated resource handles.
+- Shows each comment author's shortened pubkey and a deterministic generated
+  avatar without requesting profile metadata or remote images.
 - Native form submission is forbidden by the `allow-scripts` sandbox.
 - No direct network access, browser storage, shell imports, or environment variables.
 
