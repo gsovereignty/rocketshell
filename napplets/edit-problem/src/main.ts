@@ -1,7 +1,7 @@
 import { identity, inc, intent, outbox, themeGet, themeOnChanged, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import gsap from "gsap";
 import "./styles.css";
-import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
+import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, hasProblemChildren, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
@@ -171,8 +171,18 @@ async function publishRevision(): Promise<void> {
     busy = true;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = true; publishButton.textContent = "Publishing…"; }
+    status("Checking child problems…");
+    const coordinate = `31971:${publishingProblem.owner}:${publishingProblem.problemId}`;
+    const childResponse = await outbox.query({ kinds: [31971], "#a": [coordinate], limit: 300 }, { limit: 300, timeoutMs: 8000 });
+    const childProblemIds = [...new Set(childResponse.events.flatMap(({ event }) =>
+      event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === coordinate)
+        ? event.tags.filter((item) => item[0] === "d").map((item) => item[1]) : []))];
+    const childRevisions = childProblemIds.length
+      ? (await outbox.query({ kinds: [31971], "#d": childProblemIds, limit: 300 }, { limit: 300, timeoutMs: 8000 })).events
+      : [];
+    const hasChildren = hasProblemChildren(coordinate, [...childResponse.events, ...childRevisions]);
     status("Publishing complete revision…");
-    const template = buildRevisionTemplate(publishingProblem, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000));
+    const template = buildRevisionTemplate(publishingProblem, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000), hasChildren);
     const result = await outbox.publish(template, publishingProblem.relay ? { relays: [publishingProblem.relay] } : undefined);
     relayOutcomes = result.relays;
     const publishedMessage = revisionPublishMessage(result);

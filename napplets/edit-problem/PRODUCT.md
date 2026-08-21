@@ -17,3 +17,5 @@ used.
 Editor preserves current snapshot metadata and graph structure. It replaces
 title, description, status, optional child default, and revision lineage. Only
 current owner or listed maintainer can publish. Maintainer list stays unchanged.
+Before an owner publishes, editor resolves current direct child heads and forces
+status to `children` when any exist. Maintainer-selected status remains unchanged.

@@ -16,6 +16,7 @@ export interface EditableProblem {
   status: ProblemStatus;
   childStatus?: "rfm" | "open";
   mayEdit: boolean;
+  isOwner: boolean;
 }
 
 const tag = (event: NostrEvent, name: string, marker?: string) =>
@@ -56,14 +57,25 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
     description: selected.event.content,
     status: status as ProblemStatus,
     childStatus: childStatus === "rfm" || childStatus === "open" ? childStatus : undefined,
-    mayEdit: pubkey === owner || maintainers.includes(pubkey)
+    mayEdit: pubkey === owner || maintainers.includes(pubkey),
+    isOwner: pubkey === owner
   };
+}
+
+export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
+  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND && HEX_64.test(event.id) &&
+    /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(tagValue(event, "a", "origin") ?? ""));
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  return candidates.some(({ event }) => !referenced.has(event.id) &&
+    event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === coordinate));
 }
 
 export function buildRevisionTemplate(
   problem: EditableProblem,
   update: { title: string; description: string; status: ProblemStatus; childStatus?: "rfm" | "open" },
-  createdAt: number
+  createdAt: number,
+  hasChildren = false
 ): EventTemplate {
   const title = update.title.trim();
   const description = update.description.trim();
@@ -75,7 +87,8 @@ export function buildRevisionTemplate(
   const tags = problem.event.tags.filter((item) =>
     !lineageNames.has(item[0]) && !(item[0] === "e" && (item[3] === "genesis" || item[3] === "previous")));
   const genesis = tagValue(problem.event, "e", "genesis") ?? problem.event.id;
-  tags.splice(1, 0, ["title", title], ["status", update.status]);
+  const status = problem.isOwner && hasChildren ? "children" : update.status;
+  tags.splice(1, 0, ["title", title], ["status", status]);
   if (update.childStatus) tags.push(["child_status", update.childStatus]);
   tags.push(
     ["e", genesis, problem.relay, "genesis", problem.owner],

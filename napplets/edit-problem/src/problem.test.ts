@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { EDIT_CONVENTION, buildRevisionTemplate, isEditPayload, selectEditableProblem } from "./problem";
+import { EDIT_CONVENTION, buildRevisionTemplate, hasProblemChildren, isEditPayload, selectEditableProblem } from "./problem";
 
 const hex = (char: string) => char.repeat(64);
 const owner = hex("a");
@@ -39,5 +39,31 @@ describe("problem editor", () => {
 
   it("rejects forked heads", () => {
     expect(() => selectEditableProblem(problemId, [result(event(hex("c"))), result(event(hex("d")))], owner)).toThrow("multiple current heads");
+  });
+
+  it("forces owner edits to children when current children exist", () => {
+    const problem = selectEditableProblem(problemId, [result(event(hex("c")))], owner);
+    const template = buildRevisionTemplate(problem, { title: "New title", description: "New body", status: "open" }, 20, true);
+    expect(template.tags).toContainEqual(["status", "children"]);
+    expect(template.tags).not.toContainEqual(["status", "open"]);
+  });
+
+  it("does not override maintainer-selected status", () => {
+    const maintainer = hex("d");
+    const problem = selectEditableProblem(problemId, [result(event(hex("c"), owner, [["p", maintainer, "", "maintainer"]]))], maintainer);
+    const template = buildRevisionTemplate(problem, { title: "New title", description: "New body", status: "open" }, 20, true);
+    expect(template.tags).toContainEqual(["status", "open"]);
+  });
+
+  it("counts only current direct child heads", () => {
+    const childId = hex("d");
+    const childCoordinate = `31971:${hex("e")}:${childId}`;
+    const child = (id: string, previous?: string, parent = `31971:${owner}:${problemId}`) => result({
+      ...event(id, hex("e")), tags: [["d", childId], ["a", childCoordinate, "", "origin"], ["a", parent],
+        ...(previous ? [["e", previous, "", "previous"]] : [])]
+    });
+    const genesis = child(hex("1"));
+    expect(hasProblemChildren(`31971:${owner}:${problemId}`, [genesis])).toBe(true);
+    expect(hasProblemChildren(`31971:${owner}:${problemId}`, [genesis, child(hex("2"), hex("1"), `31971:${owner}:${hex("0")}`)])).toBe(false);
   });
 });
