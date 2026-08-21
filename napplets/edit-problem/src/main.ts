@@ -17,6 +17,8 @@ let problemEvents: RelayEventResult[] = [];
 let loadGeneration = 0;
 let pubkey = "";
 let busy = false;
+let activeProblemId: string | undefined;
+let animatedProblemId: string | undefined;
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
 const shortKey = (value: string) => `${value.slice(0, 8)}…${value.slice(-5)}`;
@@ -84,6 +86,8 @@ function receiveProblemRevision(problemId: string, result: RelayEventResult): vo
 }
 
 function renderEditor(problem: EditableProblem): void {
+  const animateEntrance = animatedProblemId !== problem.problemId;
+  animatedProblemId = problem.problemId;
   const disabled = !problem.mayEdit || busy;
   app.innerHTML = `<article class="editor-shell">
     <header class="masthead">
@@ -117,12 +121,14 @@ function renderEditor(problem: EditableProblem): void {
       void publishRevision();
     }
   });
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (animateEntrance && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     gsap.fromTo(".masthead, aside, .edit-panel", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .065, ease: "expo.out" });
   }
 }
 
-async function loadProblem(problemId: string): Promise<boolean> {
+async function loadProblem(problemId: string, force = false): Promise<boolean> {
+  if (!force && activeProblemId === problemId) return true;
+  activeProblemId = problemId;
   stopProblemSubscription();
   const generation = loadGeneration;
   renderWaiting("Loading problem…");
@@ -152,6 +158,7 @@ async function loadProblem(problemId: string): Promise<boolean> {
   } catch (error) {
     if (generation !== loadGeneration) return false;
     console.error("Problem revision load failed", { problemId, error });
+    activeProblemId = undefined;
     stopProblemSubscription();
     renderWaiting("Problem unavailable");
     status(error instanceof Error ? error.message : "Problem could not be loaded.", true);
@@ -177,7 +184,7 @@ async function publishRevision(): Promise<void> {
     relayOutcomes = result.relays;
     const publishedMessage = revisionPublishMessage(result);
     status(`${publishedMessage} Loading confirmed head…`);
-    if (!await loadProblem(publishingProblem.problemId)) return;
+    if (!await loadProblem(publishingProblem.problemId, true)) return;
     const confirmedRevision = current;
     if (!confirmedRevision) throw new Error("Published revision could not be confirmed.");
     status(`${publishedMessage} Returning to problem…`);
