@@ -36,6 +36,7 @@ let intentReceived = false;
 let countdownTimer: ReturnType<typeof setInterval> | undefined;
 const profiles = new Map<string, ProfileData>();
 const avatarHandles = new Map<string, { url: string; revoke(): void }>();
+const avatarRequestVersions = new Map<string, number>();
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => ({
@@ -225,20 +226,45 @@ async function loadProfiles(authors: string[]) {
   missing.forEach((author) => profiles.set(author, { name: shortKey(author) }));
   try {
     const response = await outbox.query({ kinds: [0], authors: missing, limit: missing.length }, { limit: missing.length, timeoutMs: 8000 });
-    for (const author of missing) {
+    const loadProfile = async (author: string) => {
       const profile = profileFromEvents(author, response.events.map(({ event }) => event));
-      if (!profile) continue;
+      if (!profile) return;
       profiles.set(author, profile);
-      if (profile.picture) {
-        try {
-          const blob = await resource.bytes(profile.picture);
-          const url = URL.createObjectURL(blob);
-          avatarHandles.set(author, { url, revoke: () => URL.revokeObjectURL(url) });
-        } catch (error) {
-          console.warn("Profile picture fetch failed; using generated avatar", { author, picture: profile.picture, error });
+      const version = (avatarRequestVersions.get(author) ?? 0) + 1;
+      avatarRequestVersions.set(author, version);
+      avatarHandles.get(author)?.revoke();
+      avatarHandles.delete(author);
+      const resourceAvailable = Boolean((window as Window & { napplet?: { resource?: unknown } }).napplet?.resource);
+      if (!profile.picture || !resourceAvailable) {
+        if (profile.picture && !resourceAvailable) {
+          console.warn("Profile picture unavailable; shell resource domain is missing", { author });
         }
+        return;
       }
-    }
+      try {
+        const blob = await resource.bytes(profile.picture);
+        if (!blob.type.startsWith("image/")) {
+          console.warn("Profile picture rejected; resource is not an image", { author, picture: profile.picture, mimeType: blob.type });
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (avatarRequestVersions.get(author) !== version) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        avatarHandles.set(author, { url, revoke: () => URL.revokeObjectURL(url) });
+        if (problem) render();
+      } catch (error) {
+        console.warn("Profile picture fetch failed; using generated avatar", { author, picture: profile.picture, error });
+      }
+    };
+    const queue = [...missing];
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+      while (queue.length) {
+        const author = queue.shift();
+        if (author) await loadProfile(author);
+      }
+    }));
     if (problem) render();
   } catch (error) {
     console.warn("Profile metadata query failed; using pubkey fallbacks", { authors: missing, error });
@@ -314,5 +340,6 @@ addEventListener("beforeunload", () => {
   discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close();
   if (countdownTimer) clearInterval(countdownTimer);
   avatarHandles.forEach((handle) => handle.revoke());
+  avatarRequestVersions.clear();
 });
 void start();
