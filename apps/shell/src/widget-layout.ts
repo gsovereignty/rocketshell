@@ -98,6 +98,7 @@ interface MoveState {
   readonly pointerId: number;
   readonly startX: number;
   readonly startY: number;
+  readonly startScrollY: number;
   readonly startRect: WidgetRect;
   readonly grabOffsetX: number;
   readonly grabOffsetY: number;
@@ -107,6 +108,8 @@ interface MoveState {
   readonly rowStride: number;
   readonly setX: (value: number) => void;
   readonly setY: (value: number) => void;
+  currentX: number;
+  currentY: number;
   candidate: WidgetRect;
   placement: RelocationResult;
 }
@@ -137,6 +140,28 @@ export interface VisibleGridRange {
   readonly startRow: number;
   readonly endRow: number;
 }
+
+export const dragScrollDirection = (
+  pointerY: number,
+  viewportHeight: number,
+  topOffset: number,
+  edgeSize = 72
+): -1 | 0 | 1 => {
+  const zone = Math.max(0, Math.min(edgeSize, (viewportHeight - topOffset) / 2));
+  if (pointerY <= topOffset + zone) return -1;
+  if (pointerY >= viewportHeight - zone) return 1;
+  return 0;
+};
+
+export const clampDragRowToPage = (
+  row: number,
+  widgetHeight: number,
+  page: number,
+  rowsPerPage: number
+): number => {
+  const pageStart = page * rowsPerPage;
+  return Math.max(pageStart, Math.min(pageStart + Math.max(0, rowsPerPage - widgetHeight), row));
+};
 
 export const snapPageStartRows = (rects: readonly WidgetRect[], rowsPerPage: number): readonly number[] => {
   if (rowsPerPage < 1 || rects.length === 0) return [];
@@ -398,6 +423,8 @@ export const createWidgetGrid = (
   container.append(preview, snapTargets);
   const scrollPosition = { y: window.scrollY };
   let scrollTween: gsap.core.Tween | null = null;
+  let dragEdgeDelay: gsap.core.Tween | null = null;
+  let dragEdgeDirection: -1 | 0 | 1 = 0;
   let activePageFrame = 0;
 
   const pageTopOffset = (): number => {
@@ -407,14 +434,17 @@ export const createWidgetGrid = (
     return barHeight + pageInset;
   };
 
+  const closestSnapPage = (): number => {
+    const targets = Array.from(snapTargets.children) as HTMLElement[];
+    return targets.reduce((closest, target, index) =>
+      Math.abs(target.getBoundingClientRect().top - pageTopOffset()) <
+        Math.abs((targets[closest]?.getBoundingClientRect().top ?? 0) - pageTopOffset()) ? index : closest, 0);
+  };
+
   const updateActivePage = (): void => {
     activePageFrame = 0;
     if (!screenNavigation) return;
-    const topOffset = pageTopOffset();
-    const targets = Array.from(snapTargets.children) as HTMLElement[];
-    const activeIndex = targets.reduce((closest, target, index) =>
-      Math.abs(target.getBoundingClientRect().top - topOffset) <
-        Math.abs((targets[closest]?.getBoundingClientRect().top ?? 0) - topOffset) ? index : closest, 0);
+    const activeIndex = closestSnapPage();
     screenNavigation.querySelectorAll<HTMLButtonElement>(".screen-preview").forEach((button, index) => {
       if (index === activeIndex) button.setAttribute("aria-current", "true");
       else button.removeAttribute("aria-current");
@@ -425,7 +455,7 @@ export const createWidgetGrid = (
     if (!activePageFrame) activePageFrame = window.requestAnimationFrame(updateActivePage);
   };
 
-  const scrollToPage = (page: number): void => {
+  const scrollToPage = (page: number, onComplete?: () => void): void => {
     const target = snapTargets.children[page];
     if (!(target instanceof HTMLElement)) return;
     const destination = Math.max(0, window.scrollY + target.getBoundingClientRect().top - pageTopOffset());
@@ -433,6 +463,7 @@ export const createWidgetGrid = (
     if (reducedMotion.matches) {
       window.scrollTo(0, destination);
       scheduleActivePageUpdate();
+      onComplete?.();
       return;
     }
     scrollPosition.y = window.scrollY;
@@ -448,6 +479,7 @@ export const createWidgetGrid = (
         window.scrollTo(0, destination);
         scrollTween = null;
         scheduleActivePageUpdate();
+        onComplete?.();
       },
       onInterrupt: () => {
         delete document.documentElement.dataset.screenScrolling;
@@ -905,6 +937,59 @@ export const createWidgetGrid = (
       edge === "inline-start" ? widthDelta : 0);
   };
 
+  const stopDragAutoScroll = (): void => {
+    dragEdgeDelay?.kill();
+    dragEdgeDelay = null;
+    dragEdgeDirection = 0;
+  };
+
+  const scheduleDragAutoScroll = (pointerY: number): void => {
+    if (!move) return;
+    const direction = dragScrollDirection(pointerY, window.innerHeight, pageTopOffset());
+    if (direction === 0) {
+      stopDragAutoScroll();
+      return;
+    }
+    if (direction === dragEdgeDirection) return;
+    dragEdgeDelay?.kill();
+    dragEdgeDirection = direction;
+    dragEdgeDelay = gsap.delayedCall(.28, () => {
+      dragEdgeDelay = null;
+      if (!move) return;
+      const targets = Array.from(snapTargets.children) as HTMLElement[];
+      const currentPage = closestSnapPage();
+      const nextPage = Math.max(0, Math.min(targets.length - 1, currentPage + direction));
+      if (nextPage === currentPage) {
+        dragEdgeDirection = 0;
+        return;
+      }
+      scrollToPage(nextPage, () => {
+        if (!move) return;
+        dragEdgeDirection = 0;
+        scheduleDragAutoScroll(move.currentY);
+      });
+    });
+  };
+
+  const updateMovePosition = (clientX: number, clientY: number, checkEdge = true): void => {
+    if (!move) return;
+    move.currentX = clientX;
+    move.currentY = clientY;
+    move.setX(clientX - move.startX);
+    move.setY(clientY - move.startY + window.scrollY - move.startScrollY);
+    const column = Math.max(0, Math.min(profile.columns - move.startRect.width,
+      Math.round((clientX - move.containerLeft - move.grabOffsetX) / move.columnStride)));
+    const rawRow = Math.max(0, Math.round((clientY + window.scrollY - move.containerTop - move.grabOffsetY) / move.rowStride));
+    const rowsPerPage = profile.name === "mobile" ? 1 : 2;
+    const row = clampDragRowToPage(rawRow, move.startRect.height, closestSnapPage(), rowsPerPage);
+    if (column !== move.candidate.column || row !== move.candidate.row) {
+      move.candidate = { ...move.startRect, column, row };
+      move.placement = placementFor(move.element, move.candidate);
+      showPreview(move.element, move.candidate, move.placement);
+    }
+    if (checkEdge) scheduleDragAutoScroll(clientY);
+  };
+
   const onPointerDown = (event: PointerEvent): void => {
     const handle = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-resize-edge]") : null;
     const element = handle?.closest<HTMLElement>(".napplet-window");
@@ -937,15 +1022,18 @@ export const createWidgetGrid = (
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      startScrollY: window.scrollY,
       startRect: movingRect,
       grabOffsetX: event.clientX - bounds.left,
       grabOffsetY: event.clientY - bounds.top,
       containerLeft: containerRect.left,
-      containerTop: containerRect.top,
+      containerTop: containerRect.top + window.scrollY,
       columnStride: cellWidth + gap,
       rowStride: rowHeight + gap,
       setX: gsap.quickSetter(movingElement, "x", "px") as (value: number) => void,
       setY: gsap.quickSetter(movingElement, "y", "px") as (value: number) => void,
+      currentX: event.clientX,
+      currentY: event.clientY,
       candidate: movingRect,
       placement
     };
@@ -974,15 +1062,7 @@ export const createWidgetGrid = (
       return;
     }
     if (!move || event.pointerId !== move.pointerId) return;
-    move.setX(event.clientX - move.startX);
-    move.setY(event.clientY - move.startY);
-    const column = Math.max(0, Math.min(profile.columns - move.startRect.width,
-      Math.round((event.clientX - move.containerLeft - move.grabOffsetX) / move.columnStride)));
-    const row = Math.max(0, Math.round((event.clientY - move.containerTop - move.grabOffsetY) / move.rowStride));
-    if (column === move.candidate.column && row === move.candidate.row) return;
-    move.candidate = { ...move.startRect, column, row };
-    move.placement = placementFor(move.element, move.candidate);
-    showPreview(move.element, move.candidate, move.placement);
+    updateMovePosition(event.clientX, event.clientY);
   };
 
   const endDrag = (event: PointerEvent): void => {
@@ -995,6 +1075,8 @@ export const createWidgetGrid = (
       return;
     }
     if (!move || event.pointerId !== move.pointerId) return;
+    stopDragAutoScroll();
+    scrollTween?.kill();
     const active = move;
     if (active.toolbar.hasPointerCapture(event.pointerId)) active.toolbar.releasePointerCapture(event.pointerId);
     const accepted = event.type !== "pointercancel" && commitPlacement(active.element, active.placement);
@@ -1112,7 +1194,11 @@ export const createWidgetGrid = (
   container.addEventListener("keydown", onKeyDown);
   container.addEventListener("click", onFullscreenClick);
   screenNavigation?.addEventListener("click", onScreenNavigationClick);
-  window.addEventListener("scroll", scheduleActivePageUpdate, { passive: true });
+  const onWindowScroll = (): void => {
+    scheduleActivePageUpdate();
+    if (move) updateMovePosition(move.currentX, move.currentY, false);
+  };
+  window.addEventListener("scroll", onWindowScroll, { passive: true });
   window.addEventListener("resize", scheduleActivePageUpdate);
   sync();
 
@@ -1128,10 +1214,11 @@ export const createWidgetGrid = (
       container.removeEventListener("keydown", onKeyDown);
       container.removeEventListener("click", onFullscreenClick);
       screenNavigation?.removeEventListener("click", onScreenNavigationClick);
-      window.removeEventListener("scroll", scheduleActivePageUpdate);
+      window.removeEventListener("scroll", onWindowScroll);
       window.removeEventListener("resize", scheduleActivePageUpdate);
       if (activePageFrame) window.cancelAnimationFrame(activePageFrame);
       scrollTween?.kill();
+      stopDragAutoScroll();
       delete document.documentElement.dataset.screenScrolling;
       screenNavigation?.replaceChildren();
       preview.remove();

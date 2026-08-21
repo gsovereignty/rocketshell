@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   canPlaceRect,
+  clampDragRowToPage,
   defaultWidgetRects,
+  dragScrollDirection,
   nextFullscreenRect,
   profileForWidth,
   rectsOverlap,
@@ -67,6 +69,25 @@ describe("viewport snap pages", () => {
       { column: 0, row: 1, width: 1, height: 2 }
     ], 1)).toEqual([0, 1, 2]);
     expect(snapPageStartRows([], 1)).toEqual([]);
+  });
+});
+
+describe("drag edge navigation", () => {
+  it("selects previous and next screens only inside viewport edge zones", () => {
+    expect(dragScrollDirection(80, 720, 52)).toBe(-1);
+    expect(dragScrollDirection(360, 720, 52)).toBe(0);
+    expect(dragScrollDirection(680, 720, 52)).toBe(1);
+  });
+
+  it("clamps overlapping edge zones on short viewports", () => {
+    expect(dragScrollDirection(50, 100, 44)).toBe(-1);
+    expect(dragScrollDirection(75, 100, 44)).toBe(1);
+  });
+
+  it("keeps drop candidates inside the currently visible screen", () => {
+    expect(clampDragRowToPage(4, 1, 1, 2)).toBe(3);
+    expect(clampDragRowToPage(1, 1, 1, 2)).toBe(2);
+    expect(clampDragRowToPage(5, 2, 1, 2)).toBe(2);
   });
 });
 
