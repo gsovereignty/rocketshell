@@ -400,14 +400,21 @@ export const createWidgetGrid = (
   let scrollTween: gsap.core.Tween | null = null;
   let activePageFrame = 0;
 
+  const pageTopOffset = (): number => {
+    const rootStyles = getComputedStyle(document.documentElement);
+    const barHeight = Number.parseFloat(rootStyles.getPropertyValue("--bar-height")) || 0;
+    const pageInset = Number.parseFloat(rootStyles.getPropertyValue("--page-top-inset")) || 0;
+    return barHeight + pageInset;
+  };
+
   const updateActivePage = (): void => {
     activePageFrame = 0;
     if (!screenNavigation) return;
-    const barHeight = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar-height")) || 0;
+    const topOffset = pageTopOffset();
     const targets = Array.from(snapTargets.children) as HTMLElement[];
     const activeIndex = targets.reduce((closest, target, index) =>
-      Math.abs(target.getBoundingClientRect().top - barHeight) <
-        Math.abs((targets[closest]?.getBoundingClientRect().top ?? 0) - barHeight) ? index : closest, 0);
+      Math.abs(target.getBoundingClientRect().top - topOffset) <
+        Math.abs((targets[closest]?.getBoundingClientRect().top ?? 0) - topOffset) ? index : closest, 0);
     screenNavigation.querySelectorAll<HTMLButtonElement>(".screen-preview").forEach((button, index) => {
       if (index === activeIndex) button.setAttribute("aria-current", "true");
       else button.removeAttribute("aria-current");
@@ -421,8 +428,7 @@ export const createWidgetGrid = (
   const scrollToPage = (page: number): void => {
     const target = snapTargets.children[page];
     if (!(target instanceof HTMLElement)) return;
-    const barHeight = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar-height")) || 0;
-    const destination = Math.max(0, window.scrollY + target.getBoundingClientRect().top - barHeight);
+    const destination = Math.max(0, window.scrollY + target.getBoundingClientRect().top - pageTopOffset());
     scrollTween?.kill();
     if (reducedMotion.matches) {
       window.scrollTo(0, destination);

@@ -3,6 +3,7 @@
   background: var(--bg);
   color: var(--text);
   --bar-height: 2.75rem;
+  --page-top-inset: .5rem;
 }
 
 /* Palettes. `data-theme` is always written explicitly by the shell, so the dark set doubles as the
@@ -85,7 +86,7 @@
 
 * { box-sizing: border-box; }
 html {
-  scroll-padding-top: var(--bar-height);
+  scroll-padding-top: calc(var(--bar-height) + var(--page-top-inset));
   scroll-snap-type: y mandatory;
 }
 html[data-screen-scrolling="true"] { scroll-snap-type: none; }
@@ -395,7 +396,7 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 #napplet-loader:has(#loader-status[data-state="error"]) #loader-progress { background: var(--danger); box-shadow: none; }
 
-main { width: calc(100% - 1rem); margin: 0 auto; padding: .5rem 0; }
+main { width: calc(100% - 1rem); margin: 0 auto; padding: var(--page-top-inset) 0; }
 p { margin: 0; }
 #windows {
   --widget-columns: 4;
