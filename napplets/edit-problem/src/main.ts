@@ -1,4 +1,4 @@
-import { identity, inc, outbox, themeGet, themeOnChanged, type Subscription, type Theme } from "@napplet/sdk";
+import { identity, inc, outbox, themeGet, themeOnChanged, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
@@ -12,6 +12,9 @@ let current: EditableProblem | undefined;
 let identitySubscription: Subscription | undefined;
 let intentSubscription: Subscription | undefined;
 let themeSubscription: Subscription | undefined;
+let problemSubscription: OutboxSubscription | undefined;
+let problemEvents: RelayEventResult[] = [];
+let loadGeneration = 0;
 let pubkey = "";
 let busy = false;
 
@@ -35,6 +38,48 @@ function renderWaiting(message = "Waiting for problem…"): void {
   </section>`;
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     gsap.fromTo(".waiting > *", { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .07, ease: "expo.out" });
+  }
+}
+
+function stopProblemSubscription(): void {
+  loadGeneration += 1;
+  problemSubscription?.close();
+  problemSubscription = undefined;
+  problemEvents = [];
+}
+
+function editorIsDirty(problem: EditableProblem): boolean {
+  const title = document.querySelector<HTMLInputElement>("#title");
+  const description = document.querySelector<HTMLTextAreaElement>("#description");
+  const problemStatus = document.querySelector<HTMLSelectElement>("#problem-status");
+  const childStatus = document.querySelector<HTMLSelectElement>("#child-status");
+  return Boolean(title && (title.value !== problem.title || description?.value !== problem.description ||
+    problemStatus?.value !== problem.status || childStatus?.value !== (problem.childStatus ?? "")));
+}
+
+function receiveProblemRevision(problemId: string, result: RelayEventResult): void {
+  if (problemEvents.some(({ event }) => event.id === result.event.id)) return;
+  problemEvents.push(result);
+  if (!current || current.problemId !== problemId) return;
+  try {
+    const previous = current;
+    const next = selectEditableProblem(problemId, problemEvents, pubkey);
+    if (next.event.id === previous.event.id) return;
+    const dirty = editorIsDirty(previous);
+    current = next;
+    if (!dirty) {
+      renderEditor(next);
+      status("Current head updated live.");
+      return;
+    }
+    const publishButton = document.querySelector<HTMLButtonElement>("#publish");
+    if (publishButton) publishButton.disabled = !next.mayEdit;
+    status(next.mayEdit
+      ? "Current head changed. Your draft will publish from latest revision."
+      : "Current head changed and removed your edit permission.", !next.mayEdit);
+  } catch (error) {
+    console.warn("Live problem revision could not become editable head", { problemId, eventId: result.event.id, error });
+    status(error instanceof Error ? error.message : "Live problem revision could not be applied.", true);
   }
 }
 
@@ -78,13 +123,35 @@ function renderEditor(problem: EditableProblem): void {
 }
 
 async function loadProblem(problemId: string): Promise<void> {
+  stopProblemSubscription();
+  const generation = loadGeneration;
   renderWaiting("Loading problem…");
   try {
+    const buffered: RelayEventResult[] = [];
+    let hydrated = false;
+    const subscription = outbox.subscribe({ kinds: [31971], "#d": [problemId] }, { timeoutMs: 8000 });
+    problemSubscription = subscription;
+    subscription.on("event", (result) => {
+      if (problemSubscription !== subscription) return;
+      if (hydrated) receiveProblemRevision(problemId, result);
+      else buffered.push(result);
+    });
+    subscription.on("closed", (reason) => {
+      if (problemSubscription !== subscription) return;
+      problemSubscription = undefined;
+      console.warn("Live editable problem subscription closed", { problemId, reason });
+      status("Live updates stopped. Reopen editor to reconnect.", true);
+    });
     const response = await outbox.query({ kinds: [31971], "#d": [problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 });
-    current = selectEditableProblem(problemId, response.events, pubkey);
+    if (generation !== loadGeneration) return;
+    problemEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
+    current = selectEditableProblem(problemId, problemEvents, pubkey);
+    hydrated = true;
     renderEditor(current);
   } catch (error) {
+    if (generation !== loadGeneration) return;
     console.error("Problem revision load failed", { problemId, error });
+    stopProblemSubscription();
     renderWaiting("Problem unavailable");
     status(error instanceof Error ? error.message : "Problem could not be loaded.", true);
   }
@@ -169,5 +236,5 @@ async function start(): Promise<void> {
   }
 }
 
-addEventListener("beforeunload", () => { identitySubscription?.close(); intentSubscription?.close(); themeSubscription?.close(); });
+addEventListener("beforeunload", () => { problemSubscription?.close(); identitySubscription?.close(); intentSubscription?.close(); themeSubscription?.close(); });
 void start();
