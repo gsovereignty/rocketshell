@@ -125,6 +125,11 @@ export class NappletWindowManager {
     closeButton.type = "button";
     closeButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>';
     closeButton.setAttribute("aria-label", `Close ${title.textContent}`);
+    const fullscreenButton = document.createElement("button");
+    fullscreenButton.className = "napplet-window-fullscreen";
+    fullscreenButton.type = "button";
+    fullscreenButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"></path></svg>';
+    fullscreenButton.setAttribute("aria-label", `Fullscreen ${title.textContent}`);
     const iframe = document.createElement("iframe");
     iframe.setAttribute("sandbox", "allow-scripts");
     iframe.title = dTag;
@@ -132,7 +137,7 @@ export class NappletWindowManager {
     element.dataset.windowId = windowId;
     closeButton.dataset.windowId = windowId;
     closeButton.addEventListener("click", () => this.destroy(windowId));
-    toolbar.append(title, closeButton);
+    toolbar.append(title, fullscreenButton, closeButton);
     element.append(toolbar, iframe);
     this.container.append(element);
     const source = iframe.contentWindow;

@@ -176,7 +176,7 @@ describe("package gateway", () => {
     expect(element.hidden).toBe(false);
     expect(element.dataset.startupPending).toBeUndefined();
     expect(element.dataset.layoutPending).toBeUndefined();
-    expect(document.createElement).toHaveBeenCalledTimes(5);
+    expect(document.createElement).toHaveBeenCalledTimes(6);
     manager.close(); vi.unstubAllGlobals();
   });
   it("replaces only the intent caller without moving peers", async () => {

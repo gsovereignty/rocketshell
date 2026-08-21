@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canPlaceRect,
   defaultWidgetRects,
+  nextFullscreenRect,
   profileForWidth,
   rectsOverlap,
   resolveOpeningPlacement,
@@ -66,6 +67,38 @@ describe("viewport snap pages", () => {
       { column: 0, row: 1, width: 1, height: 2 }
     ], 1)).toEqual([0, 1, 2]);
     expect(snapPageStartRows([], 1)).toEqual([]);
+  });
+});
+
+describe("fullscreen widget placement", () => {
+  it("expands in its current page when peers leave it empty", () => {
+    expect(nextFullscreenRect(
+      { column: 2, row: 2, width: 2, height: 1 },
+      [{ column: 0, row: 0, width: 4, height: 2 }],
+      4,
+      2
+    )).toEqual({ column: 0, row: 2, width: 4, height: 2 });
+  });
+
+  it("uses next empty screen without moving other widgets", () => {
+    expect(nextFullscreenRect(
+      { column: 0, row: 0, width: 2, height: 1 },
+      [
+        { column: 2, row: 0, width: 2, height: 1 },
+        { column: 0, row: 2, width: 1, height: 1 }
+      ],
+      4,
+      2
+    )).toEqual({ column: 0, row: 4, width: 4, height: 2 });
+  });
+
+  it("fills one row per mobile screen", () => {
+    expect(nextFullscreenRect(
+      { column: 0, row: 0, width: 1, height: 1 },
+      [{ column: 0, row: 1, width: 1, height: 1 }],
+      1,
+      1
+    )).toEqual({ column: 0, row: 0, width: 1, height: 1 });
   });
 });
 

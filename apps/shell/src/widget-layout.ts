@@ -144,6 +144,23 @@ export const snapPageStartRows = (rects: readonly WidgetRect[], rowsPerPage: num
   return Array.from({ length: Math.ceil(occupiedRows / rowsPerPage) }, (_, page) => page * rowsPerPage);
 };
 
+export const nextFullscreenRect = (
+  current: WidgetRect,
+  occupied: readonly WidgetRect[],
+  columns: number,
+  rowsPerPage: number
+): WidgetRect | undefined => {
+  if (columns < 1 || rowsPerPage < 1) return undefined;
+  const firstPage = Math.floor(current.row / rowsPerPage);
+  const lastOccupiedRow = occupied.reduce((last, rect) => Math.max(last, rect.row + rect.height), 0);
+  const lastPage = Math.max(firstPage, Math.ceil(lastOccupiedRow / rowsPerPage));
+  for (let page = firstPage; page <= lastPage; page += 1) {
+    const candidate = { column: 0, row: page * rowsPerPage, width: columns, height: rowsPerPage };
+    if (canPlaceRect(candidate, columns, occupied)) return candidate;
+  }
+  return undefined;
+};
+
 export const visibleGridRange = (
   containerTop: number,
   viewportTop: number,
@@ -437,6 +454,46 @@ export const createWidgetGrid = (
     const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>(".screen-preview") : null;
     if (!button || !screenNavigation?.contains(button)) return;
     scrollToPage(Number(button.dataset.page));
+  };
+
+  const onFullscreenClick = (event: MouseEvent): void => {
+    const button = event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>(".napplet-window-fullscreen")
+      : null;
+    const element = button?.closest<HTMLElement>(".napplet-window");
+    const current = element ? rects.get(element) : undefined;
+    if (!button || !element || !current) return;
+    const rowsPerPage = profile.name === "mobile" ? 1 : 2;
+    const destination = nextFullscreenRect(current, occupiedExcept(element), profile.columns, rowsPerPage);
+    if (!destination) return;
+    const before = element.getBoundingClientRect();
+    if (!commitRects(new Map([[element, destination]]))) return;
+    layoutCustomized = true;
+    persistCurrentLayout();
+    button.setAttribute("aria-label", `Fullscreen ${element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || "Napplet"}`);
+    const page = destination.row / rowsPerPage;
+    if (reducedMotion.matches) {
+      scrollToPage(page);
+      return;
+    }
+    const after = element.getBoundingClientRect();
+    gsap.fromTo(element, {
+      x: before.left - after.left,
+      y: before.top - after.top,
+      scaleX: before.width / after.width,
+      scaleY: before.height / after.height,
+      transformOrigin: "top left"
+    }, {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      duration: .32,
+      ease: "power4.out",
+      clearProps: "transform,transformOrigin",
+      overwrite: "auto",
+      onComplete: () => scrollToPage(page)
+    });
   };
 
   const syncScreenNavigation = (pageRows: readonly number[], rowsPerPage: number): void => {
@@ -1047,6 +1104,7 @@ export const createWidgetGrid = (
   container.addEventListener("pointerup", endDrag);
   container.addEventListener("pointercancel", endDrag);
   container.addEventListener("keydown", onKeyDown);
+  container.addEventListener("click", onFullscreenClick);
   screenNavigation?.addEventListener("click", onScreenNavigationClick);
   window.addEventListener("scroll", scheduleActivePageUpdate, { passive: true });
   window.addEventListener("resize", scheduleActivePageUpdate);
@@ -1062,6 +1120,7 @@ export const createWidgetGrid = (
       container.removeEventListener("pointerup", endDrag);
       container.removeEventListener("pointercancel", endDrag);
       container.removeEventListener("keydown", onKeyDown);
+      container.removeEventListener("click", onFullscreenClick);
       screenNavigation?.removeEventListener("click", onScreenNavigationClick);
       window.removeEventListener("scroll", scheduleActivePageUpdate);
       window.removeEventListener("resize", scheduleActivePageUpdate);
