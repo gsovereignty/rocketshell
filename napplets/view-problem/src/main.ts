@@ -356,7 +356,7 @@ async function loadProblem(value: string) {
     const problemFilter = { kinds: [31971], "#d": [target.problemId], limit: 200 };
     const [problemResponse, response] = await Promise.all([
       outbox.query(problemFilter, { authors: [target.owner], limit: 200, timeoutMs: 8000 }),
-      outbox.query(filters.slice(1), { limit: 300, timeoutMs: 8000 })
+      outbox.query(filters.slice(1), { authors: [target.owner], limit: 300, timeoutMs: 8000 })
     ]);
     if (generation !== loadGeneration) return;
     let problemResults = problemResponse.events;
