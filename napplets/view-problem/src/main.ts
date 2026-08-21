@@ -88,7 +88,7 @@ function render() {
         <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
         <span>${problem.claim ? `Claimed by ${escapeHtml(shortKey(problem.claim.claimant))}${problem.claim.height ? ` at block ${escapeHtml(problem.claim.height)}` : ""}` : "Claim opens a 144-block response window after acceptance."}</span>
       </div>
-      <button class="related-action" id="report-related" type="button">+ Report a related problem</button>
+      <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
     </section>
     <section class="related" aria-labelledby="related-title">
       <h2 id="related-title">Related · ${related.length}</h2>
