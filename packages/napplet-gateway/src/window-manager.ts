@@ -72,6 +72,14 @@ export class NappletWindowManager {
     return () => this.#changeListeners.delete(listener);
   }
 
+  show(windowId: string): void {
+    const target = this.#windows.get(windowId);
+    if (!target) return;
+    target.element.hidden = false;
+    delete target.element.dataset.layoutPending;
+    this.#notifyWindowsChanged();
+  }
+
   focus(windowId: string, callerWindowId?: string): void {
     const target = this.#windows.get(windowId);
     if (!target) return;

@@ -15,6 +15,7 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
   const windows = {
     findByDTag: vi.fn((dTag: string) => dTag === caller.identity.dTag ? caller : target),
     create: vi.fn(async () => target),
+    show: vi.fn(),
     focus: vi.fn(),
     setLaunchDescriptor: vi.fn()
   } as unknown as NappletWindowManager;
@@ -98,11 +99,25 @@ describe("intent host boundary", () => {
     expect(windows.findByDTag).toHaveBeenCalledWith("runtime-attested-sender");
     expect(windows.findByDTag).not.toHaveBeenCalledWith("viewer-app");
     expect(windows.create).toHaveBeenCalledWith("viewer-app", false, { deferLayout: false });
+    expect(windows.show).toHaveBeenCalledWith("target-1");
     expect(windows.focus).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       type: "intent.invoke.result",
       result: expect.objectContaining({ ok: true, handler: "viewer-app", windowId: "target-1" })
     }));
+  });
+
+  it("surfaces a reused target without replacing its caller", async () => {
+    const { handler, windows } = setup(); const send = vi.fn();
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "reuse-visible", request: {
+        archetype: "viewer", behavior: { focus: false, reuse: true }
+      }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(windows.create).not.toHaveBeenCalled();
+    expect(windows.show).toHaveBeenCalledWith("target-1");
+    expect(windows.focus).not.toHaveBeenCalled();
   });
 
   it("uses the account default before opening among multiple handlers", async () => {

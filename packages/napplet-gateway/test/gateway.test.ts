@@ -221,6 +221,10 @@ describe("package gateway", () => {
     expect(elements[2]!.style).toEqual({ gridColumn: "3 / span 2", gridRow: "1 / span 1" });
     expect(iframes[1]?.focus).toHaveBeenCalledOnce();
 
+    manager.show(first.identity.windowId);
+    expect(elements.map(({ hidden }) => hidden)).toEqual([false, false, false]);
+    expect(iframes[0]?.focus).not.toHaveBeenCalled();
+
     manager.destroy(second.identity.windowId);
     expect(elements[0]!.hidden).toBe(false);
     expect(elements[0]!.style).toEqual({ gridColumn: "1 / span 2", gridRow: "2 / span 3" });
