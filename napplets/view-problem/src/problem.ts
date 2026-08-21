@@ -20,6 +20,9 @@ export interface ProblemView {
   claim?: { eventId: string; claimant: string };
 }
 
+export const problemRevisionAuthors = (problem: Pick<ProblemView, "owner" | "maintainers">): string[] =>
+  [...new Set([problem.owner, ...problem.maintainers])];
+
 export interface EffectiveClaim {
   eventId: string;
   claimant: string;

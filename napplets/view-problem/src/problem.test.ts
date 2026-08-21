@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, mayEditProblem, parseCoordinate, problemRevisionAuthors, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -11,6 +11,10 @@ const result = { event: { id: revision, pubkey: owner, kind: 31971, created_at: 
 
 describe("problem view", () => {
   it("validates coordinates", () => expect(parseCoordinate(coordinate).problemId).toBe(id));
+  it("routes live revisions through owner and maintainer outboxes", () => {
+    const maintainer = "e".repeat(64);
+    expect(problemRevisionAuthors({ owner, maintainers: [maintainer, owner] })).toEqual([owner, maintainer]);
+  });
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
   it("selects a newly received revision as current", () => {
     const next = { event: {

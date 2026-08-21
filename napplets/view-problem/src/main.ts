@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, parseCoordinate, relatedCoordinates,
-  mayEditProblem, selectEffectiveClaim, selectProblem, shortKey,
+  mayEditProblem, problemRevisionAuthors, selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -316,19 +316,23 @@ async function loadProblem(value: string) {
     ];
     const buffered: RelayEventResult[] = [];
     let hydrated = false;
-    const subscription = outbox.subscribe(filters, { timeoutMs: 8000 });
-    discussionSubscription = subscription;
-    subscription.on("event", (result) => {
-      if (discussionSubscription !== subscription) return;
-      if (hydrated) receiveDiscussion(result);
-      else buffered.push(result);
-    });
-    subscription.on("closed", (reason) => {
-      if (discussionSubscription !== subscription) return;
-      discussionSubscription = undefined;
-      console.warn("Live problem subscription closed", { coordinate: target.coordinate, reason });
-      setLiveStatus("Live updates stopped. Reopen problem to reconnect.");
-    });
+    const subscribe = (authors: string[]) => {
+      const subscription = outbox.subscribe(filters, { authors, timeoutMs: 8000 });
+      discussionSubscription = subscription;
+      subscription.on("event", (result) => {
+        if (discussionSubscription !== subscription) return;
+        if (hydrated) receiveDiscussion(result);
+        else buffered.push(result);
+      });
+      subscription.on("closed", (reason) => {
+        if (discussionSubscription !== subscription) return;
+        discussionSubscription = undefined;
+        console.warn("Live problem subscription closed", { coordinate: target.coordinate, reason });
+        setLiveStatus("Live updates stopped. Reopen problem to reconnect.");
+      });
+      return subscription;
+    };
+    let subscription = subscribe([target.owner]);
     const [problemResponse, response] = await Promise.all([
       outbox.query({ kinds: [31971], "#d": [target.problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 }),
       outbox.query(filters.slice(1), { limit: 300, timeoutMs: 8000 })
@@ -341,6 +345,12 @@ async function loadProblem(value: string) {
     comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
     hydrated = true;
+    const routedAuthors = problemRevisionAuthors(problem);
+    if (routedAuthors.some((author) => author !== target.owner)) {
+      const previousSubscription = subscription;
+      subscription = subscribe(routedAuthors);
+      previousSubscription.close();
+    }
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments);
     void loadProfiles([...comments.map(({ event }) => event.pubkey), ...(effectiveClaim ? [effectiveClaim.claimant] : [])]);
