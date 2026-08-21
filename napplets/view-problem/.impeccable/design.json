@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-21T00:00:00.000Z",
+  "title": "Design System: View Problem",
+  "extensions": {
+    "colorMeta": {
+      "action-blue": { "role": "primary", "displayName": "Electric Action Blue", "canonical": "#145cff", "tonalRamp": ["oklch(15% 0.10 260)", "oklch(26% 0.15 260)", "oklch(38% 0.20 260)", "oklch(50% 0.24 260)", "oklch(62% 0.22 260)", "oklch(73% 0.16 260)", "oklch(84% 0.09 260)", "oklch(95% 0.03 260)"] },
+      "action-blue-deep": { "role": "primary", "displayName": "Deep Action Blue", "canonical": "#0846cf", "tonalRamp": ["oklch(15% 0.09 260)", "oklch(26% 0.14 260)", "oklch(38% 0.19 260)", "oklch(50% 0.21 260)", "oklch(62% 0.18 260)", "oklch(73% 0.13 260)", "oklch(84% 0.08 260)", "oklch(95% 0.03 260)"] },
+      "ink": { "role": "neutral", "displayName": "Civic Ink", "canonical": "#171a21", "tonalRamp": ["oklch(15% 0.01 260)", "oklch(26% 0.01 260)", "oklch(38% 0.01 260)", "oklch(50% 0.01 260)", "oklch(62% 0.01 260)", "oklch(73% 0.01 260)", "oklch(84% 0.01 260)", "oklch(95% 0.005 260)"] },
+      "body-ink": { "role": "neutral", "displayName": "Body Ink", "canonical": "#3d414c", "tonalRamp": ["oklch(15% 0.01 260)", "oklch(26% 0.015 260)", "oklch(38% 0.018 260)", "oklch(50% 0.018 260)", "oklch(62% 0.015 260)", "oklch(73% 0.012 260)", "oklch(84% 0.008 260)", "oklch(95% 0.004 260)"] },
+      "muted-ink": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#6d7280", "tonalRamp": ["oklch(15% 0.012 260)", "oklch(26% 0.016 260)", "oklch(38% 0.02 260)", "oklch(50% 0.02 260)", "oklch(62% 0.018 260)", "oklch(73% 0.014 260)", "oklch(84% 0.009 260)", "oklch(95% 0.004 260)"] },
+      "rule": { "role": "neutral", "displayName": "Ledger Rule", "canonical": "#dfe1e7", "tonalRamp": ["oklch(15% 0.006 260)", "oklch(26% 0.008 260)", "oklch(38% 0.01 260)", "oklch(50% 0.01 260)", "oklch(62% 0.009 260)", "oklch(73% 0.007 260)", "oklch(84% 0.005 260)", "oklch(95% 0.002 260)"] },
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#ffffff", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(73% 0 0)", "oklch(84% 0 0)", "oklch(100% 0 0)"] },
+      "quiet-surface": { "role": "neutral", "displayName": "Quiet Surface", "canonical": "#f7f7f9", "tonalRamp": ["oklch(15% 0.002 280)", "oklch(26% 0.003 280)", "oklch(38% 0.004 280)", "oklch(50% 0.004 280)", "oklch(62% 0.004 280)", "oklch(73% 0.003 280)", "oklch(84% 0.002 280)", "oklch(97% 0.002 280)"] },
+      "open-green": { "role": "secondary", "displayName": "Open Green", "canonical": "#08744d", "tonalRamp": ["oklch(15% 0.06 160)", "oklch(26% 0.09 160)", "oklch(38% 0.11 160)", "oklch(50% 0.12 160)", "oklch(62% 0.11 160)", "oklch(73% 0.08 160)", "oklch(84% 0.05 160)", "oklch(95% 0.02 160)"] },
+      "open-wash": { "role": "secondary", "displayName": "Open Wash", "canonical": "#e0f3e9", "tonalRamp": ["oklch(15% 0.03 160)", "oklch(26% 0.05 160)", "oklch(38% 0.06 160)", "oklch(50% 0.07 160)", "oklch(62% 0.06 160)", "oklch(73% 0.05 160)", "oklch(84% 0.035 160)", "oklch(95% 0.018 160)"] },
+      "warning-focus": { "role": "tertiary", "displayName": "Amber Focus", "canonical": "#ffbf47", "tonalRamp": ["oklch(15% 0.06 80)", "oklch(26% 0.09 80)", "oklch(38% 0.12 80)", "oklch(50% 0.15 80)", "oklch(62% 0.16 80)", "oklch(73% 0.14 80)", "oklch(84% 0.10 80)", "oklch(95% 0.04 80)"] },
+      "avatar-orange": { "role": "tertiary", "displayName": "Ledger Orange", "canonical": "#d37022", "tonalRamp": ["oklch(15% 0.06 55)", "oklch(26% 0.10 55)", "oklch(38% 0.14 55)", "oklch(50% 0.17 55)", "oklch(62% 0.16 55)", "oklch(73% 0.12 55)", "oklch(84% 0.08 55)", "oklch(95% 0.03 55)"] },
+      "avatar-blue": { "role": "tertiary", "displayName": "Contributor Blue", "canonical": "#2f8cdb", "tonalRamp": ["oklch(15% 0.06 245)", "oklch(26% 0.09 245)", "oklch(38% 0.12 245)", "oklch(50% 0.15 245)", "oklch(62% 0.14 245)", "oklch(73% 0.11 245)", "oklch(84% 0.07 245)", "oklch(95% 0.03 245)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Setup Display", "purpose": "Oversized setup heading only." },
+      "headline": { "displayName": "Problem Headline", "purpose": "Current problem title." },
+      "body": { "displayName": "Reading Body", "purpose": "Problem description and discussion prose." },
+      "label": { "displayName": "Ledger Label", "purpose": "Uppercase field and section labels." },
+      "code": { "displayName": "Protocol Code", "purpose": "Coordinates and shortened identifiers only." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "setup-enter", "value": "0.45s expo.out, 0.07s stagger", "purpose": "Setup elements rise 14px into view when reduced motion is not requested." },
+      { "name": "record-enter", "value": "0.38s expo.out, 0.045s stagger", "purpose": "Record regions rise 9px into view when reduced motion is not requested." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "680px" },
+      { "name": "minimum", "value": "280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main claim or post action on the civic record.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Claim problem</button>",
+      "css": ".ds-btn-primary { min-height: 52px; border: 0; border-radius: 10px; padding: 0 24px; color: #fff; background: #145cff; font: 750 1rem/1.2 'Avenir Next', Avenir, 'Segoe UI', sans-serif; cursor: pointer; } .ds-btn-primary:hover { background: #0846cf; } .ds-btn-primary:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; } .ds-btn-primary:active { background: #0846cf; } .ds-btn-primary:disabled { color: #858995; background: #e4e5e9; cursor: not-allowed; }"
+    },
+    {
+      "name": "Link Action",
+      "kind": "button",
+      "description": "Low-emphasis navigation or related-problem action.",
+      "html": "<button class=\"ds-link-action\" type=\"button\">+ Report a related problem</button>",
+      "css": ".ds-link-action { border: 0; padding: 8px 0; color: #145cff; background: transparent; font: 400 1rem/1.2 'Avenir Next', Avenir, 'Segoe UI', sans-serif; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; } .ds-link-action:hover { color: #0846cf; } .ds-link-action:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; } .ds-link-action:active { color: #0846cf; }"
+    },
+    {
+      "name": "Open Status",
+      "kind": "chip",
+      "refersTo": "status-open",
+      "description": "Compact text-and-dot workflow state.",
+      "html": "<span class=\"ds-status-open\"><i aria-hidden=\"true\"></i>Open</span>",
+      "css": ".ds-status-open { display: inline-flex; gap: 8px; align-items: center; border-radius: 99px; padding: 7px 13px; color: #08744d; background: #e0f3e9; font: 700 .82rem/1.2 'Avenir Next', Avenir, 'Segoe UI', sans-serif; } .ds-status-open i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }"
+    },
+    {
+      "name": "Coordinate Field",
+      "kind": "input",
+      "description": "Square monospace field for a full NIP-1971 coordinate.",
+      "html": "<label class=\"ds-coordinate-label\" for=\"ds-coordinate\">Problem coordinate</label><input class=\"ds-coordinate\" id=\"ds-coordinate\" placeholder=\"31971:owner:problem-id\">",
+      "css": ".ds-coordinate-label { display: block; margin-bottom: 9px; color: #171a21; font: 750 .76rem/1.2 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacing: .08em; text-transform: uppercase; } .ds-coordinate { width: 100%; min-height: 52px; border: 1px solid #b8bbc4; border-radius: 0; padding: 0 14px; color: #171a21; background: #fff; font: 400 .78rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; caret-color: #145cff; } .ds-coordinate:hover { border-color: #6d7280; } .ds-coordinate:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; }"
+    },
+    {
+      "name": "Comment Field",
+      "kind": "input",
+      "refersTo": "comment-field",
+      "description": "Softly rounded writing surface for ledger discussion.",
+      "html": "<textarea class=\"ds-comment\" rows=\"1\" placeholder=\"Leave a comment…\"></textarea>",
+      "css": ".ds-comment { width: 100%; min-height: 54px; resize: vertical; border: 1px solid #c8cbd2; border-radius: 12px; padding: 15px 17px; color: #171a21; background: #fff; font: 400 1rem/1.45 'Avenir Next', Avenir, 'Segoe UI', sans-serif; caret-color: #145cff; } .ds-comment:hover { border-color: #9296a1; } .ds-comment:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; } .ds-comment:disabled { color: #858995; background: #e4e5e9; }"
+    },
+    {
+      "name": "Related Problem Row",
+      "kind": "custom",
+      "description": "Full-width ruled row linking to another problem record.",
+      "html": "<button class=\"ds-related-row\" type=\"button\"><span>Problem a8c914</span><code>31971:…:a8c914</code></button>",
+      "css": ".ds-related-row { display: flex; justify-content: space-between; width: 100%; border: 0; border-bottom: 1px solid #dfe1e7; padding: 14px 4px; color: #171a21; background: transparent; font: 400 1rem/1.4 'Avenir Next', Avenir, 'Segoe UI', sans-serif; text-align: left; cursor: pointer; } .ds-related-row code { color: #6d7280; font: 400 .72rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; } .ds-related-row:hover { background: #f7f7f9; } .ds-related-row:focus-visible { outline: 3px solid #ffbf47; outline-offset: 3px; } .ds-related-row:active { background: #f7f7f9; }"
+    },
+    {
+      "name": "Discussion Entry",
+      "kind": "custom",
+      "description": "Ruled author-and-message row in the continuous discussion ledger.",
+      "html": "<article class=\"ds-discussion-entry\"><span class=\"ds-avatar\" aria-hidden=\"true\">7F</span><div><header><strong>7f32…81ac</strong><time>Aug 21</time></header><p>Current findings and next step.</p></div></article>",
+      "css": ".ds-discussion-entry { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 18px; padding: 20px 0; border-bottom: 1px solid #dfe1e7; color: #171a21; font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif; } .ds-avatar { display: grid; place-items: center; align-self: start; width: 42px; height: 42px; border-radius: 50%; color: #fff; background: #d37022; font-size: .76rem; font-weight: 750; } .ds-discussion-entry header { display: flex; gap: 10px; align-items: baseline; } .ds-discussion-entry time { color: #9296a1; font-size: .76rem; } .ds-discussion-entry p { margin: 7px 0 0; line-height: 1.55; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Civic Ledger",
+    "overview": "View Problem is a focused civic issue record: factual, open, and built for action. A white reading surface gives problem truth room to lead, while electric blue marks available actions with unmistakable clarity. Compact semantic state and protocol identifiers remain visible without competing with the title and description.\n\nDiscussion behaves as a continuous ledger rather than a collection of floating cards. Thin rules, generous vertical rhythm, and restrained motion keep the surface calm and accountable. The setup view carries the same system through a sparse connection glyph and oversized, tightly set heading.",
+    "keyCharacteristics": [
+      "White, editorial reading surface with one electric action color.",
+      "Large, tightly tracked headings paired with compact uppercase labels.",
+      "Continuous ruled sections instead of detached cards or panels.",
+      "Semantic status expressed through quiet tinted pills.",
+      "Responsive, keyboard-visible controls with restrained GSAP entrance motion."
+    ],
+    "rules": [
+      { "name": "The One Action Color Rule", "body": "Reserve electric blue for agency: actions, links, carets, and selection. Do not use it as decorative surface fill.", "section": "colors" },
+      { "name": "The Semantic Wash Rule", "body": "Workflow state uses dark semantic text on a pale tint; color never carries state without a text label.", "section": "colors" },
+      { "name": "The Protocol Type Rule", "body": "Use monospace only where content is protocol-shaped; never let identifiers set the tone of ordinary prose.", "section": "typography" },
+      { "name": "The Continuous Record Rule", "body": "Keep major regions on one reading surface. Use spacing and rules, not card grids, to establish hierarchy.", "section": "layout" },
+      { "name": "The Flat-by-Record Rule", "body": "Public-record content stays on one plane; do not introduce floating cards, drop shadows, glass, or layered panels.", "section": "elevation" },
+      { "name": "The Meaningful Curve Rule", "body": "Curves signal action, editable input, state, or identity. Reading regions and ledger rows remain unboxed.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do preserve one clear vertical reading order from problem truth to action to related context to discussion.",
+      "Do reserve electric blue for interactive agency and use pale semantic washes for status.",
+      "Do keep protocol coordinates available in compact monospace without letting them dominate.",
+      "Do retain visible amber keyboard focus and pointer-plus-Enter activation.",
+      "Do use GSAP for purposeful motion and honor reduced-motion preference."
+    ],
+    "donts": [
+      "Don't wrap record sections or individual comments in floating cards.",
+      "Don't add shadows, gradients, glass effects, or decorative blue surface blocks.",
+      "Don't use native form submission inside the sandboxed napplet.",
+      "Don't replace restrained ledger separators with dense borders around every element.",
+      "Don't animate content when reduced motion is requested."
+    ]
+  }
+}
