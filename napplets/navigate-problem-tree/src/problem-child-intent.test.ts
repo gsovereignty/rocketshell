@@ -22,8 +22,8 @@ describe("problem child intent", () => {
 });
 
 describe("problem viewer intent", () => {
-  it("surfaces the opened problem viewer", () => {
-    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: true, reuse: true });
+  it("opens a visible peer without replacing the problem tree", () => {
+    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: false, newWindow: true });
   });
 
   it("requires an open handler for the note convention", () => {
