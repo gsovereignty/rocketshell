@@ -256,8 +256,12 @@ async function loadDag(value: string) {
     subscription.on("event", (result) => {
       if (problemSubscription === subscription) receiveProblemEvents(coordinate, [result]);
     });
-    subscription.on("closed", () => {
-      if (problemSubscription === subscription) problemSubscription = undefined;
+    subscription.on("closed", (reason) => {
+      if (problemSubscription !== subscription) return;
+      problemSubscription = undefined;
+      console.warn("Live problem tree subscription closed", { rootCoordinate: coordinate, reason });
+      const liveStatus = document.querySelector<HTMLOutputElement>("#app-status");
+      if (liveStatus) liveStatus.textContent = "Live updates stopped. Reload tree to reconnect.";
     });
     const [{ events }, noteAvailability, childAvailability] = await Promise.all([
       outbox.query(filters, { timeoutMs: 8000 }),
