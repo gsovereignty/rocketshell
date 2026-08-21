@@ -77,30 +77,123 @@ describe("problem view", () => {
     const problem = selectProblem(coordinate, [result]);
     const claim = { event: {
       id: "e".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
-      tags: [["A", coordinate], ["e", revision], ["claim"]]
+      tags: [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]]
     } } as never;
     expect(hasClaimRequest(problem, [claim], owner)).toBe(true);
     expect(hasClaimRequest({ ...problem, revisionId: "0".repeat(64) }, [claim], owner)).toBe(false);
   });
-  it("keeps the earliest claim active until a new revision supersedes it", () => {
+  it("keeps the earliest coordinate claim active across ordinary revisions", () => {
     const problem = selectProblem(coordinate, [result]);
+    const revisions = problemRevisionHistory(coordinate, [result]);
     const claim = (eventId: string, claimant: string, createdAt: number) => ({ event: {
       id: eventId, pubkey: claimant, kind: 1111, created_at: createdAt, content: "Claiming", sig: "f".repeat(128),
-      tags: [["A", coordinate], ["e", revision], ["claim"]]
+      tags: [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]]
     } }) as never;
     const later = claim("f".repeat(64), "1".repeat(64), 20);
     const earlier = claim("e".repeat(64), "2".repeat(64), 10);
-    expect(selectEffectiveClaim(problem, [later, earlier])?.claimant).toBe("2".repeat(64));
-    expect(selectEffectiveClaim(problem, [earlier])?.claimant).toBe("2".repeat(64));
-    expect(selectEffectiveClaim({ ...problem, revisionId: "0".repeat(64) }, [earlier])).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [later, earlier], revisions)?.claimant).toBe("2".repeat(64));
+    expect(selectEffectiveClaim(problem, [earlier], revisions)?.claimant).toBe("2".repeat(64));
+  });
+  it("keeps the real prior-revision claim active on the current open head", () => {
+    const realOwner = "d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075";
+    const realProblemId = "c2b750295e3291976bdac8d281317ae99dbae49ffdd65311605f0d090d32fd3f";
+    const realCoordinate = `31971:${realOwner}:${realProblemId}`;
+    const currentId = "70ba7eda72eceecccfb28209ec289e7e92d2797200ee20b04e0f5f03294d5ad7";
+    const priorId = "d8628bb25817788ee1b6cac81b7fad2aa26f7817f745f4c9bc080c6e5e7fd8e0";
+    const problem = {
+      coordinate: realCoordinate, owner: realOwner, problemId: realProblemId,
+      revisionId: "70ba7eda72eceecccfb28209ec289e7e92d2797200ee20b04e0f5f03294d5ad7",
+      revisionAuthor: realOwner, revisionCreatedAt: 1787310942, relay: "wss://nos.lol/",
+      title: "one more", description: "a more proper description again again", status: "open", maintainers: []
+    };
+    const claimId = "8d2610a358b1715db6373c6803dd79154f0c5153e58444aa9bcf143ec8e18e72";
+    const claim = { event: {
+      id: claimId,
+      pubkey: realOwner, kind: 1111, created_at: 1787307148, content: "I am claiming this problem.", sig: "f".repeat(128),
+      tags: [["A", realCoordinate], ["a", realCoordinate], ["e", priorId], ["claim"]]
+    } } as never;
+    const revisions = [{ id: currentId, author: realOwner, createdAt: 1787310942, title: "one more",
+      description: problem.description, status: "open", maintainers: [], previousIds: [priorId] }];
+    expect(selectEffectiveClaim(problem, [claim], revisions)?.eventId).toBe(claimId);
+  });
+  it("does not let stale claim data override completed statuses", () => {
+    const problem = selectProblem(coordinate, [result]);
+    const claimId = "e".repeat(64);
+    const claim = { event: {
+      id: claimId, pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
+      tags: [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]]
+    } } as never;
+    for (const status of ["patched", "closed"]) {
+      expect(selectEffectiveClaim({ ...problem, status }, [claim], problemRevisionHistory(coordinate, [result]))).toBeUndefined();
+      expect(selectEffectiveClaim({ ...problem, status, claim: { eventId: claimId, claimant: owner } }, [claim], problemRevisionHistory(coordinate, [result]))).toBeUndefined();
+    }
+  });
+  it("uses an accepted claim as authoritative claimed state", () => {
+    const problem = {
+      ...selectProblem(coordinate, [result]), status: "claimed",
+      claim: { eventId: "e".repeat(64), claimant: "1".repeat(64) }
+    };
+    expect(selectEffectiveClaim(problem, [], [])).toMatchObject({
+      eventId: "e".repeat(64), claimant: "1".repeat(64), acknowledged: true
+    });
+  });
+  it("does not treat an embedded claim on an open revision as accepted", () => {
+    const problem = {
+      ...selectProblem(coordinate, [result]), status: "open",
+      claim: { eventId: "e".repeat(64), claimant: "1".repeat(64) }
+    };
+    expect(selectEffectiveClaim(problem, [], problemRevisionHistory(coordinate, [result]))).toBeUndefined();
+  });
+  it("accepts only unbroken all-open claim ancestry", () => {
+    const problem = { ...selectProblem(coordinate, [result]), revisionId: "3".repeat(64) };
+    const claim = { event: {
+      id: "4".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
+      tags: [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]]
+    } } as never;
+    const current = { id: problem.revisionId, author: owner, createdAt: 3, title: "Current", description: "",
+      status: "open", maintainers: [], previousIds: ["2".repeat(64)] };
+    const middle = { ...current, id: "2".repeat(64), createdAt: 2, previousIds: [revision] };
+    expect(selectEffectiveClaim(problem, [claim], [current, middle])?.eventId).toBe("4".repeat(64));
+    for (const status of ["closed", "patched"]) {
+      expect(selectEffectiveClaim(problem, [claim], [current, { ...middle, status }])).toBeUndefined();
+    }
+    expect(selectEffectiveClaim(problem, [claim], [current])).toBeUndefined();
+  });
+  it("rejects a claim targeting a known non-open direct parent", () => {
+    const problem = { ...selectProblem(coordinate, [result]), revisionId: "3".repeat(64) };
+    const claim = { event: {
+      id: "4".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
+      tags: [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]]
+    } } as never;
+    const current = { id: problem.revisionId, author: owner, createdAt: 3, title: "Reopened", description: "",
+      status: "open", maintainers: [], previousIds: [revision] };
+    const target = { ...current, id: revision, createdAt: 2, previousIds: [] };
+    for (const status of ["closed", "patched"]) {
+      expect(selectEffectiveClaim(problem, [claim], [current, { ...target, status }])).toBeUndefined();
+    }
+  });
+  it("rejects malformed or ambiguously scoped claim tags", () => {
+    const problem = selectProblem(coordinate, [result]);
+    const revisions = problemRevisionHistory(coordinate, [result]);
+    const claim = (tags: string[][]) => ({ event: {
+      id: "e".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128), tags
+    } }) as never;
+    const base = [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]];
+    expect(selectEffectiveClaim(problem, [claim([["A", coordinate], ["a", coordinate], ["e", "not-hex"], ["claim"]])], revisions)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim([["A", coordinate], ["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]])], revisions)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim(base.filter(([name]) => name !== "a"))], revisions)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim([...base, ["a", coordinate]])], revisions)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim(base.map((tag) => tag[0] === "a" ? ["a", `31971:${owner}:${"0".repeat(64)}`] : tag))], revisions)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim(base.map((tag) => tag[0] === "claim" ? ["claim", "extra"] : tag))], revisions)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim([...base, ["claim"]])], revisions)).toBeUndefined();
   });
   it("requires acknowledgement for rfm claims", () => {
     const problem = { ...selectProblem(coordinate, [result]), status: "rfm" };
     const claim = { event: {
       id: "e".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
-      tags: [["A", coordinate], ["e", revision], ["claim"]]
+      tags: [["A", coordinate], ["a", coordinate], ["e", revision], ["claim"]]
     } } as never;
-    expect(selectEffectiveClaim(problem, [claim])).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim], problemRevisionHistory(coordinate, [result]))).toBeUndefined();
   });
   it("formats a 24-hour countdown", () => {
     expect(formatClaimCountdown(86_400)).toBe("24:00:00");

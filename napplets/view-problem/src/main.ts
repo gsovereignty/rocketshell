@@ -109,12 +109,12 @@ const renderChanges = (changes: ReturnType<typeof compareProblemRevisions>) => c
 function render() {
   if (!problem) return;
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
-  const effectiveClaim = selectEffectiveClaim(problem, comments);
+  const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
+  const effectiveClaim = selectEffectiveClaim(problem, comments, revisions);
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && Boolean(pubkey) && !effectiveClaim && !claimPending;
   const canEdit = mayEditProblem(problem, pubkey);
-  const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
     <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
@@ -386,7 +386,7 @@ async function loadProblem(value: string) {
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
     hydrated = true;
     render();
-    const effectiveClaim = selectEffectiveClaim(problem, comments);
+    const effectiveClaim = selectEffectiveClaim(problem, comments, problemRevisionHistory(problem.coordinate, relatedEvents));
     void loadProfiles([
       ...comments.map(({ event }) => event.pubkey),
       ...relatedEvents.filter(({ event }) => event.kind === 31971).map(({ event }) => event.pubkey),

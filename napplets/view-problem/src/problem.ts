@@ -151,8 +151,12 @@ export function hasClaimRequest(problem: ProblemView, results: RelayEventResult[
     event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));
 }
 
-export function selectEffectiveClaim(problem: ProblemView, results: RelayEventResult[]): EffectiveClaim | undefined {
-  if (problem.claim) {
+export function selectEffectiveClaim(
+  problem: ProblemView,
+  results: RelayEventResult[],
+  revisions: ProblemRevision[]
+): EffectiveClaim | undefined {
+  if (problem.status === "claimed" && problem.claim) {
     const claimEvent = results.find(({ event }) => event.id === problem.claim?.eventId)?.event;
     return {
       eventId: problem.claim.eventId,
@@ -162,12 +166,37 @@ export function selectEffectiveClaim(problem: ProblemView, results: RelayEventRe
       acknowledged: true
     };
   }
-  if (problem.status === "rfm") return undefined;
+  if (problem.status !== "open") return undefined;
+  const revisionsById = new Map(revisions.map((revision) => [revision.id, revision]));
+  const claimTargetIsActive = (targetId: string) => {
+    const targetStatusIsOpen = () => revisionsById.get(targetId)?.status === "open" || !revisionsById.has(targetId);
+    if (targetId === problem.revisionId) return targetStatusIsOpen();
+    const current = revisionsById.get(problem.revisionId);
+    if (!current || current.status !== "open") return false;
+    const pending = [...current.previousIds];
+    const visited = new Set([problem.revisionId]);
+    while (pending.length) {
+      const revisionId = pending.pop()!;
+      if (revisionId === targetId) return targetStatusIsOpen();
+      if (visited.has(revisionId)) continue;
+      visited.add(revisionId);
+      const revision = revisionsById.get(revisionId);
+      if (!revision || revision.status !== "open") continue;
+      pending.push(...revision.previousIds);
+    }
+    return false;
+  };
   const candidates = results.map(({ event }) => event).filter((event) =>
-    event.kind === COMMENT_KIND &&
-    event.tags.some((item) => item[0] === "claim") &&
-    event.tags.some((item) => item[0] === "A" && item[1] === problem.coordinate) &&
-    event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));
+    event.kind === COMMENT_KIND && (() => {
+      const coordinates = event.tags.filter((item) => item[0] === "A");
+      const references = event.tags.filter((item) => item[0] === "a");
+      const targets = event.tags.filter((item) => item[0] === "e");
+      const claims = event.tags.filter((item) => item[0] === "claim");
+      return coordinates.length === 1 && coordinates[0][1] === problem.coordinate &&
+        references.length === 1 && references[0][1] === problem.coordinate &&
+        claims.length === 1 && claims[0].length === 1 &&
+        targets.length === 1 && HEX_64.test(targets[0][1] ?? "") && claimTargetIsActive(targets[0][1]);
+    })());
   candidates.sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id));
   const selected = candidates[0];
   return selected ? {
