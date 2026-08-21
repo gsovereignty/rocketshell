@@ -37,8 +37,9 @@ hardcoded before release; until then, users provide it at startup.
 - Uses uppercase `A` root tags and lowercase unmarked `a` parent tags as defined
   by the local NIP-1971 draft.
 - Opens every activated current revision through NAP-INTENT using the registered
-  `note` archetype and `napplet:note/open` convention. The shell focuses a reusable
-  default-handler window; the navigator never names a specific viewer.
+  `note` archetype and `napplet:note/open` convention. The shell shows a reusable
+  default-handler window without replacing the DAG; the navigator never names a
+  specific viewer.
 - Does not render problem descriptions or import shell implementation.
 - Uses no direct network access, signer, browser storage, or environment variables.
 

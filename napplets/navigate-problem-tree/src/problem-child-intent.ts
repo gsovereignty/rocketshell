@@ -3,7 +3,7 @@ export const PROBLEM_CHILD_ACTION = "problem-child";
 export const PROBLEM_CHILD_CONVENTION = "napplet:composer/problem-child";
 export const PROBLEM_VIEWER_ARCHETYPE = "note";
 export const PROBLEM_VIEWER_CONVENTION = "napplet:note/open";
-export const PROBLEM_VIEWER_BEHAVIOR = { focus: true, reuse: true } as const;
+export const PROBLEM_VIEWER_BEHAVIOR = { focus: false, reuse: true } as const;
 
 interface IntentCandidateLike {
   actions: readonly string[];

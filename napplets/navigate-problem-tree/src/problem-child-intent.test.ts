@@ -22,8 +22,8 @@ describe("problem child intent", () => {
 });
 
 describe("problem viewer intent", () => {
-  it("focuses a reusable viewer when a problem is activated", () => {
-    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: true, reuse: true });
+  it("shows a reusable viewer without replacing the DAG", () => {
+    expect(PROBLEM_VIEWER_BEHAVIOR).toEqual({ focus: false, reuse: true });
   });
 
   it("requires an open handler for the note convention", () => {

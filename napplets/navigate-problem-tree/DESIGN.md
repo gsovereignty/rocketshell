@@ -129,7 +129,8 @@ for protocol data. Input and action stack below 760px.
 
 Tree nodes show title, unique descendant count, and fork state. Current node uses
 solid blue. Activating any tree node or child row opens that problem in the
-focused default problem viewer; explicit open controls preserve discoverability.
+visible default problem viewer without replacing the DAG; explicit open controls
+preserve discoverability.
 
 ## Do's and Don'ts
 
