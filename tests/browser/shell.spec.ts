@@ -62,6 +62,33 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
   expect(await page.evaluate(() => window.__platformTest?.telemetrySnapshot().some((record) => record.name === "window.active" && record.value === 1))).toBe(true);
 });
 
+test("fetches resource bytes through the sandbox bridge", async ({ page, context }) => {
+  const resourceUrl = "http://127.0.0.1:4173/shell/resource-test.png";
+  const requests: { method: string; authorization: string; cookie: string; referer: string }[] = [];
+  page.on("request", (request) => {
+    if (request.url() !== resourceUrl) return;
+    const headers = request.headers();
+    requests.push({
+      method: request.method(),
+      authorization: headers.authorization ?? "",
+      cookie: headers.cookie ?? "",
+      referer: headers.referer ?? ""
+    });
+  });
+  await context.addCookies([{ name: "resource-test", value: "secret", url: "http://127.0.0.1:4173" }]);
+  await page.goto("./");
+
+  const frame = page.frameLocator('iframe[title="platform-fixture"]');
+  await expect(frame.locator("#fixture-status")).toHaveText("ready");
+  await frame.getByTestId("resource-url").fill(resourceUrl);
+  await frame.getByTestId("resource-request").click();
+
+  await expect.poll(async () => frame.locator("body").getAttribute("data-resource-result")).not.toBe("");
+  const result = JSON.parse((await frame.locator("body").getAttribute("data-resource-result")) ?? "null");
+  expect(result).toEqual({ ok: true, type: "image/png", size: 8, firstBytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] });
+  expect(requests.at(-1)).toEqual({ method: "GET", authorization: "", cookie: "", referer: "" });
+});
+
 test("moves widgets by toolbar drag and keeps resize handles independent", async ({ page }) => {
   await page.goto("./");
   await expect(page.frameLocator("iframe").locator("#fixture-status")).toHaveText("ready");

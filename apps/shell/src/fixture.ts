@@ -4,6 +4,18 @@ import { finalizeEvent } from "nostr-tools/pure";
 const encoder = new TextEncoder();
 const script = (resourceUrl: string): string => `
 const status = document.querySelector("#fixture-status");
+const requestResource = async () => {
+  const input = document.querySelector('[data-testid="resource-url"]');
+  document.body.dataset.resourceResult = "";
+  try {
+    const blob = await window.napplet.resource.bytes(input.value);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    document.body.dataset.resourceResult = JSON.stringify({ ok: true, type: blob.type, size: blob.size, firstBytes: [...bytes.slice(0, 8)] });
+  } catch (error) {
+    document.body.dataset.resourceResult = JSON.stringify({ ok: false, code: typeof error === "object" && error && "code" in error ? String(error.code) : "unknown" });
+  }
+};
+document.querySelector('[data-testid="resource-request"]').addEventListener("click", () => void requestResource());
 const results = { origin: window.origin, nostr: typeof window.nostr, storageBlocked: false, persistenceSealed: false, hostDomBlocked: false, fetchBlocked: false, websocketBlocked: false, relayQueried: false, resourceFetched: false, resourceObjectUrl: false, resourceRevoked: false, resourceError: "", pubkey: null, intentReceived: false, intentStructured: false, platformProfile: false, optionalAbsent: false };
 try { localStorage.setItem("x", "x"); } catch { results.storageBlocked = true; }
 results.persistenceSealed = typeof localStorage === "undefined" && typeof sessionStorage === "undefined" && typeof indexedDB === "undefined" && typeof caches === "undefined";
@@ -46,7 +58,7 @@ status.textContent = "ready";
 
 export async function installFixture(store: PackageStore, resourceUrl: string): Promise<string> {
   if (await store.getActive("platform-fixture")) return "platform-fixture";
-  const html = "<!doctype html><html><head><meta charset=\"UTF-8\"><title>Fixture Napplet</title></head><body><output id=\"fixture-status\">starting</output><script type=\"module\" src=\"./fixture.js\"></script></body></html>";
+  const html = "<!doctype html><html><head><meta charset=\"UTF-8\"><title>Fixture Napplet</title></head><body><output id=\"fixture-status\">starting</output><label>Resource URL <input data-testid=\"resource-url\"></label><button data-testid=\"resource-request\" type=\"button\">Request resource</button><script type=\"module\" src=\"./fixture.js\"></script></body></html>";
   const entries = [
     { path: "index.html", bytes: encoder.encode(html), mediaType: "text/html" },
     { path: "fixture.js", bytes: encoder.encode(script(resourceUrl)), mediaType: "text/javascript" }
