@@ -112,6 +112,8 @@ export class NappletWindowManager {
     if (!installation) throw new Error("No active verified installation");
     const element = document.createElement("article");
     element.className = "napplet-window";
+    element.hidden = true;
+    element.dataset.startupPending = "true";
     if (options.deferLayout) element.dataset.layoutPending = "true";
     const toolbar = document.createElement("header");
     toolbar.className = "napplet-window-toolbar";
@@ -153,6 +155,11 @@ export class NappletWindowManager {
       if (!response.ok || !response.headers.get("content-security-policy")) throw new Error("Verified Napplet response unavailable");
       iframe.dataset.virtualUrl = virtualUrl;
       // Navigation occurs only after authenticated identity registration.
+      iframe.onload = () => {
+        iframe.onload = null;
+        delete element.dataset.startupPending;
+        if (!options.deferLayout) element.hidden = false;
+      };
       iframe.srcdoc = await response.text();
       const bridgeReady = this.bridge.waitUntilReady(identity);
       let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -169,6 +176,7 @@ export class NappletWindowManager {
       await ready;
       return managed;
     } catch (error) {
+      iframe.onload = null;
       if (this.#windows.delete(windowId)) {
         this.#notifyWindowsChanged();
         this.telemetry.record("window.active", -1, { dTag: installation.dTag });

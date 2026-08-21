@@ -156,10 +156,10 @@ describe("package gateway", () => {
   it("shares one cold start across concurrent opens", async () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
-    const element = { append: vi.fn(), remove: vi.fn(), className: "", dataset: {}, style: {}, hidden: false };
+    const element = { append: vi.fn(), remove: vi.fn(), className: "", dataset: {} as Record<string, string>, style: {}, hidden: false };
     const node = { append: vi.fn(), className: "", textContent: "" };
     const button = { ...node, dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
-    const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
+    const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn(), onload: null as null | (() => void) };
     vi.stubGlobal("document", { createElement: vi.fn((tag: string) => tag === "article" ? element : tag === "button" ? button : tag === "iframe" ? iframe : node) });
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     let ready: (() => void) | undefined;
@@ -171,6 +171,10 @@ describe("package gateway", () => {
     await vi.waitFor(() => expect(ready).toBeTypeOf("function"));
     ready?.();
     expect(await first).toBe(await second);
+    expect(element.hidden).toBe(true);
+    iframe.onload?.();
+    expect(element.hidden).toBe(false);
+    expect(element.dataset.startupPending).toBeUndefined();
     expect(document.createElement).toHaveBeenCalledTimes(5);
     manager.close(); vi.unstubAllGlobals();
   });
@@ -178,7 +182,7 @@ describe("package gateway", () => {
     const store = new MemoryPackageStore(); const input = await fixture();
     await new PackageInstaller(store, () => true).install(input.event, input.inputs);
     const elements: Array<{ append: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; className: string; hidden: boolean; dataset: Record<string, string>; style: { gridColumn: string; gridRow: string } }> = [];
-    const iframes: Array<{ setAttribute: ReturnType<typeof vi.fn>; dataset: Record<string, string>; contentWindow: object; title: string; srcdoc: string; focus: ReturnType<typeof vi.fn> }> = [];
+    const iframes: Array<{ setAttribute: ReturnType<typeof vi.fn>; dataset: Record<string, string>; contentWindow: object; title: string; srcdoc: string; focus: ReturnType<typeof vi.fn>; onload: null | (() => void) }> = [];
     vi.stubGlobal("document", { createElement: vi.fn((tag: string) => {
       if (tag === "article") {
         const element = { append: vi.fn(), remove: vi.fn(), className: "", hidden: false, dataset: {} as Record<string, string>, style: { gridColumn: "", gridRow: "" } };
@@ -186,7 +190,7 @@ describe("package gateway", () => {
       }
       if (tag === "button") return { append: vi.fn(), className: "", textContent: "", dataset: {}, setAttribute: vi.fn(), addEventListener: vi.fn(), type: "" };
       if (tag === "iframe") {
-        const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn() };
+        const iframe = { setAttribute: vi.fn(), dataset: {}, contentWindow: {}, title: "", srcdoc: "", focus: vi.fn(), onload: null as null | (() => void) };
         iframes.push(iframe); return iframe;
       }
       return { append: vi.fn(), className: "", textContent: "" };
@@ -198,8 +202,11 @@ describe("package gateway", () => {
     const windowsChanged = vi.fn();
     manager.onWindowsChanged(windowsChanged);
     const first = await manager.create("hello/world", false);
+    iframes[0]!.onload?.();
     const second = await manager.create("hello/world", false, { deferLayout: true });
+    iframes[1]!.onload?.();
     await manager.create("hello/world", false);
+    iframes[2]!.onload?.();
     expect(windowsChanged).toHaveBeenCalledTimes(3);
     elements[0]!.style.gridColumn = "1 / span 2";
     elements[0]!.style.gridRow = "2 / span 3";
