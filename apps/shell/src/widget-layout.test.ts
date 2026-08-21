@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canPlaceRect, defaultWidgetRects, profileForWidth, rectsOverlap, resolveRelocation } from "./widget-layout.js";
+import {
+  canPlaceRect,
+  defaultWidgetRects,
+  profileForWidth,
+  rectsOverlap,
+  resolveOpeningPlacement,
+  resolveRelocation,
+  visibleGridRange
+} from "./widget-layout.js";
 
 describe("widget grid profiles", () => {
   it("selects container-driven column counts", () => {
@@ -102,5 +110,90 @@ describe("widget collision checks", () => {
     const moving = { column: 0, row: 0, width: 2, height: 1 };
     const tall = { column: 2, row: 0, width: 2, height: 2 };
     expect(resolveRelocation(0, { ...moving, column: 3 }, [moving, tall], 4).kind).toBe("reject");
+  });
+});
+
+describe("viewport-first widget opening", () => {
+  const visibleRows = { startRow: 0, endRow: 2 };
+
+  it("uses a free full-size slot inside the visible viewport", () => {
+    const occupied = [{ column: 0, row: 0, width: 2, height: 2 }];
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 2, height: 2 },
+      occupied,
+      4,
+      visibleRows
+    );
+    expect(placement.kind).toBe("visible");
+    expect(placement.rect).toEqual({ column: 2, row: 0, width: 2, height: 2 });
+  });
+
+  it("ignores an available stored placement below the viewport", () => {
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 2, height: 1 },
+      [],
+      4,
+      visibleRows,
+      { column: 0, row: 8, width: 2, height: 1 }
+    );
+    expect(placement.kind).toBe("visible");
+    expect(placement.rect.row).toBe(0);
+  });
+
+  it("uses rows belonging to the current scrolled viewport", () => {
+    const rows = visibleGridRange(-460, 0, 500, 220, 10);
+    expect(rows).toEqual({ startRow: 2, endRow: 4 });
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 2, height: 1 },
+      [],
+      4,
+      rows
+    );
+    expect(placement.rect.row).toBe(2);
+  });
+
+  it("repacks a conflicting window before growing the page", () => {
+    const occupied = [
+      { column: 0, row: 0, width: 2, height: 1 },
+      { column: 2, row: 0, width: 1, height: 1 }
+    ];
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 2, height: 2 },
+      occupied,
+      4,
+      visibleRows
+    );
+    expect(placement.kind).toBe("repacked");
+    expect(placement.rect).toEqual({ column: 0, row: 0, width: 2, height: 2 });
+    expect(placement.updates.get(0)).toEqual({ column: 2, row: 1, width: 2, height: 1 });
+  });
+
+  it("reduces the new window to legal minimum size before growing the page", () => {
+    const occupied = [{ column: 0, row: 0, width: 3, height: 2 }];
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 2, height: 2 },
+      occupied,
+      4,
+      visibleRows
+    );
+    expect(placement.kind).toBe("reduced");
+    expect(placement.rect).toEqual({ column: 3, row: 0, width: 1, height: 1 });
+  });
+
+  it("overflows only when no visible grid cell remains", () => {
+    const occupied = [{ column: 0, row: 0, width: 4, height: 2 }];
+    const placement = resolveOpeningPlacement(
+      { column: 0, row: 0, width: 2, height: 2 },
+      occupied,
+      4,
+      visibleRows
+    );
+    expect(placement.kind).toBe("overflow");
+    expect(placement.rect.row).toBe(2);
+  });
+
+  it("recalculates visible capacity after viewport resize", () => {
+    expect(visibleGridRange(80, 0, 800, 220, 10)).toEqual({ startRow: 0, endRow: 3 });
+    expect(visibleGridRange(80, 0, 500, 220, 10)).toEqual({ startRow: 0, endRow: 1 });
   });
 });

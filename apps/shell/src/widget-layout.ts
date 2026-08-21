@@ -121,6 +121,139 @@ const firstAvailableRect = (
   return undefined;
 };
 
+export interface VisibleGridRange {
+  readonly startRow: number;
+  readonly endRow: number;
+}
+
+export const visibleGridRange = (
+  containerTop: number,
+  viewportTop: number,
+  viewportBottom: number,
+  rowHeight: number,
+  rowGap: number
+): VisibleGridRange => {
+  const stride = rowHeight + rowGap;
+  if (rowHeight <= 0 || stride <= 0 || viewportBottom <= viewportTop) return { startRow: 0, endRow: 0 };
+  const startRow = Math.max(0, Math.ceil((viewportTop - containerTop) / stride));
+  const lastRow = Math.floor((viewportBottom - containerTop - rowHeight) / stride);
+  return { startRow, endRow: Math.max(startRow, lastRow + 1) };
+};
+
+export interface OpeningPlacement {
+  readonly kind: "visible" | "repacked" | "reduced" | "overflow";
+  readonly rect: WidgetRect;
+  readonly updates: ReadonlyMap<number, WidgetRect>;
+}
+
+const rectWithinRows = (rect: WidgetRect, rows: VisibleGridRange): boolean =>
+  rect.row >= rows.startRow && rect.row + rect.height <= rows.endRow;
+
+const positionsWithinRows = (
+  widget: WidgetRect,
+  columns: number,
+  rows: VisibleGridRange
+): readonly WidgetRect[] => {
+  const positions: WidgetRect[] = [];
+  for (let row = rows.startRow; row + widget.height <= rows.endRow; row += 1) {
+    for (let column = 0; column + widget.width <= columns; column += 1) {
+      positions.push({ ...widget, column, row });
+    }
+  }
+  return positions;
+};
+
+const repackForCandidate = (
+  candidate: WidgetRect,
+  occupied: readonly WidgetRect[],
+  columns: number,
+  rows: VisibleGridRange,
+  moveAll = false
+): ReadonlyMap<number, WidgetRect> | undefined => {
+  const displaced = occupied
+    .map((rect, index) => ({ rect, index }))
+    .filter(({ rect }) => moveAll || rectsOverlap(candidate, rect) || !rectWithinRows(rect, rows));
+  if (displaced.length === 0) return new Map();
+  const displacedIndexes = new Set(displaced.map(({ index }) => index));
+  const placed = occupied.filter((_rect, index) => !displacedIndexes.has(index));
+  placed.push(candidate);
+  const updates = new Map<number, WidgetRect>();
+  const ordered = [...displaced].sort((a, b) => b.rect.width * b.rect.height - a.rect.width * a.rect.height);
+  const placeNext = (index: number): boolean => {
+    const item = ordered[index];
+    if (!item) return true;
+    const positions = [...positionsWithinRows(item.rect, columns, rows)].sort((a, b) => {
+      const aDistance = Math.abs(a.column - item.rect.column) + Math.abs(a.row - item.rect.row);
+      const bDistance = Math.abs(b.column - item.rect.column) + Math.abs(b.row - item.rect.row);
+      return aDistance - bDistance || a.row - b.row || a.column - b.column;
+    });
+    for (const target of positions) {
+      if (!canPlaceRect(target, columns, placed)) continue;
+      placed.push(target);
+      const changed = target.column !== item.rect.column || target.row !== item.rect.row;
+      if (changed) updates.set(item.index, target);
+      if (placeNext(index + 1)) return true;
+      if (changed) updates.delete(item.index);
+      placed.pop();
+    }
+    return false;
+  };
+  if (!placeNext(0)) return undefined;
+  return updates;
+};
+
+export const resolveOpeningPlacement = (
+  template: WidgetRect,
+  occupied: readonly WidgetRect[],
+  columns: number,
+  rows: VisibleGridRange,
+  preferred?: WidgetRect
+): OpeningPlacement => {
+  const fullSize = { ...template, width: Math.min(template.width, columns) };
+  const fullCandidates = positionsWithinRows(fullSize, columns, rows);
+  const visiblePreferred = preferred && preferred.width === fullSize.width && preferred.height === fullSize.height &&
+    rectWithinRows(preferred, rows) ? preferred : undefined;
+  const directCandidates = visiblePreferred
+    ? [visiblePreferred, ...fullCandidates.filter((candidate) => candidate.column !== visiblePreferred.column || candidate.row !== visiblePreferred.row)]
+    : fullCandidates;
+  const direct = directCandidates.find((candidate) => canPlaceRect(candidate, columns, occupied));
+  if (direct) return { kind: "visible", rect: direct, updates: new Map() };
+
+  let bestRepack: OpeningPlacement | undefined;
+  for (const candidate of fullCandidates) {
+    const updates = repackForCandidate(candidate, occupied, columns, rows);
+    if (!updates) continue;
+    if (!bestRepack || updates.size < bestRepack.updates.size) {
+      bestRepack = { kind: "repacked", rect: candidate, updates };
+    }
+  }
+  if (bestRepack) return bestRepack;
+  for (const candidate of fullCandidates) {
+    const updates = repackForCandidate(candidate, occupied, columns, rows, true);
+    if (updates) return { kind: "repacked", rect: candidate, updates };
+  }
+
+  const minimum = { ...fullSize, width: 1, height: 1 };
+  const minimumCandidates = positionsWithinRows(minimum, columns, rows);
+  const reduced = minimumCandidates.find((candidate) => canPlaceRect(candidate, columns, occupied));
+  if (reduced) return { kind: "reduced", rect: reduced, updates: new Map() };
+  for (const candidate of minimumCandidates) {
+    const updates = repackForCandidate(candidate, occupied, columns, rows);
+    if (updates) return { kind: "reduced", rect: candidate, updates };
+  }
+  for (const candidate of minimumCandidates) {
+    const updates = repackForCandidate(candidate, occupied, columns, rows, true);
+    if (updates) return { kind: "reduced", rect: candidate, updates };
+  }
+
+  const lastOccupiedRow = occupied.reduce((last, rect) => Math.max(last, rect.row + rect.height), 0);
+  return {
+    kind: "overflow",
+    rect: { ...fullSize, column: 0, row: Math.max(lastOccupiedRow, rows.endRow) },
+    updates: new Map()
+  };
+};
+
 export const resolveRelocation = (
   movingIndex: number,
   candidate: WidgetRect,
@@ -424,6 +557,45 @@ export const createWidgetGrid = (
     });
   };
 
+  const currentVisibleRows = (): VisibleGridRange => {
+    const containerRect = container.getBoundingClientRect();
+    const styles = getComputedStyle(container);
+    const rowHeight = Number.parseFloat(styles.gridAutoRows) || 220;
+    const rowGap = Number.parseFloat(styles.rowGap) || 0;
+    const visualViewport = window.visualViewport;
+    const viewportTop = visualViewport?.offsetTop ?? 0;
+    const viewportHeight = visualViewport?.height ?? window.innerHeight;
+    return visibleGridRange(containerRect.top, viewportTop, viewportTop + viewportHeight, rowHeight, rowGap);
+  };
+
+  const commitOpeningPlacement = (element: HTMLElement, placement: OpeningPlacement): boolean => {
+    const entries = [...rects];
+    const updates = new Map<HTMLElement, WidgetRect>([[element, placement.rect]]);
+    for (const [index, rect] of placement.updates) {
+      const target = entries[index]?.[0];
+      if (target) updates.set(target, rect);
+    }
+    const moved = [...updates.keys()].filter((target) => target !== element);
+    const before = new Map(moved.map((target) => [target, target.getBoundingClientRect()]));
+    if (!commitRects(updates)) return false;
+    if (!reducedMotion.matches) {
+      for (const target of moved) {
+        const previous = before.get(target);
+        if (!previous) continue;
+        const next = target.getBoundingClientRect();
+        gsap.fromTo(target, { x: previous.left - next.left, y: previous.top - next.top }, {
+          x: 0,
+          y: 0,
+          duration: .28,
+          ease: "power4.out",
+          clearProps: "transform",
+          overwrite: "auto"
+        });
+      }
+    }
+    return true;
+  };
+
   const reset = (animate = true, clearPersistence = false): void => {
     const elements = widgetElements(container);
     if (clearPersistence) clearStoredProfile();
@@ -461,31 +633,31 @@ export const createWidgetGrid = (
     if (rects.size === 0) {
       const saved = storedLayouts.profiles[profile.name];
       const keys = widgetKeys(elements);
-      let restored = 0;
-      if (saved) {
-        for (const element of elements) {
-          const key = keys.get(element);
-          const rect = key ? saved[key] : undefined;
-          if (rect && canPlaceRect(rect, profile.columns, [...rects.values()]) && setRect(element, rect)) restored += 1;
-        }
+      const defaults = defaultWidgetRects(elements.length, profile.columns);
+      let usedSavedLayout = false;
+      for (const element of elements) {
+        const index = elements.indexOf(element);
+        const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
+        const key = keys.get(element);
+        const stored = key ? saved?.[key] : undefined;
+        const placement = resolveOpeningPlacement(
+          template,
+          [...rects.values()],
+          profile.columns,
+          currentVisibleRows(),
+          stored
+        );
+        if (stored && placement.kind === "visible" && placement.rect === stored) usedSavedLayout = true;
+        commitOpeningPlacement(element, placement);
       }
-      if (restored > 0) {
+      if (usedSavedLayout) {
         layoutCustomized = true;
-        const defaults = defaultWidgetRects(elements.length, profile.columns);
-        for (const element of elements.filter((candidate) => !rects.has(candidate))) {
-          const index = elements.indexOf(element);
-          const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
-          const packed = firstAvailableRect(template, profile.columns, [...rects.values()]);
-          if (packed) setRect(element, packed);
-        }
         persistCurrentLayout();
-        animateLayout(elements);
-        return;
       }
-      reset(true);
+      animateLayout(elements);
       return;
     }
-    if (!layoutCustomized) {
+    if (!layoutCustomized && added.length === 0) {
       reset(true);
       return;
     }
@@ -496,10 +668,14 @@ export const createWidgetGrid = (
       const index = elements.indexOf(element);
       const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
       const stored = saved?.[keys.get(element) ?? ""];
-      const target = stored && canPlaceRect(stored, profile.columns, [...rects.values()])
-        ? stored
-        : firstAvailableRect(template, profile.columns, [...rects.values()]);
-      if (target) setRect(element, target);
+      const placement = resolveOpeningPlacement(
+        template,
+        [...rects.values()],
+        profile.columns,
+        currentVisibleRows(),
+        stored
+      );
+      commitOpeningPlacement(element, placement);
     }
     persistCurrentLayout();
     animateLayout(added);
