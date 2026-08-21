@@ -83,7 +83,7 @@ const testResourceServer = (): Plugin => ({
 
 export default defineConfig(({ mode }) => {
   return {
-    base: mode === "github" ? "/shell/" : process.env.PLATFORM_BASE ?? "/",
+    base: mode === "github" ? "/rocketshell/" : process.env.PLATFORM_BASE ?? "/",
     plugins: [devServiceWorker(), testBlossomServer(), testResourceServer(), builtInNapplets(resolve(__dirname, "../.."))],
     build: {
       sourcemap: true,
