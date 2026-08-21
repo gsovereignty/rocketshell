@@ -151,7 +151,7 @@ export function hasClaimRequest(problem: ProblemView, results: RelayEventResult[
     event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));
 }
 
-export function selectEffectiveClaim(problem: ProblemView, results: RelayEventResult[], now = Math.floor(Date.now() / 1000)): EffectiveClaim | undefined {
+export function selectEffectiveClaim(problem: ProblemView, results: RelayEventResult[]): EffectiveClaim | undefined {
   if (problem.claim) {
     const claimEvent = results.find(({ event }) => event.id === problem.claim?.eventId)?.event;
     return {
@@ -165,8 +165,6 @@ export function selectEffectiveClaim(problem: ProblemView, results: RelayEventRe
   if (problem.status === "rfm") return undefined;
   const candidates = results.map(({ event }) => event).filter((event) =>
     event.kind === COMMENT_KIND &&
-    event.created_at >= problem.revisionCreatedAt &&
-    event.created_at + CLAIM_WINDOW_SECONDS > now &&
     event.tags.some((item) => item[0] === "claim") &&
     event.tags.some((item) => item[0] === "A" && item[1] === problem.coordinate) &&
     event.tags.some((item) => item[0] === "e" && item[1] === problem.revisionId));

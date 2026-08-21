@@ -82,7 +82,7 @@ describe("problem view", () => {
     expect(hasClaimRequest(problem, [claim], owner)).toBe(true);
     expect(hasClaimRequest({ ...problem, revisionId: "0".repeat(64) }, [claim], owner)).toBe(false);
   });
-  it("selects the earliest unexpired best-effort claim", () => {
+  it("keeps the earliest claim active until a new revision supersedes it", () => {
     const problem = selectProblem(coordinate, [result]);
     const claim = (eventId: string, claimant: string, createdAt: number) => ({ event: {
       id: eventId, pubkey: claimant, kind: 1111, created_at: createdAt, content: "Claiming", sig: "f".repeat(128),
@@ -90,8 +90,9 @@ describe("problem view", () => {
     } }) as never;
     const later = claim("f".repeat(64), "1".repeat(64), 20);
     const earlier = claim("e".repeat(64), "2".repeat(64), 10);
-    expect(selectEffectiveClaim(problem, [later, earlier], 30)?.claimant).toBe("2".repeat(64));
-    expect(selectEffectiveClaim(problem, [earlier], 86_410)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [later, earlier])?.claimant).toBe("2".repeat(64));
+    expect(selectEffectiveClaim(problem, [earlier])?.claimant).toBe("2".repeat(64));
+    expect(selectEffectiveClaim({ ...problem, revisionId: "0".repeat(64) }, [earlier])).toBeUndefined();
   });
   it("requires acknowledgement for rfm claims", () => {
     const problem = { ...selectProblem(coordinate, [result]), status: "rfm" };
@@ -99,7 +100,7 @@ describe("problem view", () => {
       id: "e".repeat(64), pubkey: owner, kind: 1111, created_at: 2, content: "Claiming", sig: "f".repeat(128),
       tags: [["A", coordinate], ["e", revision], ["claim"]]
     } } as never;
-    expect(selectEffectiveClaim(problem, [claim], 3)).toBeUndefined();
+    expect(selectEffectiveClaim(problem, [claim])).toBeUndefined();
   });
   it("formats a 24-hour countdown", () => {
     expect(formatClaimCountdown(86_400)).toBe("24:00:00");

@@ -161,11 +161,11 @@ function render() {
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
-  syncClaimCountdown(effectiveClaim?.expiresAt, Boolean(effectiveClaim && !effectiveClaim.acknowledged));
+  syncClaimCountdown(effectiveClaim?.expiresAt);
   if (!reducedMotion) gsap.fromTo(".problem-copy > *, .history, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
 }
 
-function syncClaimCountdown(deadline?: number, rerenderOnExpiry = false) {
+function syncClaimCountdown(deadline?: number) {
   if (countdownTimer) clearInterval(countdownTimer);
   countdownTimer = undefined;
   if (!deadline) return;
@@ -177,7 +177,6 @@ function syncClaimCountdown(deadline?: number, rerenderOnExpiry = false) {
     if (remaining > 0) return;
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = undefined;
-    if (rerenderOnExpiry) render();
   };
   update();
   if (deadline > Date.now() / 1000) countdownTimer = setInterval(update, 1000);
