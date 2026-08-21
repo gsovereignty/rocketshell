@@ -294,6 +294,34 @@ test("never exposes an empty white Napplet frame during startup", async ({ page 
   )).not.toMatchObject({ visible: true, content: "" });
 });
 
+test("renders Problem View before identity initialization settles", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __blockedProblemIdentity: boolean }).__blockedProblemIdentity = false;
+    window.addEventListener("message", (event) => {
+      if (event.data?.type !== "identity.getPublicKey") return;
+      const problemFrame = [...document.querySelectorAll<HTMLIFrameElement>("iframe")]
+        .find((frame) => frame.title === "view-problem");
+      if (!problemFrame || event.source !== problemFrame.contentWindow) return;
+      event.stopImmediatePropagation();
+      (window as unknown as { __blockedProblemIdentity: boolean }).__blockedProblemIdentity = true;
+    }, { capture: true });
+  });
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+
+  const opening = page.evaluate(async () => {
+    const platform = window.__platformTest as unknown as { openInstalled(dTag: string): Promise<unknown> };
+    return platform.openInstalled("view-problem");
+  });
+  await expect(opening).resolves.toBeDefined();
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { __blockedProblemIdentity: boolean }).__blockedProblemIdentity
+  )).toBe(true);
+
+  await expect(page.frameLocator('iframe[title="view-problem"]').locator("#app"))
+    .not.toBeEmpty();
+});
+
 test("mediates Blossom upload without exposing signer or server selection", async ({ page }) => {
   // The shell reads its media servers from the settings store, so point it at the mock server there.
   // Keys left out fall back to the shipped defaults.
