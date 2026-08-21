@@ -233,6 +233,8 @@ test("restores intent-created problem window with its tree caller", async ({ pag
   }));
   expect(result).toMatchObject({ ok: true, handled: true, handler: "view-problem" });
   await expect(page.locator('iframe[title="view-problem"]')).toHaveCount(1);
+  const problem = page.frameLocator('iframe[title="view-problem"]');
+  await expect(problem.locator("#setup-status")).toHaveText("Selected problem revision was not found.");
   await expect.poll(() => page.evaluate(() => {
     const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
     return session?.windows?.map((window: { dTag: string }) => window.dTag);
@@ -244,6 +246,8 @@ test("restores intent-created problem window with its tree caller", async ({ pag
   await expect(page.locator('iframe[title="view-problem"]')).toHaveCount(1);
   await expect(page.locator('iframe[title="navigate-problem-tree"]').locator("..")).toBeHidden();
   await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+  await expect(page.frameLocator('iframe[title="view-problem"]').locator("#setup-status"))
+    .toHaveText("Selected problem revision was not found.");
   expect(await page.evaluate(() => {
     const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
     return session?.windows?.find((window: { dTag: string }) => window.dTag === "view-problem")?.launch;
@@ -251,6 +255,43 @@ test("restores intent-created problem window with its tree caller", async ({ pag
     type: "intent", sender: "navigate-problem-tree", convention: "napplet:note/open",
     payload: { target: { type: "event", id: "0".repeat(64) } }
   });
+});
+
+test("never exposes an empty white Napplet frame during startup", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await page.evaluate(() => {
+    const samples: Array<{ title: string; visible: boolean; content: string }> = [];
+    const windows = document.querySelector("#windows");
+    if (!windows) throw new Error("Napplet window container is missing");
+    new MutationObserver((records, observer) => {
+      for (const record of records) for (const added of record.addedNodes) {
+        if (!(added instanceof HTMLElement) || !added.classList.contains("napplet-window")) continue;
+        const frame = added.querySelector("iframe");
+        samples.push({
+          title: frame?.title ?? "",
+          visible: !added.hidden && getComputedStyle(added).display !== "none",
+          content: frame?.contentDocument?.body?.textContent?.trim() ?? ""
+        });
+        if (frame?.title === "view-problem") observer.disconnect();
+      }
+    }).observe(windows, { childList: true });
+    (window as unknown as { __startupFrameSamples: typeof samples }).__startupFrameSamples = samples;
+  });
+
+  await page.evaluate(async () => {
+    const platform = window.__platformTest as unknown as { openInstalled(dTag: string): Promise<unknown> };
+    await platform.openInstalled("view-problem");
+  });
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { __startupFrameSamples?: Array<{ title: string }> }).__startupFrameSamples
+      ?.some(({ title }) => title === "view-problem") ?? false
+  )).toBe(true);
+  expect(await page.evaluate(() =>
+    (window as unknown as { __startupFrameSamples: Array<{ title: string; visible: boolean; content: string }> })
+      .__startupFrameSamples.find(({ title }) => title === "view-problem")
+  )).not.toMatchObject({ visible: true, content: "" });
 });
 
 test("mediates Blossom upload without exposing signer or server selection", async ({ page }) => {
