@@ -3,7 +3,7 @@ import type { ShellBridge } from "@kehto/shell";
 import { createIdentityService, createOutboxService, createRelayPoolOutboxRouter, createRelayPoolService } from "@kehto/services";
 import type { NostrEvent as CoreNostrEvent } from "applesauce-core/helpers/event";
 import type { Filter } from "applesauce-core/helpers/filter";
-import { DEFAULT_PUBLISH_TIMEOUT_MS, accounts, eventStore, ingress, openRelayStream, publisher, relayPolicy, relayPool, telemetry, validateFilters } from "@platform/nostr-engine";
+import { accounts, eventStore, ingress, openRelayStream, publisher, relayPolicy, relayPool, telemetry, validateFilters } from "@platform/nostr-engine";
 import { verifyEvent } from "nostr-tools/pure";
 import { createRelayConfiguration, type PlatformRelayConfiguration } from "./relay-configuration.js";
 import { castUser } from "applesauce-common/casts";
@@ -32,12 +32,7 @@ export function createOutboxRelayPool(readRelays: readonly string[], writeRelays
     async publish(event: CoreNostrEvent, relayUrls: string[]) {
       if (!ingress.verify(event)) throw new Error("invalid-event");
       const selected = relayPolicy.select(relayUrls, "write");
-      const outcomes = await relayPool.publish(selected, event, { retries: false, timeout: DEFAULT_PUBLISH_TIMEOUT_MS });
-      for (const outcome of outcomes) telemetry.record("publication.outcome", outcome.ok ? 1 : 0, { relay: outcome.from });
-      if (!outcomes.some((outcome) => outcome.ok)) telemetry.record("publication.failed", 1, { relayCount: selected.length });
-      for (const outcome of outcomes) {
-        if (outcome.ok) ingress.admit(event, outcome.from);
-      }
+      const { outcomes } = await publisher.publishSigned(selected, event);
       return Object.fromEntries(outcomes.map((outcome) => [outcome.from, outcome.ok]));
     },
     isAvailable: () => readRelays.length > 0 || writeRelays.length > 0

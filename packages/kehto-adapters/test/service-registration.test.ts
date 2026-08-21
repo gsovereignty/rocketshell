@@ -42,7 +42,7 @@ describe("core service lifecycle", () => {
     await expect(pool.publish(event, ["wss://one.example/", "wss://two.example/"])).resolves.toEqual({
       "wss://one.example/": true, "wss://two.example/": false
     });
-    expect(publish).toHaveBeenCalledWith(["wss://one.example/", "wss://two.example/"], event, { retries: false, timeout: 4_000 });
+    expect(publish).toHaveBeenCalledWith(["wss://one.example/", "wss://two.example/"], event, { retries: true, timeout: 4_000 });
     expect(engine.eventStore.getEvent(event.id)?.id).toBe(event.id);
     const invalid = { ...event, content: "tampered" };
     await expect(pool.publish(invalid, ["wss://one.example/"])).rejects.toThrow("invalid-event");
