@@ -37,7 +37,7 @@ hardcoded before release; until then, users provide it at startup.
 - Uses uppercase `A` root tags and lowercase unmarked `a` parent tags as defined
   by the local NIP-1971 draft.
 - Opens selected current revisions through NAP-INTENT using the registered `note`
-  archetype, `napplet:note/open` convention, and installed `view-problem` handler.
+  archetype and `napplet:note/open` convention. Shell owns default-handler choice.
 - Does not render problem descriptions or import shell implementation.
 - Uses no direct network access, signer, browser storage, or environment variables.
 

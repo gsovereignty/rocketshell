@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_CONVENTION,
-  PROBLEM_VIEWER_DTAG, hasProblemChildComposer, hasProblemViewer
+  hasProblemChildComposer, hasProblemViewer
 } from "./problem-child-intent";
 
 describe("problem child intent", () => {
@@ -22,12 +22,12 @@ describe("problem child intent", () => {
 });
 
 describe("problem viewer intent", () => {
-  it("requires the installed view-problem note handler", () => {
+  it("requires an open handler for the note convention", () => {
     expect(hasProblemViewer({ available: true, candidates: [
-      { dTag: PROBLEM_VIEWER_DTAG, actions: ["open"], conventions: [PROBLEM_VIEWER_CONVENTION] }
+      { actions: ["open"], conventions: [PROBLEM_VIEWER_CONVENTION] }
     ] })).toBe(true);
     expect(hasProblemViewer({ available: true, candidates: [
-      { dTag: "generic-note", actions: ["open"], conventions: [PROBLEM_VIEWER_CONVENTION] }
+      { actions: ["edit"], conventions: [PROBLEM_VIEWER_CONVENTION] }
     ] })).toBe(false);
   });
 });
