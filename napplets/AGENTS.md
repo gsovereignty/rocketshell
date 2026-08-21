@@ -1,5 +1,12 @@
 # Napplet implementation rules
 
+## Visual style
+
+- Always follow the established visual style of the existing built-in napplets.
+- Before designing or changing a napplet UI, inspect relevant built-in napplets
+  and reuse their established layout, typography, spacing, colors, controls, and
+  interaction patterns unless the user explicitly requests a different style.
+
 ## Error handling
 
 - Never silently swallow an exception. Every `catch` must bind the original
