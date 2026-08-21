@@ -22,7 +22,7 @@ describe("platform NAP conformance", () => {
     const manifestEvent = {
       kind: 35129,
       tags: [
-        ["d", "reference-napplet"],
+        ["d", "conformance-fixture"],
         ["path", "/index.html", "11".repeat(32)],
         ...PLATFORM_REQUIRED_DOMAINS.map((domain) => ["requires", domain])
       ]

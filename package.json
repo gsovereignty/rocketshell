@@ -7,7 +7,7 @@
     "check": "pnpm -r --if-present check",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "test:conformance": "pnpm --filter @platform/reference-napplet build && napplet-conformance napplets/reference-napplet/dist",
+    "test:conformance": "pnpm --filter '@platform/*-napplet' test:conformance",
     "dev": "pnpm --filter '@platform/*-napplet' build && pnpm --parallel --filter '@platform/*-napplet' --filter @platform/shell dev"
   },
   "devDependencies": {

@@ -362,10 +362,10 @@ test("coordinate loader animates pending work and stores open napplets", async (
 test("refresh restores open installed napplets", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
-  const coordinate = await page.evaluate(async () => (await window.__platformTest?.dockLaunchers())?.find((launcher) => launcher.dTag === "reference-napplet")?.coordinate);
+  const coordinate = await page.evaluate(async () => (await window.__platformTest?.dockLaunchers())?.find((launcher) => launcher.dTag === "log-new-problem")?.coordinate);
   await page.evaluate((value) => localStorage.setItem("shell.pinned-napplets", JSON.stringify([value])), coordinate);
   await page.reload();
-  await page.getByRole("button", { name: "Open Reference Napplet" }).click();
+  await page.getByRole("button", { name: "Open Log New Problem" }).click();
   await expect(page.locator(".napplet-window")).toHaveCount(2);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("shell.open-napplets"))).not.toBeNull();
 
@@ -377,10 +377,10 @@ test("refresh restores open installed napplets", async ({ page }) => {
 test("refresh migrates legacy dock state without relay discovery", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
-  const coordinate = await page.evaluate(async () => (await window.__platformTest?.dockLaunchers())?.find((launcher) => launcher.dTag === "reference-napplet")?.coordinate);
+  const coordinate = await page.evaluate(async () => (await window.__platformTest?.dockLaunchers())?.find((launcher) => launcher.dTag === "log-new-problem")?.coordinate);
   await page.evaluate((value) => localStorage.setItem("shell.pinned-napplets", JSON.stringify([value])), coordinate);
   await page.reload();
-  await page.getByRole("button", { name: "Open Reference Napplet" }).evaluate((button) => {
+  await page.getByRole("button", { name: "Open Log New Problem" }).evaluate((button) => {
     button.click();
     return new Promise<string>((resolve) => {
       const poll = (): void => {
@@ -395,7 +395,7 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
 
   await page.reload();
   await expect(page.locator(".napplet-window")).toHaveCount(2);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]")[0]?.dTag)).toBe("reference-napplet");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.open-napplets") ?? "[]")[0]?.dTag)).toBe("log-new-problem");
 });
 
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
@@ -479,32 +479,31 @@ test("dock opens an active Napplet without relay discovery", async ({ page }) =>
 
 test("dock always includes built-in Napplets", async ({ page }) => {
   await page.goto("./");
-  const launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  const launcher = page.getByRole("button", { name: "Open Log New Problem" });
   await expect(launcher).toBeVisible();
   await expect(launcher.locator("img")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Log New Problem" }).locator("img")).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Navigate Problem Tree" }).locator("img")).toBeVisible();
-  await expect(page.locator('iframe[title="reference-napplet"]')).toHaveCount(0);
+  await expect(page.locator('iframe[title="log-new-problem"]')).toHaveCount(0);
   await launcher.click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Reference Napplet is built in to Rocketshell" })).toBeDisabled();
+  await expect(page.getByRole("menuitem", { name: "Log New Problem is built in to Rocketshell" })).toBeDisabled();
 });
 
 test("dock icon override persists and can be reset", async ({ page }) => {
   await page.goto("./");
-  let launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  let launcher = page.getByRole("button", { name: "Open Log New Problem" });
   await launcher.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Change Reference Napplet icon" }).click();
+  await page.getByRole("menuitem", { name: "Change Log New Problem icon" }).click();
 
-  const editor = page.getByRole("dialog", { name: "Change Reference Napplet icon" });
+  const editor = page.getByRole("dialog", { name: "Change Log New Problem icon" });
   await editor.getByRole("textbox", { name: "Icon letters" }).fill("rs");
   await editor.getByRole("button", { name: "Use Letters" }).click();
   await expect(launcher.locator(".dock-initial")).toHaveText("RS");
 
   await page.reload();
-  launcher = page.getByRole("button", { name: "Open Reference Napplet" });
+  launcher = page.getByRole("button", { name: "Open Log New Problem" });
   await expect(launcher.locator(".dock-initial")).toHaveText("RS");
   await launcher.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Reset Reference Napplet to Napplet icon" }).click();
+  await page.getByRole("menuitem", { name: "Reset Log New Problem to Napplet icon" }).click();
   await expect(launcher.locator("img")).toBeVisible();
 });
 

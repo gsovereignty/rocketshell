@@ -7,10 +7,6 @@ shell, gateway, and host-service code stays outside it.
   and publish a napplet.
 - [`LOADING-ARCHITECTURE.md`](LOADING-ARCHITECTURE.md) defines how this monorepo
   discovers and loads built-in napplets.
-- [`reference-napplet/`](reference-napplet/) is the minimal executable built-in
-  example. Run `napplet init` before treating a copied project as externally
-  deployable; deployment metadata is intentionally publisher-owned.
-
 Each direct child containing both `package.json#napplet` and `dist/index.html`
 is eligible for built-in discovery. Documentation directories and incomplete
 projects are ignored.
