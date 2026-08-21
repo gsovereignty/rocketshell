@@ -901,12 +901,15 @@ export const createWidgetGrid = (
     resizeBy(element, edge, widthDelta, heightDelta);
   };
 
-  const mutationObserver = new MutationObserver(sync);
+  const mutationObserver = new MutationObserver((records) => {
+    if (records.some((record) => record.target === container ||
+      (record.type === "attributes" && record.target instanceof HTMLElement && record.target.parentElement === container))) sync();
+  });
   mutationObserver.observe(container, {
     childList: true,
     attributes: true,
-    attributeFilter: ["data-layout-pending", "data-replaces-window-id"],
-    subtree: false
+    attributeFilter: ["hidden", "data-layout-pending", "data-replaces-window-id"],
+    subtree: true
   });
   const resizeObserver = new ResizeObserver(([entry]) => {
     if (!entry) return;

@@ -114,7 +114,7 @@ export class NappletWindowManager {
     element.className = "napplet-window";
     element.hidden = true;
     element.dataset.startupPending = "true";
-    if (options.deferLayout) element.dataset.layoutPending = "true";
+    element.dataset.layoutPending = "true";
     const toolbar = document.createElement("header");
     toolbar.className = "napplet-window-toolbar";
     const title = document.createElement("span");
@@ -158,7 +158,10 @@ export class NappletWindowManager {
       iframe.onload = () => {
         iframe.onload = null;
         delete element.dataset.startupPending;
-        if (!options.deferLayout) element.hidden = false;
+        if (!options.deferLayout) {
+          element.hidden = false;
+          delete element.dataset.layoutPending;
+        }
       };
       iframe.srcdoc = await response.text();
       const bridgeReady = this.bridge.waitUntilReady(identity);

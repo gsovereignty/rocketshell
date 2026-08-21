@@ -175,6 +175,7 @@ describe("package gateway", () => {
     iframe.onload?.();
     expect(element.hidden).toBe(false);
     expect(element.dataset.startupPending).toBeUndefined();
+    expect(element.dataset.layoutPending).toBeUndefined();
     expect(document.createElement).toHaveBeenCalledTimes(5);
     manager.close(); vi.unstubAllGlobals();
   });
