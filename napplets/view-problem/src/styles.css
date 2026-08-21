@@ -1,6 +1,8 @@
 :root { font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; color: #171a21; background: #fff; font-synthesis: none; --blue:#145cff; --blue-dark:#0846cf; --muted:#6d7280; --line:#dfe1e7; --open:#08744d; --open-bg:#e0f3e9; }
 * { box-sizing: border-box; }
 html, body, #app { min-width: 280px; min-height: 100%; margin: 0; }
+.boot-state { display:grid; min-height:100vh; place-items:center; padding:28px; color:var(--muted); }
+.boot-state p { margin:0; font-weight:700; letter-spacing:.04em; }
 button, input, textarea { font: inherit; }
 button { color: inherit; }
 ::selection { color: #fff; background: var(--blue); }

@@ -67,6 +67,16 @@ function showSetup(message = "") {
   if (!reducedMotion) gsap.fromTo(".setup > *", { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .07, ease: "expo.out" });
 }
 
+function showLoadingProblem() {
+  stopDiscussionSubscription();
+  if (countdownTimer) clearInterval(countdownTimer);
+  app.innerHTML = `<section class="setup loading-state" aria-labelledby="loading-title" aria-live="polite">
+    <div class="setup-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div><h1 id="loading-title">Loading problem</h1><p>Finding the selected revision and its current discussion…</p></div>
+  </section>`;
+  if (!reducedMotion) gsap.fromTo(".loading-state > *", { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .07, ease: "expo.out" });
+}
+
 function stopDiscussionSubscription() {
   loadGeneration += 1;
   discussionSubscription?.close();
@@ -387,6 +397,7 @@ async function openProblemRevision(revisionId: string) {
 }
 
 async function start() {
+  showSetup();
   try {
     intentSubscription = inc.on("napplet:note/open", (event) => {
       intentReceived = true;
@@ -394,6 +405,7 @@ async function start() {
         showSetup("Incoming problem-open request has an invalid event target.");
         return;
       }
+      showLoadingProblem();
       void openProblemRevision(event.payload.target.id);
     });
   } catch (error) {
@@ -407,8 +419,8 @@ async function start() {
     console.error("Shell identity initialization failed", { error });
     pubkey = "";
     liveMessage = "Shell identity unavailable. Viewing remains available; publishing is disabled.";
+    if (!intentReceived && !problem) showSetup(liveMessage);
   }
-  if (!intentReceived && !problem) showSetup();
 }
 
 addEventListener("beforeunload", () => {
