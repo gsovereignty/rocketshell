@@ -23,6 +23,18 @@ const tag = (event: NostrEvent, name: string, marker?: string) =>
   event.tags.find((item) => item[0] === name && (marker === undefined || item[3] === marker));
 const tagValue = (event: NostrEvent, name: string, marker?: string) => tag(event, name, marker)?.[1];
 
+const parentOwners = (event: NostrEvent) => event.tags
+  .filter((item) => item[0] === "p" && item[3] === undefined && HEX_64.test(item[1] ?? ""))
+  .map((item) => item[1]);
+
+export function canEditProblem(problem: Pick<EditableProblem, "event" | "owner">, pubkey: string): boolean {
+  if (!HEX_64.test(pubkey)) return false;
+  const maintainers = problem.event.tags
+    .filter((item) => item[0] === "p" && item[3] === "maintainer")
+    .map((item) => item[1]);
+  return pubkey === problem.owner || maintainers.includes(pubkey) || parentOwners(problem.event).includes(pubkey);
+}
+
 export function isEditPayload(payload: unknown): payload is { problemId: string } {
   if (typeof payload !== "object" || payload === null) return false;
   const keys = Object.keys(payload);
@@ -46,9 +58,8 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
   const owner = origin.split(":")[1] ?? "";
   const status = tagValue(selected.event, "status") ?? "open";
   if (!HEX_64.test(owner) || !STATUSES.includes(status as ProblemStatus)) throw new Error("Problem state is invalid.");
-  const maintainers = selected.event.tags.filter((item) => item[0] === "p" && item[3] === "maintainer").map((item) => item[1]);
   const childStatus = tagValue(selected.event, "child_status");
-  return {
+  const problem: EditableProblem = {
     event: selected.event,
     relay: selected.sidecar?.relayHints?.[0] ?? tag(selected.event, "a", "origin")?.[2] ?? "",
     problemId,
@@ -57,9 +68,11 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
     description: selected.event.content,
     status: status as ProblemStatus,
     childStatus: childStatus === "rfm" || childStatus === "open" ? childStatus : undefined,
-    mayEdit: pubkey === owner || maintainers.includes(pubkey),
+    mayEdit: false,
     isOwner: pubkey === owner
   };
+  problem.mayEdit = canEditProblem(problem, pubkey);
+  return problem;
 }
 
 export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
@@ -86,6 +99,15 @@ export function buildRevisionTemplate(
   const lineageNames = new Set(["title", "status", "child_status"]);
   const tags = problem.event.tags.filter((item) =>
     !lineageNames.has(item[0]) && !(item[0] === "e" && (item[3] === "genesis" || item[3] === "previous")));
+  if (problem.isOwner) {
+    const requiredMaintainers = new Set([problem.owner, ...parentOwners(problem.event)]);
+    const listedMaintainers = new Set(tags
+      .filter((item) => item[0] === "p" && item[3] === "maintainer")
+      .map((item) => item[1]));
+    for (const maintainer of requiredMaintainers) {
+      if (!listedMaintainers.has(maintainer)) tags.push(["p", maintainer, "", "maintainer"]);
+    }
+  }
   const genesis = tagValue(problem.event, "e", "genesis") ?? problem.event.id;
   const status = problem.isOwner && hasChildren ? "children" : update.status;
   tags.splice(1, 0, ["title", title], ["status", status]);

@@ -1,7 +1,7 @@
 import { identity, inc, intent, outbox, themeGet, themeOnChanged, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import gsap from "gsap";
 import "./styles.css";
-import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, hasProblemChildren, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
+import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
@@ -240,7 +240,11 @@ async function start(): Promise<void> {
     pubkey = await identity.getPublicKey();
     identitySubscription = identity.onChanged((next) => {
       pubkey = next;
-      if (current) { current.mayEdit = next === current.owner || current.event.tags.some((item) => item[0] === "p" && item[1] === next && item[3] === "maintainer"); renderEditor(current); }
+      if (current) {
+        current.isOwner = next === current.owner;
+        current.mayEdit = canEditProblem(current, next);
+        renderEditor(current);
+      }
     });
   } catch (error) {
     console.error("Shell identity initialization failed", { error });

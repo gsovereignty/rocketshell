@@ -28,6 +28,13 @@ describe("problem editor", () => {
     expect(selectEditableProblem(problemId, [result(genesis), result(revision)], hex("d")).event.id).toBe(revision.id);
   });
 
+  it("grants direct parent owner maintainer permissions", () => {
+    const parentOwner = hex("d");
+    const child = event(hex("c"), owner, [["p", parentOwner, "wss://parent.example"]]);
+    expect(selectEditableProblem(problemId, [result(child)], parentOwner).mayEdit).toBe(true);
+    expect(selectEditableProblem(problemId, [result(child)], hex("e")).mayEdit).toBe(false);
+  });
+
   it("builds full revision lineage and preserves graph tags", () => {
     const problem = selectEditableProblem(problemId, [result(event(hex("c")))], owner);
     const template = buildRevisionTemplate(problem, { title: "New title", description: "New body", status: "big", childStatus: "open" }, 20);
@@ -35,6 +42,30 @@ describe("problem editor", () => {
     expect(template.tags).toContainEqual(["e", hex("c"), "wss://relay.example", "previous", owner]);
     expect(template.tags).toContainEqual(["A", `31971:${owner}:${problemId}`, "wss://relay.example"]);
     expect(template.tags).toContainEqual(["child_status", "open"]);
+  });
+
+  it("adds owner and direct parent owners as maintainers on owner edit", () => {
+    const parentOwner = hex("d");
+    const existingMaintainer = hex("e");
+    const problem = selectEditableProblem(problemId, [result(event(hex("c"), owner, [
+      ["p", parentOwner, "wss://parent.example"],
+      ["p", existingMaintainer, "", "maintainer"]
+    ]))], owner);
+    const template = buildRevisionTemplate(problem, { title: "New title", description: "New body", status: "open" }, 20);
+    expect(template.tags).toContainEqual(["p", owner, "", "maintainer"]);
+    expect(template.tags).toContainEqual(["p", parentOwner, "", "maintainer"]);
+    expect(template.tags).toContainEqual(["p", existingMaintainer, "", "maintainer"]);
+    expect(template.tags.filter((item) => item[0] === "p" && item[1] === parentOwner && item[3] === "maintainer")).toHaveLength(1);
+  });
+
+  it("preserves maintainer list unchanged on non-owner edit", () => {
+    const parentOwner = hex("d");
+    const problem = selectEditableProblem(problemId, [result(event(hex("c"), owner, [
+      ["p", parentOwner, "wss://parent.example"]
+    ]))], parentOwner);
+    const template = buildRevisionTemplate(problem, { title: "New title", description: "New body", status: "open" }, 20);
+    expect(template.tags).not.toContainEqual(["p", owner, "", "maintainer"]);
+    expect(template.tags).not.toContainEqual(["p", parentOwner, "", "maintainer"]);
   });
 
   it("rejects forked heads", () => {
