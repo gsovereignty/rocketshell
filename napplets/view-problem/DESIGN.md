@@ -218,6 +218,12 @@ using the same author treatment plus status, revision identifier, and expandable
 field diff. Initial publication never appears as edit history. Entries stay
 separated by ledger rules and never become cards.
 
+### Problem Author
+
+Place compact owner signature directly below problem title: circular avatar,
+small uppercase `Problem author` label, and resolved profile name. Keep pubkey
+available as title text and use generated initials when profile data is absent.
+
 ### Motion
 
 Setup elements enter with a short staggered rise; record sections use a smaller, faster rise. Both use GSAP `expo.out`. Reduced-motion preference removes these entrances entirely.

@@ -36,8 +36,11 @@ current revision, workflow state, related problem references, and NIP-22 kind
   problem owner.
 - Registers the standard `note` archetype and accepts `napplet:note/open` event
   targets so problem navigators can open a selected revision in focused detail.
-- Shows each comment author's shortened pubkey and a deterministic generated
-  avatar without requesting profile metadata or remote images.
+- Shows activity authors using profile names and shell-fetched avatars when
+  available, with shortened pubkeys and deterministic generated avatars as
+  fallbacks.
+- Shows problem owner's profile name and avatar beneath problem title, with
+  deterministic pubkey fallbacks when metadata or image loading is unavailable.
 - Native form submission is forbidden by the `allow-scripts` sandbox.
 - No direct network access, browser storage, shell imports, or environment variables.
 

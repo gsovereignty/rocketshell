@@ -134,6 +134,10 @@ function render() {
     <section class="problem-copy" aria-labelledby="problem-title">
       <div class="state-line"><span class="status status-${escapeHtml(displayedStatus)}"><i></i>${escapeHtml(statusLabel(displayedStatus))}</span></div>
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
+      <div class="problem-author">
+        ${authorAvatar(problem.owner)}
+        <div><span>Problem author</span><strong title="${escapeHtml(problem.owner)}">${escapeHtml(authorName(problem.owner))}</strong></div>
+      </div>
       <div class="description markdown-body">${renderMarkdown(problem.description)}</div>
       <div class="actions">
         <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
@@ -404,6 +408,7 @@ async function loadProblem(value: string) {
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments, problemRevisionHistory(problem.coordinate, relatedEvents));
     void loadProfiles([
+      problem.owner,
       ...comments.map(({ event }) => event.pubkey),
       ...relatedEvents.filter(({ event }) => event.kind === 31971).map(({ event }) => event.pubkey),
       ...(effectiveClaim ? [effectiveClaim.claimant] : [])
