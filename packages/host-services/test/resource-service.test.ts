@@ -30,4 +30,12 @@ describe("resource policy fetch", () => {
     expect(response.headers.get("content-type")).toBe("image/jpeg");
     expect(fetchMock).toHaveBeenNthCalledWith(2, new URL("https://image.example/avatar.jpg"), expect.objectContaining({ redirect: "manual" }));
   });
+  it.each([
+    ["MP4", new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]), "video/mp4"],
+    ["WebM", new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]), "video/webm"]
+  ])("allows shell-fetched %s video bytes", async (_label, bytes, mimeType) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes)));
+    const response = await createPolicyFetch({})("https://media.example/video", { signal: new AbortController().signal });
+    expect(response.headers.get("content-type")).toBe(mimeType);
+  });
 });

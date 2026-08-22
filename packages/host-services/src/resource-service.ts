@@ -25,12 +25,14 @@ function sniffMime(bytes: Uint8Array): string {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
   if (bytes.length >= 6 && new TextDecoder().decode(bytes.slice(0, 6)).startsWith("GIF8")) return "image/gif";
   if (bytes.length >= 12 && new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" && new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP") return "image/webp";
+  if (bytes.length >= 12 && new TextDecoder().decode(bytes.slice(4, 8)) === "ftyp") return "video/mp4";
+  if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return "video/webm";
   return "application/octet-stream";
 }
 
 export function createPolicyFetch(policy: ResourcePolicy): (url: string, init: { method?: string; headers?: Record<string, string>; signal: AbortSignal }) => Promise<Response> {
   const maximumBytes = policy.maximumBytes ?? 8 * 1024 * 1024; const timeoutMs = policy.timeoutMs ?? 10_000;
-  const allowedMimeTypes = new Set(policy.allowedMimeTypes ?? ["image/png", "image/jpeg", "image/gif", "image/webp", "application/octet-stream"]);
+  const allowedMimeTypes = new Set(policy.allowedMimeTypes ?? ["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "application/octet-stream"]);
   const telemetry = policy.telemetry ?? NOOP_TELEMETRY;
   return async (raw, init) => {
     const controller = new AbortController(); const abort = () => controller.abort(); init.signal.addEventListener("abort", abort, { once: true });

@@ -20,6 +20,7 @@ import { installBuiltInNapplets } from "./built-in-napplets.js";
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
 const DEFAULT_BLOSSOM_SERVERS = ["https://blossom.primal.net"] as const;
+const MAX_MEDIA_BYTES = 64 * 1024 * 1024;
 
 /** Seed values for a first run; from then on the settings panel owns these lists. */
 export const DEFAULT_SHELL_SETTINGS: ShellSettings = {
@@ -132,6 +133,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   });
   registerResourceService(shell.runtime, {
     allowHttpLocalhost: allowLocalPlaintext,
+    maximumBytes: MAX_MEDIA_BYTES,
     telemetry: telemetry
   });
   registerLinkService(shell.runtime, {
@@ -145,7 +147,8 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   // napplets opened before the first edit permanently without upload access.
   const uploads = registerUploadService(shell.runtime, {
     blossomServers: [...initial.backupBlossomServers],
-    signEvent: (template) => accounts.sign(template)
+    signEvent: (template) => accounts.sign(template),
+    maxBytes: MAX_MEDIA_BYTES
   });
   wiredDomains.add("upload"); wiredServices.add("upload");
   const windowBridge = new BrowserWindowBridge(shell, wiredDomains, wiredServices);
