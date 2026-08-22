@@ -28,6 +28,8 @@ const walk = (root: string, current = root): string[] => readdirSync(current, { 
   return entry.isDirectory() ? walk(root, path) : [relative(root, path).split(sep).join("/")];
 });
 
+export const isRuntimeArtifact = (path: string): boolean => path !== ".nip5a-manifest.json";
+
 export function discoverBuiltInNapplets(repositoryRoot: string): BuiltInNapplet[] {
   const nappletsRoot = join(repositoryRoot, "napplets");
   return readdirSync(nappletsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => {
@@ -38,7 +40,7 @@ export function discoverBuiltInNapplets(repositoryRoot: string): BuiltInNapplet[
     const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as { name?: string; napplet?: BuiltInNappletMetadata };
     if (!packageJson.napplet) return [];
     const dist = dirname(entrypoint);
-    const files = walk(dist).map((path) => {
+    const files = walk(dist).filter(isRuntimeArtifact).map((path) => {
       const bytes = readFileSync(join(dist, path));
       const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
       return { path, sha256: createHash("sha256").update(bytes).digest("hex"), mediaType: mediaTypes[extension] ?? "application/octet-stream" };
