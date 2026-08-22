@@ -14,7 +14,7 @@ confirmed revision event target so problem view returns without private shell AP
 NAP-THEME is optional. No direct relay, browser network, or browser storage is
 used.
 
-Authorized editors may upload images and videos through optional shell-owned
+Authorized editors may upload images and videos through required shell-owned
 NAP-UPLOAD. Returned HTTPS URLs are inserted into description as direct Markdown
 media references.
 

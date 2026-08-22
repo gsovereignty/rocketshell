@@ -19,7 +19,7 @@ boundary without handling keys or relays directly.
   disclosure.
 - Clearly distinguish a new root problem from a child of an existing problem.
 - Receive child context from shell intent delivery as a validated problem ID.
-- Upload images and videos through optional shell-owned NAP-UPLOAD and insert
+- Upload images and videos through required shell-owned NAP-UPLOAD and insert
   returned HTTPS URLs into description as Markdown media references.
 - Resolve the parent event through the shell, derive required graph and parent tags,
   then publish an unsigned event template through the shell.

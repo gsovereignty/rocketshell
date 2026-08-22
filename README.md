@@ -114,9 +114,9 @@ that URL directly into problem description using Markdown image syntax:
 
 `view-problem` never loads remote media directly. It resolves Markdown media
 URLs through NAP-RESOURCE, creates temporary blob URLs, renders supported image
-or video controls, and revokes those URLs when view changes. Missing upload
-support leaves text composition available; failed media reads remain visible as
-diagnostic fallback text.
+or video controls, and revokes those URLs when view changes. Both composers
+declare NAP-UPLOAD as a hard manifest requirement; failed media reads remain
+visible as diagnostic fallback text.
 
 ## Static deployment
 

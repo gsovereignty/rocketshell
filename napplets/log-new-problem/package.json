@@ -6,7 +6,7 @@
   "napplet": {
     "dTag": "log-new-problem",
     "title": "Log New Problem",
-    "requires": ["identity", "outbox", "inc"],
+    "requires": ["identity", "outbox", "inc", "upload"],
     "archetypes": [
       {
         "slug": "composer",
