@@ -32,6 +32,8 @@ as its base path; `pnpm --filter @platform/shell build:github` uses `/shell/`.
   runtime-attested Napplet identity.
 - **NAP-RESOURCE** (`resource`): policy-controlled metadata and byte fetching
   for HTTPS, approved localhost development URLs, and granted package origins.
+  Image, MP4, and WebM responses are content-sniffed; shell media policy caps
+  fetched and uploaded media at 64 MiB.
 - **NAP-CONFIG** (`config`): scoped configuration reads, writes, schemas, and
   host-rendered settings editing.
 - **NAP-THEME** (`theme`): current-theme queries and automatic theme-change
@@ -48,8 +50,10 @@ as its base path; `pnpm --filter @platform/shell build:github` uses `/shell/`.
   The active account's BUD-03 server list takes precedence over fallback
   servers configured in shell preferences.
 
-Every domain is granted only when declared by the signed NIP-5D manifest. A
-package requiring an unavailable domain is rejected before its code runs.
+Hard requirements are declared by signed NIP-5D manifest. A package requiring
+an unavailable domain is rejected before its code runs. Optional domains are
+feature-detected after runtime injection and must degrade without breaking the
+napplet's core task.
 
 ## Relay configuration
 
@@ -96,6 +100,23 @@ Development serves discovered artifacts under `/napplets.dev/` and generates
 enter the same package store, capability bridge, sandbox, and window manager as
 external Napplets. See the [authoring spec](napplets/AUTHORING-SPEC.md) and
 [loading architecture](napplets/LOADING-ARCHITECTURE.md).
+
+### Problem media attachments
+
+`log-new-problem` and `edit-problem` accept user-selected images and videos.
+They send file bytes to shell-owned NAP-UPLOAD; shell selects configured Blossom
+storage, signs authorization, and returns a public HTTPS URL. Composer inserts
+that URL directly into problem description using Markdown image syntax:
+
+```markdown
+![Screenshot](https://blossom.example/<hash>)
+```
+
+`view-problem` never loads remote media directly. It resolves Markdown media
+URLs through NAP-RESOURCE, creates temporary blob URLs, renders supported image
+or video controls, and revokes those URLs when view changes. Missing upload
+support leaves text composition available; failed media reads remain visible as
+diagnostic fallback text.
 
 ## Static deployment
 
