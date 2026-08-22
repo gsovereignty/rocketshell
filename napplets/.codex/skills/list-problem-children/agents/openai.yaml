@@ -1,0 +1,4 @@
+interface:
+  display_name: "List Problem Children"
+  short_description: "Find current direct Nostr problem children"
+  default_prompt: "Use $list-problem-children to list every current direct child of this Nostr problem ID."
