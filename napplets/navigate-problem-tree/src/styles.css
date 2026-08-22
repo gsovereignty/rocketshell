@@ -52,8 +52,12 @@ button { color: inherit; }
 .tree-pane { overflow: auto; padding: 28px 22px 42px; border-right: 1px solid var(--line); background: var(--panel); }
 .tree-pane > header, .list-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 34px; }
 .tree-pane h1, .list-pane h2 { margin: 0; color: #545968; font-size: .75rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+#log-root-child { width: 100%; min-height: 42px; margin-top: 14px; border: 0; border-radius: 9px; padding: 0 14px; color: white; background: var(--blue); font-size: .78rem; font-weight: 700; cursor: pointer; }
+#log-root-child:hover:not(:disabled) { background: var(--blue-dark); }
+#log-root-child:active:not(:disabled) { transform: translateY(1px); }
+#log-root-child:disabled { color: var(--muted); background: var(--line); cursor: not-allowed; }
 .tree-root, .tree-root ul { margin: 0; padding: 0; list-style: none; }
-.tree-root { margin-top: 20px; }
+.tree-root { margin-top: 16px; }
 .branch { position: relative; }
 .branch ul { margin-left: 27px; padding-left: 12px; border-left: 1px solid #d6d8df; }
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: transparent; text-align: left; cursor: pointer; }

@@ -1,10 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_CONVENTION,
-  hasProblemChildComposer, hasProblemViewer, openProblemViewer
+  hasProblemChildComposer, hasProblemViewer, openAdjacentProblemChildComposer, openProblemViewer
 } from "./problem-child-intent";
 
 describe("problem child intent", () => {
+  it("opens a child composer without replacing the tree", async () => {
+    const invoke = vi.fn().mockResolvedValue({ ok: true, handled: true });
+    const problemId = "a".repeat(64);
+    await openAdjacentProblemChildComposer({ invoke }, problemId);
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith({
+      archetype: "composer",
+      action: PROBLEM_CHILD_ACTION,
+      convention: PROBLEM_CHILD_CONVENTION,
+      payload: { problemId },
+      behavior: { focus: false, reuse: true }
+    });
+  });
+
   it("requires the convention-derived child action", () => {
     expect(hasProblemChildComposer({
       available: true,

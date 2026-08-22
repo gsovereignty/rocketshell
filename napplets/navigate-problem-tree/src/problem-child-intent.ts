@@ -4,6 +4,27 @@ export const PROBLEM_CHILD_CONVENTION = "napplet:composer/problem-child";
 export const PROBLEM_VIEWER_ARCHETYPE = "note";
 export const PROBLEM_VIEWER_CONVENTION = "napplet:note/open";
 const PROBLEM_VIEWER_BEHAVIOR = { focus: false, reuse: true } as const;
+const PROBLEM_CHILD_ADJACENT_BEHAVIOR = { focus: false, reuse: true } as const;
+
+interface ProblemChildIntent {
+  invoke(request: {
+    archetype: typeof PROBLEM_CHILD_ARCHETYPE;
+    action: typeof PROBLEM_CHILD_ACTION;
+    convention: typeof PROBLEM_CHILD_CONVENTION;
+    payload: { problemId: string };
+    behavior: typeof PROBLEM_CHILD_ADJACENT_BEHAVIOR;
+  }): Promise<{ ok: boolean; handled: boolean; error?: string }>;
+}
+
+export function openAdjacentProblemChildComposer(intentApi: ProblemChildIntent, problemId: string) {
+  return intentApi.invoke({
+    archetype: PROBLEM_CHILD_ARCHETYPE,
+    action: PROBLEM_CHILD_ACTION,
+    convention: PROBLEM_CHILD_CONVENTION,
+    payload: { problemId },
+    behavior: PROBLEM_CHILD_ADJACENT_BEHAVIOR
+  });
+}
 
 interface ProblemViewerIntent {
   open(

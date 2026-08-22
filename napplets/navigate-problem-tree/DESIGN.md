@@ -129,7 +129,8 @@ for protocol data. Input and action stack below 760px.
 
 Tree nodes show title, unique descendant count, and fork state. Current node uses
 solid blue. Activating any tree node or child row opens that problem in the
-visible default problem viewer without replacing the DAG.
+visible default problem viewer without replacing the DAG. A full-width action
+above the tree opens a composer for a new problem directly under the hidden root.
 
 ## Do's and Don'ts
 

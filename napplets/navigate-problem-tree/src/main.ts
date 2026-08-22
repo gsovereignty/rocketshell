@@ -14,7 +14,7 @@ import {
 } from "./problem-dag";
 import {
   PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION,
-  hasProblemChildComposer, hasProblemViewer, openProblemViewer
+  hasProblemChildComposer, hasProblemViewer, openAdjacentProblemChildComposer, openProblemViewer
 } from "./problem-child-intent";
 import { mergeProblemEvents } from "./problem-events";
 
@@ -159,6 +159,8 @@ function renderApp() {
     <div class="workspace">
       <aside class="tree-pane" aria-labelledby="tree-title">
         <header><h1 id="tree-title">Problem tree</h1></header>
+        <button id="log-root-child" type="button" ${problemChildHandlerAvailable && !childComposerBusy ? "" : "disabled"}
+          title="${problemChildHandlerAvailable ? "Create a problem directly under the tree root" : "No compatible problem composer available"}">New top-level problem</button>
         <nav aria-label="Problem DAG"><ul class="tree-root">${visibleTreeRoots(currentDag)
           .map((coordinate) => outlineBranch(coordinate, new Set([currentDag.rootCoordinate])))
           .join("")}</ul></nav>
@@ -194,8 +196,37 @@ function bindWorkspace() {
       void openProblem(selected);
     } else if (target.closest("#log-child")) {
       void logChildProblem();
+    } else if (target.closest("#log-root-child")) {
+      void logRootChildProblem();
     }
   };
+}
+
+async function logRootChildProblem() {
+  const root = dag?.nodes.get(dag.rootCoordinate);
+  const status = document.querySelector<HTMLOutputElement>("#app-status");
+  const button = document.querySelector<HTMLButtonElement>("#log-root-child");
+  const selectedChildButton = document.querySelector<HTMLButtonElement>("#log-child");
+  if (!root || !status || !button || childComposerBusy) return;
+  childComposerBusy = true;
+  button.disabled = true;
+  button.textContent = "Opening composer???";
+  if (selectedChildButton) selectedChildButton.disabled = true;
+  status.textContent = "Opening top-level problem composer???";
+  try {
+    const result = await openAdjacentProblemChildComposer(intent, root.problemId);
+    if (!result.ok || !result.handled) throw new Error(result.error ?? "No problem composer accepted this request.");
+    status.textContent = "Top-level problem composer opened.";
+    gsap.fromTo(button, { scale: .97 }, { scale: 1, duration: .2, ease: "expo.out" });
+  } catch (error) {
+    console.error("Top-level problem composer intent failed", { rootCoordinate: root.coordinate, error });
+    status.textContent = error instanceof Error ? error.message : "Problem composer could not be opened.";
+  } finally {
+    childComposerBusy = false;
+    button.textContent = "New top-level problem";
+    button.disabled = !problemChildHandlerAvailable;
+    if (selectedChildButton) selectedChildButton.disabled = !problemChildHandlerAvailable;
+  }
 }
 
 async function logChildProblem() {
