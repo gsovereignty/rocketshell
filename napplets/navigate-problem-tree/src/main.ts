@@ -9,7 +9,7 @@ import { intent, outbox, type OutboxSubscription, type RelayEventResult } from "
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel,
+  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel, visibleTreeRoots,
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
 import {
@@ -158,11 +158,14 @@ function renderList() {
 
 function renderApp() {
   if (!dag) return;
+  const currentDag = dag;
   app.innerHTML = `
     <div class="workspace">
       <aside class="tree-pane" aria-labelledby="tree-title">
         <header><h1 id="tree-title">Problem tree</h1><button id="change-root">Change root</button></header>
-        <nav aria-label="Problem DAG"><ul class="tree-root">${outlineBranch(dag.rootCoordinate, new Set())}</ul></nav>
+        <nav aria-label="Problem DAG"><ul class="tree-root">${visibleTreeRoots(currentDag)
+          .map((coordinate) => outlineBranch(coordinate, new Set([currentDag.rootCoordinate])))
+          .join("")}</ul></nav>
       </aside>
       <section class="list-pane" aria-labelledby="section-title">
         <header class="list-header">
