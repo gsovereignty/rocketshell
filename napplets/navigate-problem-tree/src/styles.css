@@ -52,7 +52,6 @@ button { color: inherit; }
 .tree-pane { overflow: auto; padding: 28px 22px 42px; border-right: 1px solid var(--line); background: var(--panel); }
 .tree-pane > header, .list-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 34px; }
 .tree-pane h1, .list-pane h2 { margin: 0; color: #545968; font-size: .75rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
-#change-root { border: 0; padding: 5px 0; color: var(--muted); background: transparent; font-size: .74rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .tree-root, .tree-root ul { margin: 0; padding: 0; list-style: none; }
 .tree-root { margin-top: 20px; }
 .branch { position: relative; }

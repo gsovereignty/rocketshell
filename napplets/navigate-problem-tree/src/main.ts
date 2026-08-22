@@ -162,7 +162,7 @@ function renderApp() {
   app.innerHTML = `
     <div class="workspace">
       <aside class="tree-pane" aria-labelledby="tree-title">
-        <header><h1 id="tree-title">Problem tree</h1><button id="change-root">Change root</button></header>
+        <header><h1 id="tree-title">Problem tree</h1></header>
         <nav aria-label="Problem DAG"><ul class="tree-root">${visibleTreeRoots(currentDag)
           .map((coordinate) => outlineBranch(coordinate, new Set([currentDag.rootCoordinate])))
           .join("")}</ul></nav>
@@ -201,7 +201,7 @@ function bindWorkspace() {
       void openProblem(selected);
     } else if (target.closest("#log-child")) {
       void logChildProblem();
-    } else if (target.closest("#change-root")) showSetup();
+    }
   };
 }
 
