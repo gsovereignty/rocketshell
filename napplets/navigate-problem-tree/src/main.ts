@@ -40,8 +40,6 @@ const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
 })[character]!);
 
-const externalIcon = `<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M11 3h6v6M9 11l8-8M16 11v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"/></svg>`;
-
 function showSetup(message = "") {
   stopProblemSubscription();
   app.innerHTML = `
@@ -147,8 +145,6 @@ function renderList() {
         ${node.forkCount ? `<span class="fork">${node.forkCount + 1} heads</span>` : ""}
         <span class="status status-${node.status}">${statusLabel(node.status)}</span>
       </button>
-      <button class="open-problem" data-open="${node.coordinate}" ${noteHandlerAvailable && !problemViewerBusy ? "" : "disabled"}
-        aria-label="Open ${escapeHtml(node.title)} in problem viewer" title="${noteHandlerAvailable ? "Open problem details" : "Problem viewer is not installed"}">${externalIcon}</button>
     </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
   const rows = list.querySelectorAll<HTMLElement>(".problem-row");
   if (!reducedMotion.matches && rows.length > 0) {
@@ -186,7 +182,6 @@ function bindWorkspace() {
     const target = event.target as Element;
     const selectButton = target.closest<HTMLButtonElement>("[data-select]");
     const filterButton = target.closest<HTMLButtonElement>("[data-filter]");
-    const openButton = target.closest<HTMLButtonElement>("[data-open]");
     if (selectButton?.dataset.select) {
       selected = selectButton.dataset.select;
       activeFilter = "all";
@@ -195,8 +190,6 @@ function bindWorkspace() {
     } else if (filterButton?.dataset.filter) {
       activeFilter = filterButton.dataset.filter;
       renderList();
-    } else if (openButton?.dataset.open) {
-      void openProblem(openButton.dataset.open);
     } else if (target.closest("#open-selected")) {
       void openProblem(selected);
     } else if (target.closest("#log-child")) {

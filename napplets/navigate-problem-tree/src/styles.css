@@ -82,7 +82,7 @@ button { color: inherit; }
 .filters button[aria-pressed="true"] { color: var(--ink); background: white; box-shadow: 0 2px 8px rgba(23, 26, 34, .13); }
 .filters span { color: var(--faint); font-variant-numeric: tabular-nums; }
 .problem-list { margin: 0; padding: 16px 22px 70px; list-style: none; }
-.problem-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; border-bottom: 1px solid var(--line); }
+.problem-row { border-bottom: 1px solid var(--line); }
 .row-main { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 66px; border: 0; padding: 8px 8px; background: transparent; text-align: left; cursor: pointer; }
 .problem-row:hover { background: #f7f7f9; }
 .rank { color: var(--faint); font-size: .82rem; font-variant-numeric: tabular-nums; }
@@ -94,10 +94,6 @@ button { color: inherit; }
 .status-patched { color: var(--patched); background: var(--patched-bg); }
 .status-closed { color: var(--closed); background: var(--closed-bg); }
 .status-draft, .status-rfm, .status-big, .status-children { color: #24516a; background: #e1eff6; }
-.open-problem { align-self: center; width: 36px; height: 36px; border: 0; border-radius: 8px; color: var(--blue); background: transparent; cursor: pointer; }
-.open-problem svg { width: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
-.open-problem:hover:not(:disabled) { color: white; background: var(--blue); }
-.open-problem:disabled { color: #b8bbc4; cursor: not-allowed; }
 .empty { padding: 54px 8px; color: var(--muted); text-align: center; }
 .app-status { position: fixed; right: 20px; bottom: 16px; min-height: 1.3em; max-width: min(450px, calc(100vw - 40px)); color: var(--muted); background: rgba(255, 255, 255, .94); font-size: .75rem; }
 
