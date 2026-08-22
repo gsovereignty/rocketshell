@@ -17,6 +17,7 @@ export interface ProblemView {
   description: string;
   status: string;
   maintainers: string[];
+  parentOwners: string[];
   claim?: { eventId: string; claimant: string };
 }
 
@@ -37,8 +38,8 @@ export interface ProblemRevisionChange {
   after: string;
 }
 
-export const problemRevisionAuthors = (problem: Pick<ProblemView, "owner" | "maintainers">): string[] =>
-  [...new Set([problem.owner, ...problem.maintainers])];
+export const problemRevisionAuthors = (problem: Pick<ProblemView, "owner" | "maintainers" | "parentOwners">): string[] =>
+  [...new Set([problem.owner, ...problem.maintainers, ...problem.parentOwners])];
 
 export interface EffectiveClaim {
   eventId: string;
@@ -88,6 +89,9 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
     maintainers: selected.event.tags
       .filter((item) => item[0] === "p" && item[3] === "maintainer" && HEX_64.test(item[1] ?? ""))
       .map((item) => item[1]),
+    parentOwners: selected.event.tags
+      .filter((item) => item[0] === "p" && item[3] === undefined && HEX_64.test(item[1] ?? ""))
+      .map((item) => item[1]),
     claim: claim?.[1] && claim[2] ? { eventId: claim[1], claimant: claim[2] } : undefined
   };
 }
@@ -134,7 +138,7 @@ export function compareProblemRevisions(previous: ProblemRevision | undefined, c
 
 export function mayEditProblem(problem: ProblemView, currentPubkey: string) {
   return HEX_64.test(currentPubkey) &&
-    (currentPubkey === problem.owner || problem.maintainers.includes(currentPubkey));
+    (currentPubkey === problem.owner || problem.maintainers.includes(currentPubkey) || problem.parentOwners.includes(currentPubkey));
 }
 
 export function buildWorkflowTemplate(problem: ProblemView, content: string, action?: "claim"): EventTemplate {

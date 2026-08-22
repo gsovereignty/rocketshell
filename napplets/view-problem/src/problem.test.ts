@@ -13,7 +13,8 @@ describe("problem view", () => {
   it("validates coordinates", () => expect(parseCoordinate(coordinate).problemId).toBe(id));
   it("routes live revisions through owner and maintainer outboxes", () => {
     const maintainer = "e".repeat(64);
-    expect(problemRevisionAuthors({ owner, maintainers: [maintainer, owner] })).toEqual([owner, maintainer]);
+    const parentOwner = "f".repeat(64);
+    expect(problemRevisionAuthors({ owner, maintainers: [maintainer, owner], parentOwners: [parentOwner] })).toEqual([owner, maintainer, parentOwner]);
   });
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
   it("selects a newly received revision as current", () => {
@@ -62,16 +63,18 @@ describe("problem view", () => {
     expect(compareProblemRevisions(undefined, previous).map(({ field }) => field))
       .toEqual(["Title", "Description", "Status", "Maintainers"]);
   });
-  it("allows only owner or current maintainer to edit", () => {
+  it("allows owner, current maintainer, or direct parent owner to edit", () => {
     const maintainer = "e".repeat(64);
+    const parentOwner = "f".repeat(64);
     const baseEvent = (result as unknown as { event: { tags: string[][] } }).event;
     const maintainedResult = { event: { ...baseEvent,
-      tags: [...baseEvent.tags, ["p", maintainer, "", "maintainer"]] },
+      tags: [...baseEvent.tags, ["p", maintainer, "", "maintainer"], ["p", parentOwner, "wss://parent.example"]] },
       sidecar: { relayHints: ["wss://relay.example"] } } as never;
     const problem = selectProblem(coordinate, [maintainedResult]);
     expect(mayEditProblem(problem, owner)).toBe(true);
     expect(mayEditProblem(problem, maintainer)).toBe(true);
-    expect(mayEditProblem(problem, "f".repeat(64))).toBe(false);
+    expect(mayEditProblem(problem, parentOwner)).toBe(true);
+    expect(mayEditProblem(problem, "1".repeat(64))).toBe(false);
     expect(mayEditProblem(problem, "")).toBe(false);
   });
   it("resolves intent event targets to logical coordinates", () =>
@@ -112,7 +115,7 @@ describe("problem view", () => {
       coordinate: realCoordinate, owner: realOwner, problemId: realProblemId,
       revisionId: "70ba7eda72eceecccfb28209ec289e7e92d2797200ee20b04e0f5f03294d5ad7",
       revisionAuthor: realOwner, revisionCreatedAt: 1787310942, relay: "wss://nos.lol/",
-      title: "one more", description: "a more proper description again again", status: "open", maintainers: []
+      title: "one more", description: "a more proper description again again", status: "open", maintainers: [], parentOwners: []
     };
     const claimId = "8d2610a358b1715db6373c6803dd79154f0c5153e58444aa9bcf143ec8e18e72";
     const claim = { event: {

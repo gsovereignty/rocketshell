@@ -32,7 +32,8 @@ current revision, workflow state, related problem references, and NIP-22 kind
   `napplet:composer/problem-child` convention through NAP-INTENT.
 - Problem editing uses project-local `napplet:composer/problem-edit` through
   NAP-INTENT. Edit remains visible but disabled unless current identity is the
-  problem owner or a maintainer listed by current revision.
+  problem owner, a maintainer listed by current revision, or a direct parent
+  problem owner.
 - Registers the standard `note` archetype and accepts `napplet:note/open` event
   targets so problem navigators can open a selected revision in focused detail.
 - Shows each comment author's shortened pubkey and a deterministic generated

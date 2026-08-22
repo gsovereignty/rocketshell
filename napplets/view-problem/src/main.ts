@@ -130,7 +130,7 @@ function render() {
       : `<strong>Deadline unavailable</strong>`}</div>
   </div>` : "";
   app.innerHTML = `<article class="problem-view">
-    <header class="topbar"><button id="change-problem" type="button">Change problem</button><div class="topbar-actions"><button id="edit-problem" type="button" ${canEdit ? "" : "disabled"} title="${canEdit ? "Edit this problem" : "Only the author or a current maintainer can edit this problem"}">Edit problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></div></header>
+    <header class="topbar"><button id="change-problem" type="button">Change problem</button><div class="topbar-actions"><button id="edit-problem" type="button" ${canEdit ? "" : "disabled"} title="${canEdit ? "Edit this problem" : "Only the author, a current maintainer, or a direct parent author can edit this problem"}">Edit problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></div></header>
     <section class="problem-copy" aria-labelledby="problem-title">
       <div class="state-line"><span class="status status-${escapeHtml(displayedStatus)}"><i></i>${escapeHtml(statusLabel(displayedStatus))}</span></div>
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
