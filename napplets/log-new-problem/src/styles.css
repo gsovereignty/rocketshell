@@ -39,6 +39,12 @@ textarea { padding: 13px 14px; resize: vertical; line-height: 1.55; }
 input:focus, textarea:focus, select:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(16, 40, 50, .12); }
 .hint { display: flex; justify-content: flex-end; margin-top: 6px; color: var(--muted); font-size: .75rem; }
 .field .hint:first-of-type { justify-content: flex-start; }
+.attachment-field { display:flex; align-items:center; gap:14px; margin:-8px 0 25px; }
+.attachment-field button { flex:none; min-height:42px; border:1px solid var(--ink); padding:0 14px; color:var(--ink); background:transparent; font-weight:720; cursor:pointer; }
+.attachment-field button:hover:not(:disabled) { color:#fff; background:var(--ink); }
+.attachment-field button:focus-visible { outline:3px solid var(--signal); outline-offset:3px; }
+.attachment-field button:disabled { cursor:not-allowed; opacity:.42; }
+.attachment-field span { color:var(--muted); font-size:.75rem; line-height:1.4; }
 details { margin-top: 10px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
 summary { display: flex; justify-content: space-between; padding: 17px 0; cursor: pointer; font-weight: 720; }
 .summary-note { color: var(--muted); font-size: .75rem; font-weight: 550; }
@@ -65,5 +71,6 @@ fieldset { margin: 0 0 24px; padding: 18px; border: 1px solid var(--rule); }
   .context-row span { margin-top: 8px; }
   .action-rail { position: static; align-items: stretch; flex-direction: column; margin: 28px 0 0; padding: 17px 0 0; }
   #publish { justify-content: space-between; width: 100%; }
+  .attachment-field { align-items:stretch; flex-direction:column; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

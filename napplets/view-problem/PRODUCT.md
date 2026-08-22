@@ -41,6 +41,8 @@ current revision, workflow state, related problem references, and NIP-22 kind
   fallbacks.
 - Shows problem owner's profile name and avatar beneath problem title, with
   deterministic pubkey fallbacks when metadata or image loading is unavailable.
+- Resolves Markdown media references through shell-owned NAP-RESOURCE and renders
+  supported image/video blobs without direct browser network access.
 - Native form submission is forbidden by the `allow-scripts` sandbox.
 - No direct network access, browser storage, shell imports, or environment variables.
 

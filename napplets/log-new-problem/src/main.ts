@@ -1,4 +1,4 @@
-import { identity, inc, outbox } from "@napplet/sdk";
+import { identity, inc, outbox, upload } from "@napplet/sdk";
 import type { OutboxSubscription, RelayEventResult, Subscription } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
@@ -7,6 +7,7 @@ import {
   resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
 } from "./problem";
 import { publishSuccessMessage } from "./publish-result";
+import { attachmentMarkdown, insertAtSelection } from "./attachment";
 
 const root = document.querySelector<HTMLElement>("#app");
 if (!root) throw new Error("Application root is missing.");
@@ -31,6 +32,11 @@ root.innerHTML = `
         <label for="description">What is happening?</label>
         <textarea id="description" name="description" rows="12" required placeholder="Describe current behavior, impact, and enough context to understand the problem."></textarea>
         <span class="hint"><output id="count">0</output> characters</span>
+      </div>
+      <div class="attachment-field" id="attachment-field">
+        <input id="attachment" type="file" accept="image/*,video/*" hidden>
+        <button id="attach-media" type="button">Add image or video</button>
+        <span id="attachment-status">Uploads insert a Markdown reference into description.</span>
       </div>
       <details id="advanced">
         <summary><span>Protocol options</span><span class="summary-note">Optional</span></summary>
@@ -69,6 +75,8 @@ const parentId = document.querySelector<HTMLElement>("#parent-id")!;
 const mode = document.querySelector<HTMLElement>("#mode")!;
 const advanced = document.querySelector<HTMLDetailsElement>("#advanced")!;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const uploadAvailable = Boolean((window as Window & { napplet?: { upload?: unknown } }).napplet?.upload);
+let uploading = false;
 
 let pubkey = "";
 let parent: ParentContext | undefined;
@@ -198,8 +206,46 @@ advanced.addEventListener("toggle", () => {
   if (advanced.open) animate(advanced.querySelector(".advanced-grid"), { duration: 0.24 });
 });
 
+const attachmentInput = document.querySelector<HTMLInputElement>("#attachment")!;
+const attachButton = document.querySelector<HTMLButtonElement>("#attach-media")!;
+const attachmentStatus = document.querySelector<HTMLElement>("#attachment-status")!;
+if (!uploadAvailable) {
+  attachButton.disabled = true;
+  attachmentStatus.textContent = "Media uploads are unavailable in this shell.";
+}
+attachButton.addEventListener("click", () => attachmentInput.click());
+attachmentInput.addEventListener("change", () => void uploadAttachment());
+
+async function uploadAttachment() {
+  const file = attachmentInput.files?.[0];
+  if (!file || uploading || !uploadAvailable) return;
+  uploading = true;
+  attachButton.disabled = true;
+  publishButton.disabled = true;
+  attachmentStatus.textContent = `Uploading ${file.name}…`;
+  try {
+    const result = await upload.upload({ data: file, filename: file.name, mimeType: file.type || undefined });
+    if (!result.ok || result.status !== "complete" || !result.url) throw new Error(result.error ?? "Media upload did not complete.");
+    const caption = file.name.replace(/\.[^.]+$/, "") || "Attached media";
+    insertAtSelection(description, attachmentMarkdown(result.url, caption));
+    attachmentStatus.textContent = `${file.name} added to description.`;
+    description.focus();
+  } catch (error) {
+    console.error("Problem media upload failed", { filename: file.name, mimeType: file.type, size: file.size, error });
+    attachmentStatus.textContent = error instanceof Error ? error.message : "Media upload failed. Try again.";
+  } finally {
+    uploading = false;
+    attachButton.disabled = !uploadAvailable;
+    publishButton.disabled = !pubkey || childRequestPending || (mode.textContent === "Child" && !parent);
+    attachmentInput.value = "";
+  }
+}
+
 async function publishProblem() {
-  if (childRequestPending) return;
+  if (childRequestPending || uploading) {
+    if (uploading) setStatus("Wait for media upload to finish before publishing.", "busy");
+    return;
+  }
   publishButton.disabled = true;
   setStatus("Preparing event for shell approval…", "busy");
   try {

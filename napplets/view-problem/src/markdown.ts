@@ -22,7 +22,7 @@ export function renderMarkdownInline(source: string): string {
     }
     const image = source.slice(index).match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/);
     if (image) {
-      output += `<span class="markdown-image">${renderMarkdownInline(image[1])}</span>`;
+      output += `<span class="markdown-media" data-media-url="${escapeHtml(image[2])}" data-media-alt="${escapeHtml(image[1])}"><span>${renderMarkdownInline(image[1])}</span><code>${escapeHtml(image[2])}</code></span>`;
       index += image[0].length;
       continue;
     }

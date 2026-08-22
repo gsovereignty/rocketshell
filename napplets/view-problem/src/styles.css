@@ -57,7 +57,11 @@ button { color: inherit; }
 .markdown-body del { color:var(--muted); }
 .markdown-link { color:var(--blue); }
 .markdown-link code { margin-inline-start:.35em; color:var(--muted); font-size:.72em; }
-.markdown-image { color:var(--muted); font-style:italic; }
+.markdown-media { display:grid; gap:4px; margin:.8em 0; border:1px solid var(--line); padding:14px 16px; color:var(--muted); background:#f7f7f9; font-style:italic; }
+.markdown-media code { overflow-wrap:anywhere; color:var(--muted); font-size:.72em; font-style:normal; }
+.markdown-media[data-state="error"] { color:#8b2d2d; background:#fff0f0; }
+.problem-media { display:block; width:auto; max-width:100%; max-height:min(70vh,720px); margin:1em 0; background:#f7f7f9; object-fit:contain; }
+video.problem-media { width:min(100%,760px); }
 .actions { display:flex; align-items:center; gap:24px; margin-top:32px; }
 .primary { min-height:52px; border-radius:10px; padding:0 24px; }
 .primary:disabled { color:#858995; background:#e4e5e9; cursor:not-allowed; }

@@ -1,8 +1,9 @@
-import { identity, inc, intent, outbox, themeGet, themeOnChanged, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
+import { identity, inc, intent, outbox, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
+import { attachmentMarkdown, insertAtSelection } from "./attachment";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("App root is missing.");
@@ -17,6 +18,8 @@ let problemEvents: RelayEventResult[] = [];
 let loadGeneration = 0;
 let pubkey = "";
 let busy = false;
+let uploading = false;
+const uploadAvailable = Boolean((window as Window & { napplet?: { upload?: unknown } }).napplet?.upload);
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
 const shortKey = (value: string) => `${value.slice(0, 8)}…${value.slice(-5)}`;
@@ -101,6 +104,11 @@ function renderEditor(problem: EditableProblem): void {
         <div class="section-title"><h1 id="editor-title">Next revision</h1><p>Update problem details, then publish complete snapshot.</p></div>
         <div class="field"><label for="title">Title</label><input id="title" maxlength="180" value="${escapeHtml(problem.title)}" ${disabled ? "disabled" : ""}></div>
         <div class="field grow"><label for="description">Description</label><textarea id="description" rows="10" ${disabled ? "disabled" : ""}>${escapeHtml(problem.description)}</textarea></div>
+        <div class="attachment-field">
+          <input id="attachment" type="file" accept="image/*,video/*" hidden ${disabled || !uploadAvailable ? "disabled" : ""}>
+          <button id="attach-media" type="button" ${disabled || !uploadAvailable || uploading ? "disabled" : ""}>${uploading ? "Uploading…" : "Add image or video"}</button>
+          <span id="attachment-status">${uploadAvailable ? "Uploads insert a Markdown reference into description." : "Media uploads are unavailable in this shell."}</span>
+        </div>
         <div class="field-row">
           <div class="field"><label for="problem-status">Status</label><select id="problem-status" ${disabled ? "disabled" : ""}>${STATUSES.map((value) => `<option value="${value}"${value === problem.status ? " selected" : ""}>${value}</option>`).join("")}</select></div>
           <div class="field"><label for="child-status">New child default</label><select id="child-status" ${disabled ? "disabled" : ""}><option value="">Not set</option><option value="open"${problem.childStatus === "open" ? " selected" : ""}>open</option><option value="rfm"${problem.childStatus === "rfm" ? " selected" : ""}>rfm</option></select></div>
@@ -110,6 +118,9 @@ function renderEditor(problem: EditableProblem): void {
     </div>
   </article>`;
   document.querySelector("#publish")?.addEventListener("click", () => void publishRevision());
+  const attachmentInput = document.querySelector<HTMLInputElement>("#attachment");
+  document.querySelector("#attach-media")?.addEventListener("click", () => attachmentInput?.click());
+  attachmentInput?.addEventListener("change", () => void uploadAttachment(attachmentInput));
   document.querySelector(".edit-panel")?.addEventListener("keydown", (event) => {
     const keyboardEvent = event as KeyboardEvent;
     if (keyboardEvent.key === "Enter" && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
@@ -119,6 +130,35 @@ function renderEditor(problem: EditableProblem): void {
   });
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     gsap.fromTo(".masthead, aside, .edit-panel", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .065, ease: "expo.out" });
+  }
+}
+
+async function uploadAttachment(input: HTMLInputElement): Promise<void> {
+  const file = input.files?.[0];
+  const description = document.querySelector<HTMLTextAreaElement>("#description");
+  const attachmentStatus = document.querySelector<HTMLElement>("#attachment-status");
+  if (!file || !description || !attachmentStatus || uploading || !uploadAvailable) return;
+  uploading = true;
+  const button = document.querySelector<HTMLButtonElement>("#attach-media");
+  const publishButton = document.querySelector<HTMLButtonElement>("#publish");
+  if (button) { button.disabled = true; button.textContent = "Uploading…"; }
+  if (publishButton) publishButton.disabled = true;
+  attachmentStatus.textContent = `Uploading ${file.name}…`;
+  try {
+    const result = await upload.upload({ data: file, filename: file.name, mimeType: file.type || undefined });
+    if (!result.ok || result.status !== "complete" || !result.url) throw new Error(result.error ?? "Media upload did not complete.");
+    const caption = file.name.replace(/\.[^.]+$/, "") || "Attached media";
+    insertAtSelection(description, attachmentMarkdown(result.url, caption));
+    attachmentStatus.textContent = `${file.name} added to description.`;
+    description.focus();
+  } catch (error) {
+    console.error("Problem revision media upload failed", { problemId: current?.problemId, filename: file.name, mimeType: file.type, size: file.size, error });
+    attachmentStatus.textContent = error instanceof Error ? error.message : "Media upload failed. Try again.";
+  } finally {
+    uploading = false;
+    input.value = "";
+    if (button) { button.disabled = !current?.mayEdit; button.textContent = "Add image or video"; }
+    if (publishButton) publishButton.disabled = !current?.mayEdit || busy;
   }
 }
 
@@ -160,7 +200,10 @@ async function loadProblem(problemId: string): Promise<boolean> {
 }
 
 async function publishRevision(): Promise<void> {
-  if (!current || !current.mayEdit || busy) return;
+  if (!current || !current.mayEdit || busy || uploading) {
+    if (uploading) status("Wait for media upload to finish before publishing.");
+    return;
+  }
   const publishingProblem = current;
   const title = document.querySelector<HTMLInputElement>("#title")?.value ?? "";
   const description = document.querySelector<HTMLTextAreaElement>("#description")?.value ?? "";

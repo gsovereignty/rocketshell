@@ -14,7 +14,7 @@ describe("renderMarkdown", () => {
 
   it("does not load Markdown images or navigate links directly", () => {
     expect(renderMarkdown("![diagram](https://example.com/a.png) [spec](https://example.com/spec)"))
-      .toBe('<p><span class="markdown-image">diagram</span> <span class="markdown-link">spec<code>https://example.com/spec</code></span></p>');
+      .toBe('<p><span class="markdown-media" data-media-url="https://example.com/a.png" data-media-alt="diagram"><span>diagram</span><code>https://example.com/a.png</code></span> <span class="markdown-link">spec<code>https://example.com/spec</code></span></p>');
   });
 });
 

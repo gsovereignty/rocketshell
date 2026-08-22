@@ -37,6 +37,11 @@ dt { color:var(--muted); } dd { margin:0; }
 .field input:focus,.field textarea:focus,.field select:focus { border-color:var(--accent); }
 .field input { font-size:1.08rem; font-weight:650; line-height:1.25; }
 .field textarea { min-height:220px; resize:vertical; line-height:1.6; }
+.attachment-field { display:flex; align-items:center; gap:14px; margin:-8px 0 26px; }
+.attachment-field button { flex:none; min-height:42px; border:1px solid var(--accent); border-radius:10px; padding:0 15px; color:var(--accent); background:transparent; font-weight:720; cursor:pointer; }
+.attachment-field button:hover:not(:disabled) { color:#fff; background:var(--accent); }
+.attachment-field button:disabled { cursor:not-allowed; opacity:.46; }
+.attachment-field span { color:var(--muted); font-size:.78rem; line-height:1.4; }
 .field-row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
 footer { display:flex; align-items:center; justify-content:space-between; gap:24px; border-top:1px solid var(--line); padding-top:22px; }
 footer button { min-height:50px; border:0; border-radius:10px; background:var(--accent); color:white; padding:0 22px; font-weight:750; cursor:pointer; }
@@ -45,6 +50,6 @@ footer button:active:not(:disabled) { transform:translateY(1px); }
 button:disabled { opacity:.46; cursor:not-allowed; }
 .status { min-height:1.3em; margin:0; color:var(--muted); font-size:.84rem; }
 .status[data-error="true"] { color:var(--error); }
-@media(max-width:680px){.waiting{grid-template-columns:1fr;align-content:center}.mark{width:82px}.workspace{grid-template-columns:1fr}.masthead{gap:16px}aside{position:static}.field-row{grid-template-columns:1fr}footer{align-items:stretch;flex-direction:column}footer button{width:100%;min-height:50px}}
+@media(max-width:680px){.waiting{grid-template-columns:1fr;align-content:center}.mark{width:82px}.workspace{grid-template-columns:1fr}.masthead{gap:16px}aside{position:static}.field-row{grid-template-columns:1fr}.attachment-field{align-items:stretch;flex-direction:column}footer{align-items:stretch;flex-direction:column}footer button{width:100%;min-height:50px}}
 @media(max-width:360px){.editor-shell{padding:14px}.authority{max-width:110px;text-align:center}.workspace{gap:26px}.waiting{padding:18px}.waiting h1{font-size:2.2rem}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}

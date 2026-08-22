@@ -19,6 +19,8 @@ boundary without handling keys or relays directly.
   disclosure.
 - Clearly distinguish a new root problem from a child of an existing problem.
 - Receive child context from shell intent delivery as a validated problem ID.
+- Upload images and videos through optional shell-owned NAP-UPLOAD and insert
+  returned HTTPS URLs into description as Markdown media references.
 - Resolve the parent event through the shell, derive required graph and parent tags,
   then publish an unsigned event template through the shell.
 - Show pending, success, validation, missing-capability, lookup, and publish states.
@@ -31,7 +33,7 @@ boundary without handling keys or relays directly.
   archetype exists in the living registry.
 - `napplet:composer/problem-child` is a project-local convention, not a NAP or
   registry standard. Payload version 1 is `{ "problemId": "<64 lowercase hex>" }`.
-- Shell owns identity, signing, relay selection, querying, and publishing.
+- Shell owns identity, signing, relay selection, querying, publishing, and uploads.
 
 ## Constraints
 

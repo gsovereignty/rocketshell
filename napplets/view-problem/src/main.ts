@@ -39,6 +39,8 @@ let countdownTimer: ReturnType<typeof setInterval> | undefined;
 const profiles = new Map<string, ProfileData>();
 const avatarHandles = new Map<string, { url: string; revoke(): void }>();
 const avatarRequestVersions = new Map<string, number>();
+const mediaObjectUrls = new Set<string>();
+let mediaRenderVersion = 0;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => ({
@@ -46,6 +48,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => (
 })[character]!);
 
 function showSetup(message = "") {
+  resetMedia();
   stopDiscussionSubscription();
   if (countdownTimer) clearInterval(countdownTimer);
   app.innerHTML = `<section class="setup" aria-labelledby="setup-title">
@@ -69,6 +72,7 @@ function showSetup(message = "") {
 }
 
 function showLoadingProblem() {
+  resetMedia();
   stopDiscussionSubscription();
   if (countdownTimer) clearInterval(countdownTimer);
   app.innerHTML = `<section class="setup loading-state" aria-labelledby="loading-title" aria-live="polite">
@@ -109,6 +113,7 @@ const renderChanges = (changes: ReturnType<typeof compareProblemRevisions>) => c
 
 function render() {
   if (!problem) return;
+  resetMedia();
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
   const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
   const edits = problemEdits(revisions);
@@ -169,8 +174,65 @@ function render() {
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
+  void hydrateMedia(mediaRenderVersion);
   syncClaimCountdown(effectiveClaim?.expiresAt);
   if (!reducedMotion) gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+}
+
+function resetMedia(): void {
+  mediaRenderVersion += 1;
+  mediaObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  mediaObjectUrls.clear();
+}
+
+async function hydrateMedia(version: number): Promise<void> {
+  const placeholders = [...document.querySelectorAll<HTMLElement>("[data-media-url]")];
+  await Promise.all(placeholders.map(async (placeholder) => {
+    const url = placeholder.dataset.mediaUrl;
+    const alt = placeholder.dataset.mediaAlt || "Attached media";
+    if (!url) return;
+    try {
+      const blob = await resource.bytes(url);
+      if (version !== mediaRenderVersion || !placeholder.isConnected) return;
+      if (!blob.type.startsWith("image/") && !blob.type.startsWith("video/")) {
+        throw new Error(`Unsupported media type: ${blob.type || "unknown"}`);
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      mediaObjectUrls.add(objectUrl);
+      const replaceDecodeFailure = (element: HTMLElement, kind: "image" | "video") => {
+        console.warn(`Problem ${kind} decode failed`, { url, mimeType: blob.type });
+        URL.revokeObjectURL(objectUrl);
+        mediaObjectUrls.delete(objectUrl);
+        const fallback = document.createElement("span");
+        fallback.className = "markdown-media";
+        fallback.dataset.state = "error";
+        fallback.textContent = `${kind === "image" ? "Image" : "Video"} unavailable: ${alt}`;
+        element.replaceWith(fallback);
+      };
+      if (blob.type.startsWith("image/")) {
+        const image = document.createElement("img");
+        image.className = "problem-media";
+        image.src = objectUrl;
+        image.alt = alt;
+        image.addEventListener("error", () => replaceDecodeFailure(image, "image"), { once: true });
+        placeholder.replaceWith(image);
+        return;
+      }
+      const video = document.createElement("video");
+      video.className = "problem-media";
+      video.src = objectUrl;
+      video.controls = true;
+      video.preload = "metadata";
+      video.setAttribute("aria-label", alt);
+      video.addEventListener("error", () => replaceDecodeFailure(video, "video"), { once: true });
+      placeholder.replaceWith(video);
+    } catch (error) {
+      console.warn("Problem media load failed", { url, error });
+      if (version !== mediaRenderVersion || !placeholder.isConnected) return;
+      placeholder.dataset.state = "error";
+      placeholder.replaceChildren(document.createTextNode(`Media unavailable: ${alt}`));
+    }
+  }));
 }
 
 function syncClaimCountdown(deadline?: number) {
@@ -471,5 +533,6 @@ addEventListener("beforeunload", () => {
   if (countdownTimer) clearInterval(countdownTimer);
   avatarHandles.forEach((handle) => handle.revoke());
   avatarRequestVersions.clear();
+  resetMedia();
 });
 void start();
