@@ -83,7 +83,7 @@ button { color: inherit; }
 .filters span { color: var(--faint); font-variant-numeric: tabular-nums; }
 .problem-list { margin: 0; padding: 16px 22px 70px; list-style: none; }
 .problem-row { border-bottom: 1px solid var(--line); }
-.row-main { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 66px; border: 0; padding: 8px 8px; background: transparent; text-align: left; cursor: pointer; }
+.row-main { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; width: 100%; min-height: 66px; border: 0; padding: 8px 8px; background: transparent; text-align: left; cursor: pointer; }
 .problem-row:hover { background: #f7f7f9; }
 .rank { color: var(--faint); font-size: .82rem; font-variant-numeric: tabular-nums; }
 .row-title { overflow: hidden; font-size: 1rem; font-weight: 520; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
