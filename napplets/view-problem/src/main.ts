@@ -411,20 +411,41 @@ async function loadProblem(value: string) {
     if (status) status.textContent = "Loading current revision and discussion…";
     stopDiscussionSubscription();
     generation = loadGeneration;
+    problem = undefined;
+    comments = [];
+    relatedEvents = [];
+    related = [];
+    liveMessage = "Syncing discussion and revisions…";
     const filters = [
       { kinds: [31971], "#d": [target.problemId] },
       { kinds: [COMMENT_KIND], "#A": [target.coordinate] },
       { kinds: [31971], "#a": [target.coordinate] }
     ];
-    const buffered: RelayEventResult[] = [];
-    let hydrated = false;
+    const receiveInitial = (result: RelayEventResult) => {
+      if (generation !== loadGeneration) return;
+      const collection = result.event.kind === COMMENT_KIND ? comments : relatedEvents;
+      if (collection.some(({ event }) => event.id === result.event.id)) return;
+      collection.push(result);
+      if (result.event.kind === 31971) {
+        try {
+          problem = selectProblem(target.coordinate, relatedEvents);
+        } catch (error) {
+          console.warn("Cached problem revision set is not renderable yet", {
+            coordinate: target.coordinate, eventId: result.event.id, error
+          });
+        }
+      }
+      if (!problem) return;
+      related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
+      render();
+      void loadProfiles([problem.owner, result.event.pubkey]);
+    };
     const subscribe = (authors: string[]) => {
       const subscription = outbox.subscribe(filters, { authors, timeoutMs: 8000 });
       discussionSubscription = subscription;
       subscription.on("event", (result) => {
         if (discussionSubscription !== subscription) return;
-        if (hydrated) receiveDiscussion(result);
-        else buffered.push(result);
+        receiveInitial(result);
       });
       subscription.on("closed", (reason) => {
         if (discussionSubscription !== subscription) return;
@@ -452,7 +473,7 @@ async function loadProblem(value: string) {
       if (generation !== loadGeneration) return;
       problemResults = [...problemResults, ...routedResponse.events];
     }
-    const initialRelated = [...response.events, ...buffered];
+    const initialRelated = response.events;
     const childProblemIds = [...new Set(initialRelated.flatMap(({ event }) => event.kind === 31971 &&
       event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === target.coordinate)
       ? event.tags.filter((item) => item[0] === "d").map((item) => item[1]) : []))];
@@ -466,7 +487,7 @@ async function loadProblem(value: string) {
     problem = selectProblem(target.coordinate, relatedEvents);
     comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
-    hydrated = true;
+    liveMessage = "";
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments, problemRevisionHistory(problem.coordinate, relatedEvents));
     void loadProfiles([
