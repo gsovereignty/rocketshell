@@ -22,13 +22,14 @@ describe("resource policy fetch", () => {
   });
   it("follows a cross-origin HTTPS image redirect", async () => {
     const image = new Uint8Array([0xff, 0xd8, 0xff, 0xdb]);
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(null, { status: 301, headers: { location: "https://image.example/avatar.jpg" } }))
-      .mockResolvedValueOnce(new Response(image));
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(image));
     vi.stubGlobal("fetch", fetchMock);
     const response = await createPolicyFetch({})("https://media.example/a", { signal: new AbortController().signal });
     expect(response.headers.get("content-type")).toBe("image/jpeg");
-    expect(fetchMock).toHaveBeenNthCalledWith(2, new URL("https://image.example/avatar.jpg"), expect.objectContaining({ redirect: "manual" }));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(new URL("https://media.example/a"), expect.objectContaining({
+      redirect: "follow", credentials: "omit", referrerPolicy: "no-referrer"
+    }));
   });
   it.each([
     ["MP4", new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]), "video/mp4"],

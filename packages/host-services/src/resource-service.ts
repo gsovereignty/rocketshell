@@ -38,29 +38,23 @@ export function createPolicyFetch(policy: ResourcePolicy): (url: string, init: {
     const controller = new AbortController(); const abort = () => controller.abort(); init.signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(abort, timeoutMs);
     try {
-      let current = validateUrl(raw, policy.allowHttpLocalhost ?? false);
-      for (let redirects = 0; redirects <= 5; redirects += 1) {
-        const headers = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([name]) => !["authorization", "cookie", "proxy-authorization"].includes(name.toLowerCase())));
-        const response = await fetch(current, { method: init.method ?? "GET", headers, signal: controller.signal, redirect: "manual", credentials: "omit", referrerPolicy: "no-referrer" });
-        if (response.status >= 300 && response.status < 400) {
-          const location = response.headers.get("location");
-          if (!location || redirects === 5) throw new ResourceServiceError("blocked-by-policy", "Resource redirect denied");
-          const redirected = validateUrl(new URL(location, current).toString(), policy.allowHttpLocalhost ?? false);
-          current = redirected; continue;
-        }
-        if (!response.ok || !response.body) throw new ResourceServiceError("network-error", "Resource request failed");
-        const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let total = 0;
-        while (true) {
-          const item = await reader.read(); if (item.done) break;
-          total += item.value.byteLength; if (total > maximumBytes) { await reader.cancel(); throw new ResourceServiceError("too-large", "Resource exceeds byte limit"); }
-          chunks.push(item.value);
-        }
-        const bytes = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-        const mime = sniffMime(bytes); if (!allowedMimeTypes.has(mime)) throw new ResourceServiceError("decode-failed", "Resource media type denied");
-        telemetry.record("resource.bytes", total, { mime });
-        return new Response(bytes, { status: 200, headers: { "Content-Type": mime, "Content-Length": String(total) } });
+      const initial = validateUrl(raw, policy.allowHttpLocalhost ?? false);
+      const headers = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([name]) => !["authorization", "cookie", "proxy-authorization"].includes(name.toLowerCase())));
+      // Browsers expose a cross-origin manual redirect only as an opaque status-0
+      // response. Follow without ambient credentials, then validate final URL.
+      const response = await fetch(initial, { method: init.method ?? "GET", headers, signal: controller.signal, redirect: "follow", credentials: "omit", referrerPolicy: "no-referrer" });
+      if (response.url) validateUrl(response.url, policy.allowHttpLocalhost ?? false);
+      if (!response.ok || !response.body) throw new ResourceServiceError("network-error", "Resource request failed");
+      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let total = 0;
+      while (true) {
+        const item = await reader.read(); if (item.done) break;
+        total += item.value.byteLength; if (total > maximumBytes) { await reader.cancel(); throw new ResourceServiceError("too-large", "Resource exceeds byte limit"); }
+        chunks.push(item.value);
       }
-      throw new ResourceServiceError("blocked-by-policy", "Resource redirect limit exceeded");
+      const bytes = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      const mime = sniffMime(bytes); if (!allowedMimeTypes.has(mime)) throw new ResourceServiceError("decode-failed", "Resource media type denied");
+      telemetry.record("resource.bytes", total, { mime });
+      return new Response(bytes, { status: 200, headers: { "Content-Type": mime, "Content-Length": String(total) } });
     } catch (error) {
       if (error instanceof ResourceServiceError) { telemetry.record("resource.denied", 1, { reason: error.code }); throw error; }
       if (controller.signal.aborted) { telemetry.record("resource.timeout", 1); throw new ResourceServiceError("timeout", "Resource request timed out"); }
