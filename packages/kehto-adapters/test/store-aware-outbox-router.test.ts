@@ -28,7 +28,76 @@ const relayRouter = () => {
   return { router, close, getSink: () => sink! };
 };
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => { resolve = next; });
+  return { promise, resolve };
+};
+
 describe("store-aware outbox router", () => {
+  it("returns an exact cached query without waiting for the relay", async () => {
+    const store = new EventStore();
+    const relay = relayRouter();
+    const pending = deferred<{ events: [] }>();
+    relay.router.query = vi.fn(() => pending.promise);
+    const revision = event(31971, "cached revision");
+    store.add(revision);
+
+    const response = await createStoreAwareOutboxRouter(relay.router, store)
+      .query([{ ids: [revision.id], kinds: [31971] }], { limit: 1 });
+
+    expect(response.events).toEqual([{ event: revision }]);
+    expect(relay.router.query).toHaveBeenCalledOnce();
+    pending.resolve({ events: [] });
+    store.dispose();
+  });
+
+  it("uses the network path when an exact event is absent", async () => {
+    const store = new EventStore();
+    const relay = relayRouter();
+    const revision = event(31971, "remote revision");
+    relay.router.query = vi.fn().mockResolvedValue({ events: [{ event: revision }] });
+
+    const response = await createStoreAwareOutboxRouter(relay.router, store)
+      .query([{ ids: [revision.id], kinds: [31971] }], { limit: 1 });
+
+    expect(response.events).toEqual([{ event: revision }]);
+    expect(store.getEvent(revision.id)).toBe(revision);
+    store.dispose();
+  });
+
+  it("merges and deduplicates cached and relay query results", async () => {
+    const store = new EventStore();
+    const relay = relayRouter();
+    const cached = event(31971, "cached revision");
+    const remote = event(31971, "newer revision");
+    store.add(cached);
+    relay.router.query = vi.fn().mockResolvedValue({
+      events: [{ event: cached }, { event: remote }]
+    });
+
+    const response = await createStoreAwareOutboxRouter(relay.router, store)
+      .query([{ kinds: [31971] }]);
+
+    expect(response.events.map(({ event }) => event.id)).toEqual([cached.id, remote.id]);
+    expect(store.getEvent(remote.id)).toBe(remote);
+    store.dispose();
+  });
+
+  it("replays matching cached ingress before relay completion", () => {
+    const store = new EventStore();
+    const relay = relayRouter();
+    const revision = event(31971, "cached revision");
+    store.add(revision);
+    const sink = { event: vi.fn(), closed: vi.fn() };
+
+    createStoreAwareOutboxRouter(relay.router, store)
+      .subscribe([{ kinds: [31971] }], undefined, sink);
+
+    expect(sink.event).toHaveBeenCalledWith({ event: revision });
+    store.dispose();
+  });
+
   it("delivers matching local ingress without a relay echo", () => {
     const store = new EventStore();
     const relay = relayRouter();
