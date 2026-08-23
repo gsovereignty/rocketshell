@@ -1,8 +1,9 @@
 /// <reference lib="webworker" />
 import { IndexedDbPackageStore, SERVICE_WORKER_PROTOCOL_VERSION, parseVirtualNappletUrl, parseWorkerRequest, routeNappletRequest, type WorkerReply } from "@platform/napplet-gateway/worker";
+import { isBuiltInNappletRequest } from "./service-worker-cache";
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
-const SHELL_CACHE = "platform-shell-v2";
+const SHELL_CACHE = "platform-shell-v3";
 const storePromise = IndexedDbPackageStore.open();
 
 worker.addEventListener("install", (event: ExtendableEvent) => {
@@ -11,7 +12,12 @@ worker.addEventListener("install", (event: ExtendableEvent) => {
 });
 
 worker.addEventListener("activate", (event: ExtendableEvent) => {
-  event.waitUntil(worker.clients.claim());
+  event.waitUntil(Promise.all([
+    worker.clients.claim(),
+    caches.keys().then((names) => Promise.all(names
+      .filter((name) => name.startsWith("platform-shell-") && name !== SHELL_CACHE)
+      .map((name) => caches.delete(name))))
+  ]).then(() => undefined));
 });
 
 worker.addEventListener("message", (event: ExtendableMessageEvent) => {
@@ -37,6 +43,10 @@ worker.addEventListener("fetch", (event: FetchEvent) => {
   const scopePath = new URL(worker.registration.scope).pathname;
   if (parseVirtualNappletUrl(requestUrl, scopePath)) {
     event.respondWith(storePromise.then((store) => routeNappletRequest(event.request, scopePath, store)).then((response) => response ?? new Response("Not found", { status: 404 })));
+    return;
+  }
+  if (isBuiltInNappletRequest(requestUrl.pathname, scopePath)) {
+    event.respondWith(fetch(event.request, { cache: "no-store" }));
     return;
   }
   if (import.meta.env.DEV) {
