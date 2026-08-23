@@ -117,7 +117,11 @@ export function descendantsCount(dag: ProblemDag, coordinate: string): number {
 }
 
 export function visibleTreeRoots(dag: ProblemDag): string[] {
-  return dag.children.get(dag.rootCoordinate) ?? [];
+  return visibleTreeChildren(dag, dag.rootCoordinate);
+}
+
+export function visibleTreeChildren(dag: ProblemDag, coordinate: string): string[] {
+  return (dag.children.get(coordinate) ?? []).filter((child) => (dag.children.get(child)?.length ?? 0) > 0);
 }
 
 export function leafDescendants(dag: ProblemDag, coordinate: string): ProblemNode[] {

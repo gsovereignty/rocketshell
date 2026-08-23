@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, visibleTreeRoots } from "./problem-dag";
+import {
+  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants,
+  visibleTreeChildren, visibleTreeRoots
+} from "./problem-dag";
 
 const hex = (char: string) => char.repeat(64);
 const root = `31971:${hex("a")}:${hex("b")}`;
@@ -34,16 +37,20 @@ describe("problem DAG", () => {
     expect(descendantsCount(dag, root)).toBe(1);
   });
 
-  it("hides the DAG root from the visible tree", () => {
+  it("shows only problems with children in the visible tree", () => {
     const secondChild = `31971:${hex("e")}:${hex("f")}`;
+    const grandchild = `31971:${hex("6")}:${hex("7")}`;
     const dag = buildProblemDag(root, [
       problem(root, hex("1")),
       problem(child, hex("2"), [["a", root, ""]]),
-      problem(secondChild, hex("3"), [["a", root, ""]])
+      problem(secondChild, hex("3"), [["a", root, ""]]),
+      problem(grandchild, hex("4"), [["a", child, ""]])
     ]);
 
-    expect(visibleTreeRoots(dag)).toEqual([child, secondChild]);
+    expect(visibleTreeRoots(dag)).toEqual([child]);
     expect(visibleTreeRoots(dag)).not.toContain(root);
+    expect(visibleTreeRoots(dag)).not.toContain(secondChild);
+    expect(visibleTreeChildren(dag, child)).toEqual([]);
   });
 
   it("keeps parent candidates from forked heads visible", () => {

@@ -9,7 +9,8 @@ import { intent, outbox, type OutboxSubscription, type RelayEventResult } from "
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel, visibleTreeRoots,
+  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel,
+  visibleTreeChildren, visibleTreeRoots,
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
 import {
@@ -93,7 +94,7 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
   const node = dag.nodes.get(coordinate);
   if (!node) return "";
   const nextTrail = new Set(trail).add(coordinate);
-  const children = dag.children.get(coordinate) ?? [];
+  const children = visibleTreeChildren(dag, coordinate);
   const isSelected = selected === coordinate;
   return `<li class="branch" style="--depth:${depth}">
     <button class="tree-node${isSelected ? " selected" : ""}" data-select="${coordinate}" aria-current="${isSelected ? "true" : "false"}">
