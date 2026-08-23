@@ -4,7 +4,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   CHILD_CONVENTION, HEX_64, buildProblemTemplate, createProblemId, isChildPayload,
-  resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
+  parentGraphRoot, resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
 } from "./problem";
 import { publishSuccessMessage } from "./publish-result";
 import { attachmentMarkdown, insertAtSelection } from "./attachment";
@@ -110,7 +110,7 @@ function receiveParentRevision(problemIdValue: string, result: RelayEventResult)
   try {
     const previous = parent;
     const next = resolveParent(problemIdValue, parentEvents);
-    if (next.revisionId === previous.revisionId) return;
+    if (next.revisionId === previous.revisionId && next.ancestorOwners.join() === previous.ancestorOwners.join()) return;
     parent = next;
     parentTitle.textContent = next.title;
     const problemStatus = document.querySelector<HTMLSelectElement>("#status")!;
@@ -152,7 +152,28 @@ async function loadParent(problemIdValue: string) {
     });
     const response = await outbox.query({ kinds: [31971], "#d": [problemIdValue], limit: 200 }, { limit: 200, timeoutMs: 8000 });
     if (generation !== parentLoadGeneration) return;
-    parentEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
+    const initialEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
+    const graphRoot = parentGraphRoot(problemIdValue, initialEvents);
+    const graphResponse = await outbox.query({ kinds: [31971], "#A": [graphRoot], limit: 1000 }, { limit: 1000, timeoutMs: 8000 });
+    if (generation !== parentLoadGeneration) return;
+    const graphSubscription = outbox.subscribe([
+      { kinds: [31971], "#d": [problemIdValue] },
+      { kinds: [31971], "#A": [graphRoot] }
+    ], { timeoutMs: 8000 });
+    parentSubscription = graphSubscription;
+    graphSubscription.on("event", (result) => {
+      if (parentSubscription !== graphSubscription) return;
+      if (hydrated) receiveParentRevision(problemIdValue, result);
+      else buffered.push(result);
+    });
+    graphSubscription.on("closed", (reason) => {
+      if (parentSubscription !== graphSubscription) return;
+      parentSubscription = undefined;
+      console.warn("Live parent DAG subscription closed", { problemId: problemIdValue, graphRoot, reason });
+      setStatus("Live parent ancestry updates stopped. Reopen composer to reconnect.", "error");
+    });
+    subscription.close();
+    parentEvents = Array.from(new Map([...initialEvents, ...graphResponse.events, ...buffered].map((result) => [result.event.id, result])).values());
     parent = resolveParent(problemIdValue, parentEvents);
     hydrated = true;
     parentTitle.textContent = parent.title;

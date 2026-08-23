@@ -22,7 +22,8 @@ boundary without handling keys or relays directly.
 - Upload images and videos through required shell-owned NAP-UPLOAD and insert
   returned HTTPS URLs into description as Markdown media references.
 - Resolve the parent event through the shell, derive required graph and parent tags,
-  then publish an unsigned event template through the shell.
+  resolve all ancestor owners, then publish an unsigned event template through
+  the shell with owner and ancestor maintainers.
 - Show pending, success, validation, missing-capability, lookup, and publish states.
 
 ## Protocol commitments

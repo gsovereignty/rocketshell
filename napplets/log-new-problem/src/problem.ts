@@ -18,6 +18,7 @@ export interface ParentContext {
   rootGenesisId: string;
   rootOwner: string;
   rootRelay: string;
+  ancestorOwners: string[];
   defaultChildStatus: "rfm" | "open";
 }
 
@@ -75,6 +76,8 @@ export function resolveParent(problemId: string, results: RelayEventResult[]): P
     throw new Error("Parent graph-root references are invalid.");
   }
 
+  const ancestorOwners = resolveAncestorOwners(event, results);
+
   return {
     problemId,
     title: tagValue(event, "title") ?? "Untitled parent",
@@ -87,8 +90,57 @@ export function resolveParent(problemId: string, results: RelayEventResult[]): P
     rootGenesisId,
     rootOwner: rootOwnerTag,
     rootRelay: tag(event, "A")?.[2] || relayHint(selected),
+    ancestorOwners: [owner, ...ancestorOwners.filter((ancestor) => ancestor !== owner)],
     defaultChildStatus: tagValue(event, "child_status") === "rfm" ? "rfm" : "open"
   };
+}
+
+const currentHead = (coordinate: string, results: RelayEventResult[]): RelayEventResult => {
+  const problemId = coordinate.split(":")[2] ?? "";
+  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
+    tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
+  if (!candidates.length) throw new Error(`Ancestor problem ${problemId} was not found.`);
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
+  if (heads.length !== 1) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
+  return heads[0];
+};
+
+export function resolveAncestorOwners(event: NostrEvent, results: RelayEventResult[]): string[] {
+  const owners = new Set<string>();
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const visit = (coordinate: string) => {
+    if (visiting.has(coordinate)) throw new Error("Problem ancestry contains a cycle.");
+    if (visited.has(coordinate)) return;
+    visiting.add(coordinate);
+    const owner = coordinate.split(":")[1] ?? "";
+    if (!HEX_64.test(owner)) throw new Error("Ancestor problem owner is invalid.");
+    const head = currentHead(coordinate, results).event;
+    owners.add(owner);
+    for (const parent of head.tags
+      .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
+      .map((item) => item[1])) visit(parent);
+    visiting.delete(coordinate);
+    visited.add(coordinate);
+  };
+  for (const parent of event.tags
+    .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
+    .map((item) => item[1])) visit(parent);
+  return [...owners].sort();
+}
+
+export function parentGraphRoot(problemId: string, results: RelayEventResult[]): string {
+  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND && tagValue(event, "d") === problemId);
+  if (!candidates.length) throw new Error("Parent problem was not found.");
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
+  if (heads.length !== 1) throw new Error("Parent has multiple current heads. Merge its revisions before adding a child.");
+  const root = tagValue(heads[0].event, "A");
+  if (!/^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(root ?? "")) throw new Error("Parent graph root is invalid.");
+  return root!;
 }
 
 export function createProblemId(random: Uint8Array): string {
@@ -131,7 +183,8 @@ export function buildProblemTemplate(
     );
   }
 
-  for (const maintainer of draft.maintainers) tags.push(["p", maintainer, "", "maintainer"]);
+  const requiredMaintainers = new Set([pubkey, ...(parent?.ancestorOwners ?? []), ...draft.maintainers]);
+  for (const maintainer of requiredMaintainers) tags.push(["p", maintainer, "", "maintainer"]);
   if (draft.childStatus) tags.push(["child_status", draft.childStatus]);
   if (draft.rocket) tags.push(["a", `31108:${draft.rocket.owner}:${draft.rocket.id}`, draft.rocket.relay, "rocket"]);
   if (draft.repository) tags.push(["a", `30617:${draft.repository.owner}:${draft.repository.id}`, draft.repository.relay, "repository"]);

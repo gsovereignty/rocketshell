@@ -32,6 +32,7 @@ describe("problem events", () => {
     expect(template.tags).toContainEqual(["a", `31971:${pubkey}:${id}`, "", "origin"]);
     expect(template.tags).toContainEqual(["A", `31971:${pubkey}:${id}`, ""]);
     expect(template.tags.some((item) => item[0] === "E")).toBe(false);
+    expect(template.tags).toContainEqual(["p", pubkey, "", "maintainer"]);
   });
 
   it("resolves a root parent and builds child graph tags", () => {
@@ -48,6 +49,31 @@ describe("problem events", () => {
     }, 10, parent);
     expect(template.tags).toContainEqual(["E", parentEventId, "wss://relay.example", owner]);
     expect(template.tags).toContainEqual(["e", parentEventId, "wss://relay.example", owner]);
+    expect(template.tags).toContainEqual(["p", owner, "", "maintainer"]);
+    expect(template.tags).toContainEqual(["p", hex("d"), "", "maintainer"]);
+  });
+
+  it("carries every parent ancestor into child maintainers", () => {
+    const rootOwner = hex("a");
+    const parentOwner = hex("b");
+    const rootId = hex("c");
+    const parentId = hex("d");
+    const rootCoordinate = `31971:${rootOwner}:${rootId}`;
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const root = result({ id: hex("1"), pubkey: rootOwner, tags: [
+      ["d", rootId], ["a", rootCoordinate, "", "origin"], ["A", rootCoordinate]
+    ] });
+    const parentEvent = result({ id: hex("2"), pubkey: parentOwner, tags: [
+      ["d", parentId], ["a", parentCoordinate, "", "origin"], ["A", rootCoordinate], ["a", rootCoordinate]
+    ] });
+    const parent = resolveParent(parentId, [parentEvent, root]);
+    const childOwner = hex("e");
+    const template = buildProblemTemplate(childOwner, hex("f"), {
+      title: "Child", description: "Details", status: "open", maintainers: []
+    }, 10, parent);
+    for (const maintainer of [childOwner, parentOwner, rootOwner]) {
+      expect(template.tags).toContainEqual(["p", maintainer, "", "maintainer"]);
+    }
   });
 
   it("rejects forked parent heads", () => {

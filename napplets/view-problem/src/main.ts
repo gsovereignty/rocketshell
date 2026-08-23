@@ -9,7 +9,8 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates,
-  mayEditProblem, problemEdits, problemRevisionAuthors, problemRevisionHistory, selectEffectiveClaim, selectProblem, shortKey,
+  mayEditProblem, problemEdits, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
+  selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
 import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
@@ -26,6 +27,7 @@ const app = (() => {
 let problem: ProblemView | undefined;
 let comments: RelayEventResult[] = [];
 let relatedEvents: RelayEventResult[] = [];
+let ancestorOwners: string[] = [];
 let related: string[] = [];
 let pubkey = "";
 let discussionSubscription: OutboxSubscription | undefined;
@@ -42,6 +44,16 @@ const avatarRequestVersions = new Map<string, number>();
 const mediaObjectUrls = new Set<string>();
 let mediaRenderVersion = 0;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function refreshAncestorOwners(coordinate: string): void {
+  if (!problem) return;
+  try {
+    ancestorOwners = resolveProblemAncestorOwners(problem, relatedEvents);
+  } catch (error) {
+    ancestorOwners = [];
+    console.warn("Problem ancestor authorization could not be resolved", { coordinate, error });
+  }
+}
 
 const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
@@ -126,7 +138,7 @@ function render() {
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
-  const canEdit = mayEditProblem(problem, pubkey);
+  const canEdit = mayEditProblem(problem, pubkey, ancestorOwners);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
     <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
@@ -135,7 +147,7 @@ function render() {
       : `<strong>Deadline unavailable</strong>`}</div>
   </div>` : "";
   app.innerHTML = `<article class="problem-view">
-    <header class="topbar"><button id="change-problem" type="button">Change problem</button><div class="topbar-actions"><button id="edit-problem" type="button" ${canEdit ? "" : "disabled"} title="${canEdit ? "Edit this problem" : "Only the author, a current maintainer, or a direct parent author can edit this problem"}">Edit problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></div></header>
+    <header class="topbar"><button id="change-problem" type="button">Change problem</button><div class="topbar-actions"><button id="edit-problem" type="button" ${canEdit ? "" : "disabled"} title="${canEdit ? "Edit this problem" : "Only the owner, a current maintainer, or an ancestor owner can edit this problem"}">Edit problem</button><code title="${problem.coordinate}">${shortKey(problem.problemId)}</code></div></header>
     <section class="problem-copy" aria-labelledby="problem-title">
       <div class="state-line"><span class="status status-${escapeHtml(displayedStatus)}"><i></i>${escapeHtml(statusLabel(displayedStatus))}</span></div>
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
@@ -317,7 +329,7 @@ async function reportRelated() {
 }
 
 async function editProblem() {
-  if (!problem || !mayEditProblem(problem, pubkey)) return;
+  if (!problem || !mayEditProblem(problem, pubkey, ancestorOwners)) return;
   setLiveStatus("Opening problem editor…");
   try {
     const result = await intent.invoke({ archetype: "composer", action: "problem-edit", convention: "napplet:composer/problem-edit", payload: { problemId: problem.problemId }, behavior: { focus: true, reuse: true } });
@@ -414,9 +426,10 @@ async function loadProblem(value: string) {
     problem = undefined;
     comments = [];
     relatedEvents = [];
+    ancestorOwners = [];
     related = [];
     liveMessage = "Syncing discussion and revisions…";
-    const filters = [
+    let filters = [
       { kinds: [31971], "#d": [target.problemId] },
       { kinds: [COMMENT_KIND], "#A": [target.coordinate] },
       { kinds: [31971], "#a": [target.coordinate] }
@@ -429,6 +442,7 @@ async function loadProblem(value: string) {
       if (result.event.kind === 31971) {
         try {
           problem = selectProblem(target.coordinate, relatedEvents);
+          refreshAncestorOwners(target.coordinate);
         } catch (error) {
           console.warn("Cached problem revision set is not renderable yet", {
             coordinate: target.coordinate, eventId: result.event.id, error
@@ -464,7 +478,15 @@ async function loadProblem(value: string) {
     if (generation !== loadGeneration) return;
     let problemResults = problemResponse.events;
     const initialProblem = selectProblem(target.coordinate, problemResults);
-    const routedAuthors = problemRevisionAuthors(initialProblem);
+    const graphResponse = await outbox.query({ kinds: [31971], "#A": [initialProblem.rootCoordinate], limit: 1000 }, { limit: 1000, timeoutMs: 8000 });
+    if (generation !== loadGeneration) return;
+    const graphEvents = graphResponse.events;
+    const graphProblem = selectProblem(target.coordinate, [...problemResults, ...graphEvents]);
+    problem = graphProblem;
+    relatedEvents = graphEvents;
+    refreshAncestorOwners(target.coordinate);
+    const routedAuthors = [...new Set([...problemRevisionAuthors(graphProblem), ...ancestorOwners])];
+    filters = [...filters, { kinds: [31971], "#A": [graphProblem.rootCoordinate] }];
     if (routedAuthors.some((author) => author !== target.owner)) {
       const previousSubscription = subscription;
       subscription = subscribe(routedAuthors);
@@ -481,10 +503,11 @@ async function loadProblem(value: string) {
       ? (await outbox.query({ kinds: [31971], "#d": childProblemIds, limit: 300 }, { limit: 300, timeoutMs: 8000 })).events
       : [];
     if (generation !== loadGeneration) return;
-    const allResults = [...problemResults, ...initialRelated, ...childRevisions];
+    const allResults = [...problemResults, ...graphEvents, ...initialRelated, ...childRevisions];
     const uniqueResults = Array.from(new Map(allResults.map((result) => [result.event.id, result])).values());
     relatedEvents = uniqueResults.filter(({ event }) => event.kind === 31971);
     problem = selectProblem(target.coordinate, relatedEvents);
+    refreshAncestorOwners(target.coordinate);
     comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
     liveMessage = "";

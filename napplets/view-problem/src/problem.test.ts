@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, parseCoordinate, problemEdits, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, parseCoordinate, problemEdits, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, resolveProblemAncestorOwners, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -63,7 +63,7 @@ describe("problem view", () => {
     expect(compareProblemRevisions(undefined, previous).map(({ field }) => field))
       .toEqual(["Title", "Description", "Status", "Maintainers"]);
   });
-  it("allows owner, current maintainer, or direct parent owner to edit", () => {
+  it("allows owner, current maintainer, or resolved ancestor owner to edit", () => {
     const maintainer = "e".repeat(64);
     const parentOwner = "f".repeat(64);
     const baseEvent = (result as unknown as { event: { tags: string[][] } }).event;
@@ -76,6 +76,26 @@ describe("problem view", () => {
     expect(mayEditProblem(problem, parentOwner)).toBe(true);
     expect(mayEditProblem(problem, "1".repeat(64))).toBe(false);
     expect(mayEditProblem(problem, "")).toBe(false);
+  });
+  it("resolves ancestor owners through every parent level", () => {
+    const rootOwner = "d".repeat(64);
+    const parentOwner = "e".repeat(64);
+    const rootId = "1".repeat(64);
+    const parentId = "2".repeat(64);
+    const rootCoordinate = `31971:${rootOwner}:${rootId}`;
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const eventResult = (eventId: string, pubkey: string, problemId: string, origin: string, parents: string[] = []) => ({ event: {
+      id: eventId, pubkey, kind: 31971, created_at: 1, content: "Body", sig: "f".repeat(128),
+      tags: [["d", problemId], ["title", "Problem"], ["status", "open"], ["a", origin, "", "origin"],
+        ["A", rootCoordinate], ...parents.map((parent) => ["a", parent])]
+    } }) as never;
+    const target = eventResult(revision, owner, id, coordinate, [parentCoordinate]);
+    const parent = eventResult("3".repeat(64), parentOwner, parentId, parentCoordinate, [rootCoordinate]);
+    const root = eventResult("4".repeat(64), rootOwner, rootId, rootCoordinate);
+    const problem = selectProblem(coordinate, [target, parent, root]);
+    const ancestors = resolveProblemAncestorOwners(problem, [target, parent, root]);
+    expect(ancestors).toEqual([rootOwner, parentOwner].sort());
+    expect(mayEditProblem(problem, rootOwner, ancestors)).toBe(true);
   });
   it("resolves intent event targets to logical coordinates", () =>
     expect(coordinateFromProblemEvent((result as { event: never }).event)).toBe(coordinate));
@@ -112,7 +132,7 @@ describe("problem view", () => {
     const currentId = "70ba7eda72eceecccfb28209ec289e7e92d2797200ee20b04e0f5f03294d5ad7";
     const priorId = "d8628bb25817788ee1b6cac81b7fad2aa26f7817f745f4c9bc080c6e5e7fd8e0";
     const problem = {
-      coordinate: realCoordinate, owner: realOwner, problemId: realProblemId,
+      coordinate: realCoordinate, rootCoordinate: realCoordinate, owner: realOwner, problemId: realProblemId,
       revisionId: "70ba7eda72eceecccfb28209ec289e7e92d2797200ee20b04e0f5f03294d5ad7",
       revisionAuthor: realOwner, revisionCreatedAt: 1787310942, relay: "wss://nos.lol/",
       title: "one more", description: "a more proper description again again", status: "open", maintainers: [], parentOwners: []

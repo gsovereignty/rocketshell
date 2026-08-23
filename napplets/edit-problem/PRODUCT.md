@@ -19,7 +19,8 @@ NAP-UPLOAD. Returned HTTPS URLs are inserted into description as direct Markdown
 media references.
 
 Editor preserves current snapshot metadata and graph structure. It replaces
-title, description, status, optional child default, and revision lineage. Only
-current owner or listed maintainer can publish. Maintainer list stays unchanged.
+title, description, status, optional child default, and revision lineage. Owner,
+listed maintainers, and resolved ancestor owners may publish. Owner revisions
+add every resolved ancestor owner to maintainers; other editors preserve list.
 Before an owner publishes, editor resolves current direct child heads and forces
 status to `children` when any exist. Maintainer-selected status remains unchanged.

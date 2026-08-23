@@ -28,11 +28,36 @@ describe("problem editor", () => {
     expect(selectEditableProblem(problemId, [result(genesis), result(revision)], hex("d")).event.id).toBe(revision.id);
   });
 
-  it("grants direct parent owner maintainer permissions", () => {
+  it("grants direct parent owner permissions", () => {
     const parentOwner = hex("d");
-    const child = event(hex("c"), owner, [["p", parentOwner, "wss://parent.example"]]);
-    expect(selectEditableProblem(problemId, [result(child)], parentOwner).mayEdit).toBe(true);
-    expect(selectEditableProblem(problemId, [result(child)], hex("e")).mayEdit).toBe(false);
+    const parentId = hex("e");
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const parent = result({ ...event(hex("1"), parentOwner), tags: [
+      ["d", parentId], ["title", "Parent"], ["status", "open"],
+      ["a", parentCoordinate, "", "origin"], ["A", parentCoordinate], ["K", "31971"], ["P", parentOwner]
+    ] });
+    const child = event(hex("c"), owner, [["a", parentCoordinate], ["p", parentOwner, "wss://parent.example"]]);
+    expect(selectEditableProblem(problemId, [result(child), parent], parentOwner).mayEdit).toBe(true);
+    expect(selectEditableProblem(problemId, [result(child), parent], hex("f")).mayEdit).toBe(false);
+  });
+
+  it("grants every resolved ancestor owner permissions", () => {
+    const rootOwner = hex("d");
+    const parentOwner = hex("e");
+    const rootId = hex("1");
+    const parentId = hex("2");
+    const rootCoordinate = `31971:${rootOwner}:${rootId}`;
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const root = result({ ...event(hex("3"), rootOwner), tags: [
+      ["d", rootId], ["a", rootCoordinate, "", "origin"], ["A", rootCoordinate]
+    ] });
+    const parent = result({ ...event(hex("4"), parentOwner), tags: [
+      ["d", parentId], ["a", parentCoordinate, "", "origin"], ["A", rootCoordinate], ["a", rootCoordinate]
+    ] });
+    const child = result(event(hex("5"), owner, [["A", rootCoordinate], ["a", parentCoordinate]]));
+    const problem = selectEditableProblem(problemId, [child, parent, root], rootOwner);
+    expect(problem.mayEdit).toBe(true);
+    expect(problem.ancestorOwners).toEqual([rootOwner, parentOwner].sort());
   });
 
   it("builds full revision lineage and preserves graph tags", () => {
@@ -44,13 +69,19 @@ describe("problem editor", () => {
     expect(template.tags).toContainEqual(["child_status", "open"]);
   });
 
-  it("adds owner and direct parent owners as maintainers on owner edit", () => {
+  it("adds owner and resolved ancestor owners as maintainers on owner edit", () => {
     const parentOwner = hex("d");
     const existingMaintainer = hex("e");
+    const parentId = hex("1");
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const parent = result({ ...event(hex("2"), parentOwner), tags: [
+      ["d", parentId], ["a", parentCoordinate, "", "origin"], ["A", parentCoordinate]
+    ] });
     const problem = selectEditableProblem(problemId, [result(event(hex("c"), owner, [
+      ["a", parentCoordinate],
       ["p", parentOwner, "wss://parent.example"],
       ["p", existingMaintainer, "", "maintainer"]
-    ]))], owner);
+    ])), parent], owner);
     const template = buildRevisionTemplate(problem, { title: "New title", description: "New body", status: "open" }, 20);
     expect(template.tags).toContainEqual(["p", owner, "", "maintainer"]);
     expect(template.tags).toContainEqual(["p", parentOwner, "", "maintainer"]);

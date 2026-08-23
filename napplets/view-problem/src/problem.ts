@@ -7,6 +7,7 @@ export const CLAIM_WINDOW_SECONDS = 86_400;
 
 export interface ProblemView {
   coordinate: string;
+  rootCoordinate: string;
   problemId: string;
   owner: string;
   revisionId: string;
@@ -79,7 +80,7 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
   const selected = heads[0];
   const claim = tag(selected.event, "claim");
   return {
-    coordinate, owner, problemId, revisionId: selected.event.id,
+    coordinate, rootCoordinate: tagValue(selected.event, "A") ?? coordinate, owner, problemId, revisionId: selected.event.id,
     revisionAuthor: selected.event.pubkey,
     revisionCreatedAt: selected.event.created_at,
     relay: selected.sidecar?.relayHints?.[0] ?? tag(selected.event, "a", "origin")?.[2] ?? "",
@@ -136,9 +137,46 @@ export function compareProblemRevisions(previous: ProblemRevision | undefined, c
     .map(([field, before, after]) => ({ field, ...(previous === undefined ? {} : { before }), after }));
 }
 
-export function mayEditProblem(problem: ProblemView, currentPubkey: string) {
+export function mayEditProblem(problem: ProblemView, currentPubkey: string, ancestorOwners = problem.parentOwners) {
   return HEX_64.test(currentPubkey) &&
-    (currentPubkey === problem.owner || problem.maintainers.includes(currentPubkey) || problem.parentOwners.includes(currentPubkey));
+    (currentPubkey === problem.owner || problem.maintainers.includes(currentPubkey) || ancestorOwners.includes(currentPubkey));
+}
+
+const currentProblemHead = (coordinate: string, results: RelayEventResult[]): RelayEventResult => {
+  const problemId = coordinate.split(":")[2] ?? "";
+  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
+    tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
+  if (!candidates.length) throw new Error(`Ancestor problem ${problemId} was not found.`);
+  const previous = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const heads = candidates.filter(({ event }) => !previous.has(event.id));
+  if (heads.length !== 1) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
+  return heads[0];
+};
+
+export function resolveProblemAncestorOwners(problem: ProblemView, results: RelayEventResult[]): string[] {
+  const owners = new Set<string>();
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const selected = currentProblemHead(problem.coordinate, results).event;
+  const visit = (coordinate: string) => {
+    if (visiting.has(coordinate)) throw new Error("Problem ancestry contains a cycle.");
+    if (visited.has(coordinate)) return;
+    visiting.add(coordinate);
+    const owner = coordinate.split(":")[1] ?? "";
+    if (!HEX_64.test(owner)) throw new Error("Ancestor problem owner is invalid.");
+    const head = currentProblemHead(coordinate, results).event;
+    owners.add(owner);
+    for (const parent of head.tags
+      .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
+      .map((item) => item[1])) visit(parent);
+    visiting.delete(coordinate);
+    visited.add(coordinate);
+  };
+  for (const parent of selected.tags
+    .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
+    .map((item) => item[1])) visit(parent);
+  return [...owners].sort();
 }
 
 export function buildWorkflowTemplate(problem: ProblemView, content: string, action?: "claim"): EventTemplate {

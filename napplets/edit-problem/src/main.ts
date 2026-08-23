@@ -1,7 +1,7 @@
 import { identity, inc, intent, outbox, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import gsap from "gsap";
 import "./styles.css";
-import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
+import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
 import { attachmentMarkdown, insertAtSelection } from "./attachment";
 
@@ -67,7 +67,8 @@ function receiveProblemRevision(problemId: string, result: RelayEventResult): vo
   try {
     const previous = current;
     const next = selectEditableProblem(problemId, problemEvents, pubkey);
-    if (next.event.id === previous.event.id) return;
+    if (next.event.id === previous.event.id && next.mayEdit === previous.mayEdit &&
+      next.ancestorOwners.join() === previous.ancestorOwners.join()) return;
     const dirty = editorIsDirty(previous);
     current = next;
     if (!dirty) {
@@ -113,7 +114,7 @@ function renderEditor(problem: EditableProblem): void {
           <div class="field"><label for="problem-status">Status</label><select id="problem-status" ${disabled ? "disabled" : ""}>${STATUSES.map((value) => `<option value="${value}"${value === problem.status ? " selected" : ""}>${value}</option>`).join("")}</select></div>
           <div class="field"><label for="child-status">New child default</label><select id="child-status" ${disabled ? "disabled" : ""}><option value="">Not set</option><option value="open"${problem.childStatus === "open" ? " selected" : ""}>open</option><option value="rfm"${problem.childStatus === "rfm" ? " selected" : ""}>rfm</option></select></div>
         </div>
-        <footer><p id="status-message" class="status" role="status" aria-live="polite">${problem.mayEdit ? "Ready to publish." : "Connected identity is neither owner nor current maintainer."}</p><button id="publish" type="button" ${disabled ? "disabled" : ""}>${busy ? "Publishing…" : "Publish revision"}</button></footer>
+        <footer><p id="status-message" class="status" role="status" aria-live="polite">${problem.mayEdit ? "Ready to publish." : "Connected identity is not the owner, a current maintainer, or an ancestor owner."}</p><button id="publish" type="button" ${disabled ? "disabled" : ""}>${busy ? "Publishing…" : "Publish revision"}</button></footer>
       </section>
     </div>
   </article>`;
@@ -184,7 +185,28 @@ async function loadProblem(problemId: string): Promise<boolean> {
     });
     const response = await outbox.query({ kinds: [31971], "#d": [problemId], limit: 200 }, { limit: 200, timeoutMs: 8000 });
     if (generation !== loadGeneration) return false;
-    problemEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
+    const initialEvents = Array.from(new Map([...response.events, ...buffered].map((result) => [result.event.id, result])).values());
+    const graphRoot = problemGraphRoot(problemId, initialEvents);
+    const graphResponse = await outbox.query({ kinds: [31971], "#A": [graphRoot], limit: 1000 }, { limit: 1000, timeoutMs: 8000 });
+    if (generation !== loadGeneration) return false;
+    const graphSubscription = outbox.subscribe([
+      { kinds: [31971], "#d": [problemId] },
+      { kinds: [31971], "#A": [graphRoot] }
+    ], { timeoutMs: 8000 });
+    problemSubscription = graphSubscription;
+    graphSubscription.on("event", (result) => {
+      if (problemSubscription !== graphSubscription) return;
+      if (hydrated) receiveProblemRevision(problemId, result);
+      else buffered.push(result);
+    });
+    graphSubscription.on("closed", (reason) => {
+      if (problemSubscription !== graphSubscription) return;
+      problemSubscription = undefined;
+      console.warn("Live problem DAG subscription closed", { problemId, graphRoot, reason });
+      status("Live ancestry updates stopped. Reopen editor to reconnect.", true);
+    });
+    subscription.close();
+    problemEvents = Array.from(new Map([...initialEvents, ...graphResponse.events, ...buffered].map((result) => [result.event.id, result])).values());
     current = selectEditableProblem(problemId, problemEvents, pubkey);
     hydrated = true;
     renderEditor(current);
