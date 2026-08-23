@@ -27,7 +27,9 @@ export function registerIntentService(runtime: Runtime, store: PackageStore, win
         const startedAt = Date.now();
         const reuse = params.behavior?.newWindow !== true && params.behavior?.reuse !== false;
         const caller = windows.findByDTag(params.sender);
-        const existingTarget = reuse ? windows.findByDTag(params.handler) : undefined;
+        const activeTarget = await store.getActive(params.handler);
+        if (!activeTarget) throw new Error("Intent handler is no longer installed");
+        const existingTarget = reuse ? windows.findByDTag(params.handler, activeTarget.aggregateHash) : undefined;
         const replaceCaller = params.behavior?.focus !== false && caller !== undefined && caller.identity.dTag !== params.handler;
         const target = existingTarget ?? await windows.create(params.handler, reuse, { deferLayout: replaceCaller });
         // Self-dispatch cannot await its own startup without deadlocking. Other

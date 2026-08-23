@@ -8,7 +8,7 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
   const runtime = { registerService: (_name: string, value: ServiceHandler) => { handler = value; } } as unknown as Runtime;
   const source = { postMessage: vi.fn() };
   const target = {
-    identity: { dTag: "viewer-app", windowId: "target-1", source }, iframe: { focus: vi.fn() },
+    identity: { dTag: "viewer-app", aggregateHash: "a".repeat(64), windowId: "target-1", source }, iframe: { focus: vi.fn() },
     ready: Promise.resolve(), launch: undefined as WindowLaunchDescriptor | undefined
   };
   const caller = { identity: { dTag: "runtime-attested-sender", windowId: "caller-1", source: {} } };
@@ -19,12 +19,20 @@ function setup(options: Parameters<typeof registerIntentService>[3] = {}) {
     focus: vi.fn(),
     setLaunchDescriptor: vi.fn()
   } as unknown as NappletWindowManager;
-  const store = { listActive: vi.fn(async () => [{
+  const activeViewer = {
     dTag: "viewer-app", manifest: {
       dTag: "viewer-app", aggregateHash: "a".repeat(64), entrypoint: "index.html", requires: [], artifacts: [],
       archetypes: [{ slug: "viewer", convention: "napplet:viewer/open" }]
     }
-  }]) } as unknown as PackageStore;
+  };
+  const store = {
+    listActive: vi.fn(async () => [activeViewer]),
+    getActive: vi.fn(async (dTag: string) => ({
+      ...activeViewer,
+      dTag,
+      aggregateHash: dTag === "viewer-app" ? "a".repeat(64) : "b".repeat(64)
+    }))
+  } as unknown as PackageStore;
   registerIntentService(runtime, store, windows, options);
   handler!.onRegistered?.({
     resolveDTag: () => "runtime-attested-sender", listWindowIds: () => ["sender-1"],
@@ -120,6 +128,29 @@ describe("intent host boundary", () => {
     expect(windows.focus).not.toHaveBeenCalled();
   });
 
+  it("does not reuse a target from an inactive package version", async () => {
+    const { handler, windows, target } = setup(); const send = vi.fn();
+    const staleTarget = {
+      ...target,
+      identity: { ...target.identity, aggregateHash: "b".repeat(64), windowId: "stale-target" }
+    };
+    (windows.findByDTag as ReturnType<typeof vi.fn>).mockImplementation((dTag: string, aggregateHash?: string) => {
+      if (dTag === "runtime-attested-sender") return { identity: { dTag, windowId: "caller-1", source: {} } };
+      return aggregateHash === staleTarget.identity.aggregateHash ? staleTarget : undefined;
+    });
+    handler.handleMessage("sender-1", {
+      type: "intent.invoke", id: "active-version", request: {
+        archetype: "viewer", payload: { id: 4 }, behavior: { reuse: true }
+      }
+    } as never, send);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(windows.findByDTag).toHaveBeenCalledWith("viewer-app", "a".repeat(64));
+    expect(windows.create).toHaveBeenCalledWith("viewer-app", true, { deferLayout: true });
+    expect(target.identity.source.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: "inc.event", payload: { id: 4 }
+    }), "*");
+  });
+
   it("uses the account default before opening among multiple handlers", async () => {
     const getDefaultHandler = vi.fn(() => "alternate-viewer");
     const { handler, windows, store } = setup({ getDefaultHandler });
@@ -131,7 +162,7 @@ describe("intent host boundary", () => {
     handler.handleMessage("sender-1", { type: "intent.invoke", id: "default", request: { archetype: "viewer" } } as never, send);
     await vi.waitFor(() => expect(send).toHaveBeenCalled());
     expect(getDefaultHandler).toHaveBeenCalledWith("viewer");
-    expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer");
+    expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer", "b".repeat(64));
     expect(windows.focus).toHaveBeenCalledWith("target-1", "caller-1");
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "alternate-viewer" }) }));
   });
@@ -149,7 +180,7 @@ describe("intent host boundary", () => {
     expect(chooseHandler).toHaveBeenCalledWith("viewer", expect.arrayContaining([
       expect.objectContaining({ dTag: "viewer-app" }), expect.objectContaining({ dTag: "alternate-viewer" })
     ]), "runtime-attested-sender");
-    expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer");
+    expect(windows.findByDTag).toHaveBeenCalledWith("alternate-viewer", "b".repeat(64));
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ ok: true, handler: "alternate-viewer" }) }));
   });
 

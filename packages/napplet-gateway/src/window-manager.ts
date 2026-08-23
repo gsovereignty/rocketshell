@@ -47,8 +47,10 @@ export class NappletWindowManager {
 
   constructor(private readonly store: PackageStore, private readonly bridge: WindowBridge, private readonly container: HTMLElement, private readonly applicationBase: string, private readonly telemetry: PlatformTelemetry = NOOP_TELEMETRY, private readonly readyTimeoutMs = 10_000) {}
 
-  findByDTag(dTag: string): ManagedNappletWindow | undefined {
-    return [...this.#windows.values()].find((window) => window.identity.dTag === dTag);
+  findByDTag(dTag: string, aggregateHash?: string): ManagedNappletWindow | undefined {
+    return [...this.#windows.values()].find((window) =>
+      window.identity.dTag === dTag
+      && (aggregateHash === undefined || window.identity.aggregateHash === aggregateHash));
   }
 
   findByWindowId(windowId: string): ManagedNappletWindow | undefined {
