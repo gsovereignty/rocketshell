@@ -141,10 +141,9 @@ function renderList() {
     : "No compatible problem composer available";
   filters.innerHTML = filterCounts(actionable).map(([value, label, count]) => `
     <button data-filter="${value}" aria-pressed="${activeFilter === value}">${label} <span>${count}</span></button>`).join("");
-  list.innerHTML = visible.length ? visible.map((node, index) => `
+  list.innerHTML = visible.length ? visible.map((node) => `
     <li class="problem-row${node.coordinate === selected ? " selected" : ""}">
       <button class="row-main" data-select="${node.coordinate}">
-        <span class="rank">${String(index + 1).padStart(2, "0")}</span>
         <span class="row-title">${escapeHtml(node.title)}</span>
         ${node.forkCount ? `<span class="fork">${node.forkCount + 1} heads</span>` : ""}
         <span class="status status-${node.status}">${statusLabel(node.status)}</span>
