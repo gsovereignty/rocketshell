@@ -1,7 +1,7 @@
 import type { EditorState, TransactionSpec } from "@codemirror/state";
 
 export type MarkdownCommandName =
-  | "bold" | "italic" | "heading" | "bullet-list" | "numbered-list"
+  | "bold" | "italic" | "strikethrough" | "heading" | "bullet-list" | "numbered-list"
   | "blockquote" | "inline-code" | "code-block" | "link" | "table";
 
 export interface MarkdownCommandSpec {
@@ -17,6 +17,7 @@ const icon = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true" focu
 export const markdownCommandSpecs: readonly MarkdownCommandSpec[] = [
   { name: "bold", label: "Bold", title: "Bold", shortcut: "Ctrl+B", icon: icon('<path d="M7 4h6a4 4 0 0 1 0 8H7zm0 8h7a4 4 0 0 1 0 8H7"/>') },
   { name: "italic", label: "Italic", title: "Italic", shortcut: "Ctrl+I", icon: icon('<path d="M10 4h7M7 20h7M14 4 10 20"/>') },
+  { name: "strikethrough", label: "Strikethrough", title: "Strikethrough", icon: icon('<path d="M7 7c0-2 2-3 5-3s5 1 5 3M7 17c1 2 3 3 5 3 3 0 5-1 5-3M4 12h16"/>') },
   { name: "heading", label: "Heading", title: "Heading", icon: icon('<path d="M5 5v14M15 5v14M5 12h10M19 8v11M17 10l2-2 2 2"/>') },
   { name: "bullet-list", label: "Bulleted list", title: "Bulleted list", icon: icon('<circle cx="5" cy="7" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="17" r="1"/><path d="M9 7h10M9 12h10M9 17h10"/>') },
   { name: "numbered-list", label: "Numbered list", title: "Numbered list", icon: icon('<path d="M4 6h2v4M4 10h3M4 14h3l-3 4h3M10 7h10M10 12h10M10 17h10"/>') },
@@ -48,6 +49,7 @@ export function applyMarkdownCommand(state: EditorState, name: MarkdownCommandNa
   switch (name) {
     case "bold": return wrap(state, "**", "**", "bold text");
     case "italic": return wrap(state, "*", "*", "italic text");
+    case "strikethrough": return wrap(state, "~~", "~~", "struck text");
     case "inline-code": return wrap(state, "`", "`", "code");
     case "link": return wrap(state, "[", "](https://)", "link text");
     case "heading": return prefixLines(state, () => "## ");

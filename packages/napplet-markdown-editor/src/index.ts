@@ -1,10 +1,11 @@
 import "./styles.css";
 
-export { createProblemMarkdownEditor } from "./editor";
+export { createPlainMarkdownEditorFallback, createProblemMarkdownEditor } from "./editor";
 export type {
   ProblemMarkdownEditor,
   ProblemMarkdownEditorOptions,
-  ProblemMarkdownEditorResourceLoader
+  ProblemMarkdownEditorResourceLoader,
+  PlainMarkdownEditorFallbackOptions
 } from "./editor";
 export { applyMarkdownCommand, markdownCommandSpecs } from "./commands";
 export type { MarkdownCommandName } from "./commands";

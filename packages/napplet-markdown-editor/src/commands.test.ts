@@ -12,4 +12,5 @@ describe("Markdown commands", () => {
   it("prefixes every selected list line", () => expect(apply("one\ntwo", 0, 7, "numbered-list")).toBe("1. one\n2. two"));
   it("inserts editable table source", () => expect(apply("", 0, 0, "table")).toContain("| Column 1 | Column 2 |"));
   it("inserts useful placeholders", () => expect(apply("", 0, 0, "link")).toBe("[link text](https://)"));
+  it("wraps strikethrough text", () => expect(apply("remove", 0, 6, "strikethrough")).toBe("~~remove~~"));
 });

@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   base: "./",
+  resolve: { conditions: ["source"] },
   plugins: [nip5aManifest({
     nappletType: "edit-problem",
     title: "Edit Problem",

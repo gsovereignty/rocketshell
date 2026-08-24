@@ -1,6 +1,6 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
 import { Table } from "@lezer/markdown";
 import {
@@ -8,7 +8,7 @@ import {
   markdownStylePlugin, mouseSelectingField, setMouseSelecting, tableEditorPlugin
 } from "codemirror-live-markdown";
 import { applyMarkdownCommand, markdownCommandSpecs, type MarkdownCommandName } from "./commands";
-import { codeFencePreview, resourceImagePreview, type ErrorReporter, type ResourceLoader } from "./media";
+import { codeFencePreview, nonNavigatingLinkPreview, resourceImagePreview, type ErrorReporter, type ResourceLoader } from "./media";
 
 export type ProblemMarkdownEditorResourceLoader = ResourceLoader;
 
@@ -32,6 +32,15 @@ export interface ProblemMarkdownEditor {
   setDisabled(disabled: boolean): void;
   isDirtyComparedWith(value: string): boolean;
   destroy(): void;
+}
+
+export interface PlainMarkdownEditorFallbackOptions {
+  parent: HTMLElement;
+  value: string;
+  disabled?: boolean;
+  ariaLabel: string;
+  placeholder?: string;
+  onChange?: (value: string) => void;
 }
 
 const fallbackReporter: ErrorReporter = (operation, error, details) => console.error(`Markdown editor failed to ${operation}`, { ...details, error });
@@ -61,11 +70,20 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
 
   const readOnly = new Compartment();
   let destroyed = false;
+  const runCommand = (view: EditorView, name: MarkdownCommandName) => {
+    if (view.state.readOnly) return false;
+    try { view.dispatch(applyMarkdownCommand(view.state, name)); view.focus(); return true; }
+    catch (error) { report(`apply ${name} formatting`, error); return false; }
+  };
   const extensions = [
     markdown({ extensions: [Table] }), history(),
-    keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+    Prec.high(keymap.of([
+      { key: "Mod-b", run: (view) => runCommand(view, "bold") },
+      { key: "Mod-i", run: (view) => runCommand(view, "italic") },
+      ...defaultKeymap, ...historyKeymap, indentWithTab
+    ])),
     collapseOnSelectionFacet.of(true), mouseSelectingField, livePreviewPlugin,
-    markdownStylePlugin, editorTheme, tableEditorPlugin(), codeFencePreview(report),
+    markdownStylePlugin, editorTheme, tableEditorPlugin(), codeFencePreview(report), nonNavigatingLinkPreview(),
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({ "aria-label": options.ariaLabel, "aria-multiline": "true" }),
     EditorView.updateListener.of((update) => { if (update.docChanged) options.onChange?.(update.state.doc.toString()); }),
@@ -84,9 +102,7 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
   document.addEventListener("mouseup", mouseUp);
 
   const run = (name: MarkdownCommandName) => {
-    if (view.state.readOnly) return;
-    try { view.dispatch(applyMarkdownCommand(view.state, name)); view.focus(); }
-    catch (error) { report(`apply ${name} formatting`, error); }
+    runCommand(view, name);
   };
   for (const command of markdownCommandSpecs) {
     const button = document.createElement("button");
@@ -95,6 +111,7 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
     button.dataset.command = command.name;
     button.disabled = Boolean(options.disabled);
     button.setAttribute("aria-label", command.label);
+    if (command.shortcut) button.setAttribute("aria-keyshortcuts", command.shortcut.replace("Ctrl", "Control"));
     button.title = command.shortcut ? `${command.title} (${command.shortcut})` : command.title;
     button.innerHTML = command.icon;
     button.addEventListener("click", () => run(command.name));
@@ -145,5 +162,36 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
       view.destroy();
       shell.remove();
     }
+  };
+}
+
+export function createPlainMarkdownEditorFallback(options: PlainMarkdownEditorFallbackOptions): ProblemMarkdownEditor {
+  const input = document.createElement("textarea");
+  input.className = "napplet-md-fallback";
+  input.rows = 12;
+  input.value = options.value;
+  input.disabled = Boolean(options.disabled);
+  input.placeholder = options.placeholder ?? "";
+  input.setAttribute("aria-label", options.ariaLabel);
+  options.parent.replaceChildren(input);
+  let destroyed = false;
+  const changed = () => options.onChange?.(input.value);
+  input.addEventListener("input", changed);
+  return {
+    getValue: () => input.value,
+    setValue(value) { input.value = value; changed(); },
+    insertMarkdown(value) {
+      if (input.disabled || destroyed) return;
+      const before = input.value.slice(0, input.selectionStart);
+      const after = input.value.slice(input.selectionEnd);
+      const prefix = before && !before.endsWith("\n") ? "\n\n" : "";
+      const suffix = after && !after.startsWith("\n") ? "\n\n" : "";
+      input.setRangeText(`${prefix}${value}${suffix}`, input.selectionStart, input.selectionEnd, "end");
+      changed();
+    },
+    focus: () => input.focus(),
+    setDisabled: (disabled) => { input.disabled = disabled; },
+    isDirtyComparedWith: (value) => input.value !== value,
+    destroy() { if (destroyed) return; destroyed = true; input.removeEventListener("input", changed); input.remove(); }
   };
 }
