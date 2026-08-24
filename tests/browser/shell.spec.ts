@@ -556,6 +556,27 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await expect(page.locator("#spotlight-panel")).toBeHidden();
 });
 
+test("relay status opens an accessible connected-relays popover", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toHaveText("Platform ready");
+  const trigger = page.locator("#relay-status");
+  await expect(trigger).toHaveAttribute("aria-controls", "relay-popover");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("region", { name: "Connected relays" })).toBeVisible();
+  await expect(page.locator("#relay-popover-empty")).toHaveText("No relays currently connected.");
+
+  await page.getByRole("button", { name: "Open Napplet Spotlight" }).click();
+  await expect(page.locator("#relay-popover")).toBeHidden();
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#relay-popover")).toBeHidden();
+
+  await trigger.click();
+  await page.locator("main").click({ position: { x: 4, y: 4 } });
+  await expect(page.locator("#relay-popover")).toBeHidden();
+});
+
 test("preferences panel themes the shell and edits the local relay list", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
