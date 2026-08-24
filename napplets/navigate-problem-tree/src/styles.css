@@ -7,6 +7,7 @@
   --muted: #6d7280;
   --faint: #9ca1ae;
   --line: #dfe1e7;
+  --connector: var(--faint);
   --panel: #f4f4f6;
   --white: #fff;
   --blue: #145cff;
@@ -59,7 +60,25 @@ button { color: inherit; }
 .tree-root, .tree-root ul { margin: 0; padding: 0; list-style: none; }
 .tree-root { margin-top: 16px; }
 .branch { position: relative; }
-.branch ul { margin-left: 27px; padding-left: 12px; border-left: 1px solid #d6d8df; }
+.branch ul { margin-left: 27px; padding-left: 12px; border-left: 1px solid var(--connector); }
+.branch > ul > .branch::before {
+  position: absolute;
+  top: 25px;
+  left: -12px;
+  width: 9px;
+  border-top: 1px solid var(--connector);
+  content: "";
+}
+.branch > ul > .branch::after {
+  position: absolute;
+  top: 21px;
+  left: -3px;
+  width: 6px;
+  height: 8px;
+  background: var(--connector);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  content: "";
+}
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: transparent; text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }
