@@ -43,6 +43,7 @@ const avatarHandles = new Map<string, { url: string; revoke(): void }>();
 const avatarRequestVersions = new Map<string, number>();
 const mediaObjectUrls = new Set<string>();
 let mediaRenderVersion = 0;
+let recordEntrancePending = true;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function refreshAncestorOwners(coordinate: string): void {
@@ -85,6 +86,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>\"]/g, (character) => (
 })[character]!);
 
 function showSetup(message = "") {
+  recordEntrancePending = true;
   resetMedia();
   stopDiscussionSubscription();
   if (countdownTimer) clearInterval(countdownTimer);
@@ -109,6 +111,7 @@ function showSetup(message = "") {
 }
 
 function showLoadingProblem() {
+  recordEntrancePending = true;
   resetMedia();
   stopDiscussionSubscription();
   if (countdownTimer) clearInterval(countdownTimer);
@@ -213,7 +216,10 @@ function render() {
   bind();
   void hydrateMedia(mediaRenderVersion);
   syncClaimCountdown(effectiveClaim?.expiresAt);
-  if (!reducedMotion) gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+  if (recordEntrancePending && !reducedMotion) {
+    gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+  }
+  recordEntrancePending = false;
 }
 
 function resetMedia(): void {
@@ -459,6 +465,7 @@ async function loadProblem(value: string) {
       { kinds: [COMMENT_KIND], "#A": [target.coordinate] },
       { kinds: [31971], "#a": [target.coordinate] }
     ];
+    let initialHydrated = false;
     const receiveInitial = (result: RelayEventResult) => {
       if (generation !== loadGeneration) return;
       const collection = result.event.kind === COMMENT_KIND ? comments : relatedEvents;
@@ -476,6 +483,7 @@ async function loadProblem(value: string) {
       }
       if (!problem) return;
       related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
+      if (!initialHydrated) return;
       render();
       void loadProfiles([problem.owner, result.event.pubkey]);
     };
@@ -538,6 +546,7 @@ async function loadProblem(value: string) {
     comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
     related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
     liveMessage = "";
+    initialHydrated = true;
     render();
     const effectiveClaim = selectEffectiveClaim(problem, comments, problemRevisionHistory(problem.coordinate, relatedEvents));
     void loadProfiles([
