@@ -114,19 +114,45 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .menu-cluster { position: relative; display: flex; align-items: center; height: 100%; }
 .menu-center { display: flex; min-width: 0; align-items: center; justify-content: center; gap: .45rem; }
 .menu-tools { display: flex; align-items: center; justify-self: end; gap: .25rem; }
+.relay-menu { position: relative; }
 #relay-status {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
-  margin: 0;
+  min-height: 2rem;
   padding: .25rem .4rem;
+  border: 0;
+  border-radius: .4rem;
+  background: transparent;
   color: var(--muted);
   font-size: .7rem;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
+  cursor: pointer;
 }
+#relay-status:hover, #relay-status[aria-expanded="true"] { background: var(--hover); }
 #relay-status svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 #relay-status[data-connected="true"] { color: var(--accent); }
+#relay-popover {
+  position: absolute;
+  z-index: 125;
+  top: calc(100% + .45rem);
+  right: 0;
+  width: min(24rem, calc(100vw - 1rem));
+  max-height: calc(100dvh - var(--bar-height) - 1rem);
+  overflow: hidden auto;
+  border-radius: .9rem;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+#relay-popover h2 { margin: 0; padding: .85rem 1rem .7rem; border-bottom: 1px solid var(--hairline); color: var(--text-strong); font-size: .85rem; font-weight: 720; }
+#relay-popover-empty { margin: 0; padding: 2rem 1rem; color: var(--muted); font-size: .76rem; text-align: center; }
+#relay-popover-list { margin: 0; padding: .35rem; list-style: none; }
+#relay-popover-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .55rem; padding: .62rem .65rem; border-radius: .48rem; color: var(--text); }
+#relay-popover-list li + li { border-top: 1px solid var(--hairline); }
+.relay-connected-dot { width: .48rem; height: .48rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+#relay-popover-list code { overflow-wrap: anywhere; font: .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 #status {
   min-width: 0;
   overflow: hidden;

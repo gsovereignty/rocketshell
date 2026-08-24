@@ -40,10 +40,17 @@
         <nav id="screen-nav" aria-label="Open screens"></nav>
       </div>
       <div class="menu-tools">
-        <p id="relay-status" aria-label="0 relays connected" title="0 relays connected">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5a10 10 0 0 1 14 0M8 19.5a5.8 5.8 0 0 1 8 0"></path><circle cx="12" cy="22" r=".7"></circle></svg>
-          <span>0</span>
-        </p>
+        <div class="relay-menu">
+          <button id="relay-status" type="button" aria-label="0 relays connected" title="0 relays connected" aria-expanded="false" aria-controls="relay-popover" aria-haspopup="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5a10 10 0 0 1 14 0M8 19.5a5.8 5.8 0 0 1 8 0"></path><circle cx="12" cy="22" r=".7"></circle></svg>
+            <span>0</span>
+          </button>
+          <div id="relay-popover" role="region" aria-labelledby="relay-popover-title" hidden>
+            <h2 id="relay-popover-title">Connected relays</h2>
+            <p id="relay-popover-empty">No relays currently connected.</p>
+            <ul id="relay-popover-list"></ul>
+          </div>
+        </div>
         <button id="spotlight-trigger" class="menu-button icon-button" type="button" aria-label="Open Napplet Spotlight" aria-expanded="false" aria-controls="spotlight-panel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
         </button>

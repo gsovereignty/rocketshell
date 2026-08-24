@@ -1,7 +1,7 @@
 import { combineLatest } from "rxjs";
 import { bootstrap } from "./bootstrap.js";
 import { createShellSettingsStore } from "@platform/host-services";
-import { connectedRelayCount$ } from "@platform/nostr-engine";
+import { connectedRelayCount$, connectedRelays$ } from "@platform/nostr-engine";
 import { activePubkey$, activeProfile$, getSeenRelaysForEvent, signedEvents$ } from "./nostr.js";
 import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
@@ -22,7 +22,10 @@ document.documentElement.setAttribute("data-theme", resolveTheme(
 ));
 
 const status = document.querySelector<HTMLElement>("#status");
-const relayStatus = document.querySelector<HTMLElement>("#relay-status");
+const relayStatus = document.querySelector<HTMLButtonElement>("#relay-status");
+const relayPopover = document.querySelector<HTMLElement>("#relay-popover");
+const relayPopoverList = document.querySelector<HTMLUListElement>("#relay-popover-list");
+const relayPopoverEmpty = document.querySelector<HTMLElement>("#relay-popover-empty");
 const form = document.querySelector<HTMLFormElement>("#napplet-loader");
 const input = document.querySelector<HTMLInputElement>("#coordinate");
 const button = form?.querySelector<HTMLButtonElement>("button[type=submit]");
@@ -73,6 +76,7 @@ const widgetGrid = windowsContainer
 let loadingTimeline: gsap.core.Timeline | null = null;
 let accountTimeline: gsap.core.Timeline | null = null;
 let accountOpen = false;
+let relayPopoverOpen = false;
 let settingsView: SettingsView | null = null;
 const signedEventsView = signedEventsTrigger && signedEventsCount && signedEventsPanel && signedEventsClose && signedEventsList && signedEventsEmpty && signedEventDialog && signedEventDialogTitle && signedEventRelaysList && signedEventRelaysEmpty && signedEventCode && signedEventDialogClose
   ? createSignedEventsView({
@@ -80,7 +84,7 @@ const signedEventsView = signedEventsTrigger && signedEventsCount && signedEvent
     list: signedEventsList, empty: signedEventsEmpty, dialog: signedEventDialog,
     dialogTitle: signedEventDialogTitle, relayList: signedEventRelaysList, relayEmpty: signedEventRelaysEmpty,
     code: signedEventCode, dialogClose: signedEventDialogClose
-  }, signedEvents$, reducedMotion, () => { closeAccountMenu(); closeSpotlight(); closeSettings(); }, getSeenRelaysForEvent)
+  }, signedEvents$, reducedMotion, () => { closeAccountMenu(); closeSpotlight(); closeSettings(); closeRelayPopover(); }, getSeenRelaysForEvent)
   : null;
 let dockHideTimer: number | undefined;
 
@@ -91,7 +95,25 @@ const relayCountSubscription = connectedRelayCount$.subscribe((count) => {
   relayStatus?.setAttribute("title", label);
   if (relayStatus) relayStatus.dataset.connected = String(count > 0);
 });
-window.addEventListener("pagehide", () => relayCountSubscription.unsubscribe(), { once: true });
+const connectedRelaysSubscription = connectedRelays$.subscribe((relays) => {
+  if (!relayPopoverList || !relayPopoverEmpty) return;
+  relayPopoverList.replaceChildren(...relays.map((url) => {
+    const item = document.createElement("li");
+    const indicator = document.createElement("span");
+    const label = document.createElement("code");
+    indicator.className = "relay-connected-dot";
+    indicator.setAttribute("aria-hidden", "true");
+    label.textContent = url;
+    item.append(indicator, label);
+    return item;
+  }));
+  relayPopoverEmpty.hidden = relays.length > 0;
+  relayPopoverList.hidden = relays.length === 0;
+});
+window.addEventListener("pagehide", () => {
+  relayCountSubscription.unsubscribe();
+  connectedRelaysSubscription.unsubscribe();
+}, { once: true });
 
 profileImage?.addEventListener("error", () => {
   profileImage.hidden = true;
@@ -124,6 +146,38 @@ const closeSpotlight = (): void => {
       gsap.set(spotlightPanel, { clearProps: "opacity,visibility,transform,filter" });
     }
   });
+};
+
+const closeRelayPopover = (): void => {
+  if (!relayStatus || !relayPopover || !relayPopoverOpen) return;
+  relayPopoverOpen = false;
+  relayStatus.setAttribute("aria-expanded", "false");
+  gsap.killTweensOf(relayPopover);
+  if (reducedMotion.matches) {
+    relayPopover.hidden = true;
+    return;
+  }
+  gsap.to(relayPopover, {
+    autoAlpha: 0, y: -6, scale: .98, duration: .14, ease: "power2.in",
+    onComplete: () => {
+      relayPopover.hidden = true;
+      gsap.set(relayPopover, { clearProps: "opacity,visibility,transform" });
+    }
+  });
+};
+
+const openRelayPopover = (): void => {
+  if (!relayStatus || !relayPopover) return;
+  closeMenus();
+  relayPopoverOpen = true;
+  relayStatus.setAttribute("aria-expanded", "true");
+  relayPopover.hidden = false;
+  gsap.killTweensOf(relayPopover);
+  if (reducedMotion.matches) return;
+  gsap.fromTo(relayPopover,
+    { autoAlpha: 0, y: -8, scale: .97, transformOrigin: "right top" },
+    { autoAlpha: 1, y: 0, scale: 1, duration: .24, ease: "power3.out", clearProps: "opacity,visibility,transform" }
+  );
 };
 
 const radialPosition = (index: number): { x: number; y: number } => {
@@ -171,6 +225,7 @@ const closeAccountMenu = (): void => {
 const openAccountMenu = (): void => {
   if (!profileTrigger || !accountPopover) return;
   closeSpotlight();
+  closeRelayPopover();
   accountOpen = true;
   profileTrigger.setAttribute("aria-expanded", "true");
   accountPopover.hidden = false;
@@ -192,6 +247,7 @@ const openSettings = (): void => {
   if (!settingsView) return;
   closeAccountMenu();
   closeSpotlight();
+  closeRelayPopover();
   settingsTrigger?.setAttribute("aria-expanded", "true");
   settingsView.open();
 };
@@ -201,6 +257,7 @@ const closeMenus = (): void => {
   closeSpotlight();
   closeSettings();
   signedEventsView?.close();
+  closeRelayPopover();
 };
 
 window.addEventListener("pagehide", () => signedEventsView?.destroy(), { once: true });
@@ -209,6 +266,8 @@ profileTrigger?.addEventListener("click", () => {
   if (!accountOpen) openAccountMenu();
   else closeAccountMenu();
 });
+
+relayStatus?.addEventListener("click", () => relayPopoverOpen ? closeRelayPopover() : openRelayPopover());
 
 profileActions.filter((action) => action.dataset.stub).forEach((action) => action.addEventListener("click", () => {
   if (accountStatus) accountStatus.textContent = `${action.dataset.stub} is coming soon.`;
@@ -237,6 +296,7 @@ document.addEventListener("keydown", (event) => {
     const returnFocus = settingsView?.isOpen() ? settingsTrigger
       : spotlightPanel?.hidden === false ? spotlightTrigger
         : signedEventsPanel?.hidden === false ? signedEventsTrigger
+          : relayPopoverOpen ? relayStatus
           : profileTrigger;
     closeMenus();
     returnFocus?.focus();
@@ -249,6 +309,7 @@ document.addEventListener("pointerdown", (event) => {
   const target = event.target;
   if (!(target instanceof Node)) return;
   if (accountPopover?.contains(target) || profileTrigger?.contains(target) || spotlightPanel?.contains(target) || spotlightTrigger?.contains(target)) return;
+  if (relayPopover?.contains(target) || relayStatus?.contains(target)) return;
   if (signedEventsPanel?.contains(target) || signedEventsTrigger?.contains(target) || signedEventDialog?.contains(target)) return;
   if (settingsPanel?.contains(target) || settingsTrigger?.contains(target)) return;
   closeMenus();
