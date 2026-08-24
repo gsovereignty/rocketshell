@@ -76,7 +76,22 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
   const previous = new Set(candidates.flatMap(({ event }) => event.tags
     .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
   const heads = candidates.filter(({ event }) => !previous.has(event.id));
-  if (heads.length !== 1) throw new Error("Problem has multiple current heads. Merge revisions before viewing it here.");
+  if (heads.length !== 1) {
+    console.error("Could not select problem revision because current head count is not one.", {
+      coordinate,
+      headCount: heads.length,
+      heads: heads.map(({ event, sidecar }) => ({
+        id: event.id,
+        author: event.pubkey,
+        createdAt: event.created_at,
+        previousIds: event.tags
+          .filter((item) => item[0] === "e" && item[3] === "previous")
+          .map((item) => item[1]),
+        relayHints: sidecar?.relayHints ?? []
+      }))
+    });
+    throw new Error("Problem has multiple current heads. Merge revisions before viewing it here.");
+  }
   const selected = heads[0];
   const claim = tag(selected.event, "claim");
   return {

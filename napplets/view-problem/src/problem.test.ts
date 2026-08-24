@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, parseCoordinate, problemEdits, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, resolveProblemAncestorOwners, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
@@ -17,6 +17,29 @@ describe("problem view", () => {
     expect(problemRevisionAuthors({ owner, maintainers: [maintainer, owner], parentOwners: [parentOwner] })).toEqual([owner, maintainer, parentOwner]);
   });
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
+  it("logs competing heads when current revision is ambiguous", () => {
+    const competingId = "e".repeat(64);
+    const competing = { event: {
+      ...(result as unknown as { event: Record<string, unknown> }).event,
+      id: competingId, pubkey: "f".repeat(64), created_at: 2
+    }, sidecar: { relayHints: ["wss://other.example"] } } as never;
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    expect(() => selectProblem(coordinate, [result, competing]))
+      .toThrow("Problem has multiple current heads. Merge revisions before viewing it here.");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Could not select problem revision because current head count is not one.",
+      expect.objectContaining({
+        coordinate,
+        headCount: 2,
+        heads: [
+          expect.objectContaining({ id: revision, author: owner, createdAt: 1 }),
+          expect.objectContaining({ id: competingId, author: "f".repeat(64), createdAt: 2 })
+        ]
+      })
+    );
+    consoleError.mockRestore();
+  });
   it("selects a newly received revision as current", () => {
     const next = { event: {
       ...(result as unknown as { event: Record<string, unknown> }).event,
