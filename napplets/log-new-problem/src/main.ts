@@ -1,6 +1,6 @@
 import { identity, inc, outbox, resource, upload } from "@napplet/sdk";
 import type { OutboxSubscription, RelayEventResult, Subscription } from "@napplet/sdk";
-import { createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
+import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
@@ -23,7 +23,7 @@ root.innerHTML = `
       <div><span class="micro">Child of</span><strong id="parent-title">Loading parent…</strong></div>
       <code id="parent-id"></code>
     </section>
-    <form id="problem-form" novalidate>
+    <div id="problem-editor">
       <div class="field">
         <label for="title">What is the problem?</label>
         <input id="title" name="title" maxlength="160" required autocomplete="off" placeholder="Short, specific title">
@@ -61,10 +61,10 @@ root.innerHTML = `
         <output id="status-line" role="status" aria-live="polite">Connecting to shell…</output>
         <button id="publish" type="button" disabled><span>Publish problem</span><span aria-hidden="true">↗</span></button>
       </footer>
-    </form>
+    </div>
   </article>`;
 
-const form = document.querySelector<HTMLFormElement>("#problem-form")!;
+const problemEditor = document.querySelector<HTMLElement>("#problem-editor")!;
 const publishButton = document.querySelector<HTMLButtonElement>("#publish")!;
 const statusLine = document.querySelector<HTMLOutputElement>("#status-line")!;
 const count = document.querySelector<HTMLOutputElement>("#count")!;
@@ -245,27 +245,33 @@ try {
 } catch (error) {
   console.error("Problem Markdown editor initialization failed", { error });
   const host = document.querySelector<HTMLElement>("#description-editor")!;
-  const fallback = document.createElement("textarea");
-  fallback.id = "description-fallback";
-  fallback.rows = 12;
-  fallback.placeholder = "Describe current behavior, impact, and enough context to understand the problem.";
-  fallback.setAttribute("aria-label", "Problem description");
-  host.replaceChildren(fallback);
   const fallbackUpload = document.createElement("button");
   fallbackUpload.type = "button";
   fallbackUpload.textContent = "Add image or video";
   fallbackUpload.disabled = !uploadAvailable;
   fallbackUpload.addEventListener("click", () => attachmentInput.click());
   attachmentStatus.before(fallbackUpload);
-  fallback.addEventListener("input", () => { count.value = String(fallback.value.length); });
   attachmentStatus.textContent = "Rich editor unavailable. Plain Markdown editing remains available.";
-  markdownEditor = {
-    getValue: () => fallback.value,
-    setValue: (value) => { fallback.value = value; count.value = String(value.length); },
-    insertMarkdown: (value) => { fallback.setRangeText(value, fallback.selectionStart, fallback.selectionEnd, "end"); fallback.dispatchEvent(new Event("input")); },
-    focus: () => fallback.focus(), setDisabled: (value) => { fallback.disabled = value; },
-    isDirtyComparedWith: (value) => fallback.value !== value, destroy: () => fallback.remove()
-  };
+  markdownEditor = createPlainMarkdownEditorFallback({
+    parent: host, value: "", ariaLabel: "Problem description",
+    placeholder: "Describe current behavior, impact, and enough context to understand the problem.",
+    onChange: (value) => { count.value = String(value.length); }
+  });
+}
+
+function collectProblemFields(): FormData {
+  const data = new FormData();
+  problemEditor.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
+    if (!control.disabled) data.append(control.name, control.value);
+  });
+  return data;
+}
+
+function resetProblemFields(): void {
+  problemEditor.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
+    if (control instanceof HTMLSelectElement) control.selectedIndex = 0;
+    else control.value = "";
+  });
 }
 
 async function uploadAttachment() {
@@ -299,13 +305,13 @@ async function publishProblem() {
   publishButton.disabled = true;
   setStatus("Preparing event for shell approval…", "busy");
   try {
-    const draft = readDraft(new FormData(form), markdownEditor.getValue());
+    const draft = readDraft(collectProblemFields(), markdownEditor.getValue());
     const random = crypto.getRandomValues(new Uint8Array(32));
     const template = buildProblemTemplate(pubkey, createProblemId(random), draft, Math.floor(Date.now() / 1000), parent);
     const recipients = parent ? Array.from(new Set([parent.owner, parent.rootOwner])) : [];
     const result = await outbox.publish(template, recipients.length ? { toInboxes: recipients } : undefined);
     setStatus(publishSuccessMessage(result), "success");
-    form.reset();
+    resetProblemFields();
     markdownEditor.setValue("");
     count.value = "0";
     animate(statusLine, {});
@@ -318,9 +324,14 @@ async function publishProblem() {
 }
 
 publishButton.addEventListener("click", () => { void publishProblem(); });
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  void publishProblem();
+problemEditor.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    void publishProblem();
+  } else if (event.key === "Enter" && event.target === document.querySelector("#title")) {
+    event.preventDefault();
+    void publishProblem();
+  }
 });
 
 async function start() {

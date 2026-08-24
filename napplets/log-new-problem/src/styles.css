@@ -30,7 +30,7 @@ h1 { margin: 4px 0 0; font-size: clamp(2rem, 7vw, 3.6rem); line-height: .98; let
 .parent-card div { display: flex; gap: 9px; align-items: baseline; }
 .parent-card strong { font-size: .98rem; }
 .parent-card code { display: block; max-width: 100%; margin-top: 7px; overflow: hidden; color: #76412e; font-size: .7rem; text-overflow: ellipsis; }
-form { padding-top: 30px; }
+#problem-editor { padding-top: 30px; }
 .field { margin-bottom: 25px; }
 label, legend, .field-label { display: block; margin-bottom: 8px; font-size: .76rem; font-weight: 760; letter-spacing: .055em; text-transform: uppercase; }
 .field #description-editor { --md-border:var(--rule); --md-surface:#fff; --md-text:var(--ink); --md-muted:var(--muted); --md-accent:var(--signal); --md-error:var(--error); --md-radius:0; --md-min-height:290px; }

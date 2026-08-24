@@ -1,10 +1,11 @@
 import { identity, inc, intent, outbox, resource, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
-import { createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
+import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
 import { attachmentMarkdown } from "./attachment";
+import { applyEditorAccessState } from "./editor-access";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("App root is missing.");
@@ -135,12 +136,6 @@ function renderEditor(problem: EditableProblem): void {
   } catch (error) {
     console.error("Problem revision Markdown editor initialization failed", { problemId: problem.problemId, error });
     const host = document.querySelector<HTMLElement>("#description-editor")!;
-    const fallback = document.createElement("textarea");
-    fallback.rows = 10;
-    fallback.value = problem.description;
-    fallback.disabled = disabled;
-    fallback.setAttribute("aria-label", "Problem description");
-    host.replaceChildren(fallback);
     const fallbackUpload = document.createElement("button");
     fallbackUpload.type = "button";
     fallbackUpload.textContent = "Add image or video";
@@ -151,12 +146,10 @@ function renderEditor(problem: EditableProblem): void {
       attachmentStatus.before(fallbackUpload);
       attachmentStatus.textContent = "Rich editor unavailable. Plain Markdown editing remains available.";
     }
-    markdownEditor = {
-      getValue: () => fallback.value, setValue: (value) => { fallback.value = value; },
-      insertMarkdown: (value) => { fallback.setRangeText(value, fallback.selectionStart, fallback.selectionEnd, "end"); },
-      focus: () => fallback.focus(), setDisabled: (value) => { fallback.disabled = value; },
-      isDirtyComparedWith: (value) => fallback.value !== value, destroy: () => fallback.remove()
-    };
+    markdownEditor = createPlainMarkdownEditorFallback({
+      parent: host, value: problem.description, disabled, ariaLabel: "Problem description",
+      onChange: (value) => { const count = document.querySelector<HTMLOutputElement>("#description-count"); if (count) count.value = String(value.length); }
+    });
   }
   document.querySelector(".edit-panel")?.addEventListener("keydown", (event) => {
     const keyboardEvent = event as KeyboardEvent;
@@ -341,7 +334,7 @@ async function start(): Promise<void> {
       if (current) {
         current.isOwner = next === current.owner;
         current.mayEdit = canEditProblem(current, next);
-        renderEditor(current);
+        status(applyEditorAccessState(current.mayEdit, busy, markdownEditor), !current.mayEdit);
       }
     });
   } catch (error) {
