@@ -450,6 +450,7 @@ async function loadProfiles(authors: string[]) {
 async function loadProblem(value: string) {
   const status = document.querySelector<HTMLOutputElement>("#setup-status");
   let generation = loadGeneration;
+  let initialPreviewRendered = false;
   try {
     const target = parseCoordinate(value);
     if (status) status.textContent = "Loading current revision and discussion…";
@@ -484,7 +485,13 @@ async function loadProblem(value: string) {
       }
       if (!problem) return;
       related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
-      if (!initialHydrated) return;
+      if (!initialHydrated) {
+        if (!initialPreviewRendered) {
+          initialPreviewRendered = true;
+          render();
+        }
+        return;
+      }
       render();
       void loadProfiles([problem.owner, result.event.pubkey]);
     };
@@ -559,6 +566,10 @@ async function loadProblem(value: string) {
   } catch (error) {
     if (generation !== loadGeneration) return;
     console.error("Problem load failed", { value, error });
+    if (initialPreviewRendered && problem) {
+      setLiveStatus("Background sync failed. Showing cached problem data; reopen to retry.");
+      return;
+    }
     showSetup(error instanceof Error ? error.message : "Problem could not be loaded.");
   }
 }
