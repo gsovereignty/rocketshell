@@ -51,6 +51,28 @@ describe("reactive relay sources", () => {
     await expect(settle(writeRelays$)).resolves.toEqual(["wss://own.test/"]);
   });
 
+  it("drops insecure NIP-65 relays before they reach pool consumers", async () => {
+    const { accountManager, fallbackRelays$, ingress, writeRelays$ } = await freshServices();
+    fallbackRelays$.next(["wss://backup.test/"]);
+    const mailboxes = identity();
+    const event = mailboxes(1, ["ws://10.46.107.110:7777/", "wss://own.test/"]);
+    ingress.admit(event, "local:test");
+    accountManager.addAccount(ReadonlyAccount.fromPubkey(event.pubkey) as never);
+    accountManager.setActive(accountManager.accounts[0]!.id);
+    await expect(settle(writeRelays$)).resolves.toEqual(["wss://own.test/"]);
+  });
+
+  it("uses secure fallback when every NIP-65 relay is forbidden", async () => {
+    const { accountManager, fallbackRelays$, ingress, writeRelays$ } = await freshServices();
+    fallbackRelays$.next(["wss://backup.test/"]);
+    const mailboxes = identity();
+    const event = mailboxes(1, ["ws://10.46.107.110:7777/"]);
+    ingress.admit(event, "local:test");
+    accountManager.addAccount(ReadonlyAccount.fromPubkey(event.pubkey) as never);
+    accountManager.setActive(accountManager.accounts[0]!.id);
+    await expect(settle(writeRelays$)).resolves.toEqual(["wss://backup.test/"]);
+  });
+
   it("returns to the fallback when the account signs out", async () => {
     const { accountManager, fallbackRelays$, ingress, writeRelays$ } = await freshServices();
     fallbackRelays$.next(["wss://backup.test/"]);

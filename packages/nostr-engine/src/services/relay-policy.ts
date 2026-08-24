@@ -3,10 +3,12 @@ import { createRelayPolicy } from "../relay-policy.js";
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**
- * Plaintext relays are tolerated only when the shell itself is served from a loopback origin.
- * Derived from the document rather than a build flag so the rule also holds in tests and workers.
+ * Plaintext relays are tolerated only when the shell itself is served over HTTP from loopback.
+ * This lets local Vite development reach LAN relays while HTTPS deployments remain WSS-only.
  */
 const servedLocally = (): boolean =>
   typeof location !== "undefined" && LOCAL_HOSTNAMES.has(location.hostname);
 
-export const relayPolicy = createRelayPolicy({ allowInsecureLocalhost: servedLocally() });
+export const relayPolicy = createRelayPolicy({
+  allowInsecure: servedLocally() && location.protocol === "http:"
+});

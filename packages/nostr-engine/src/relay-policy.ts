@@ -2,6 +2,7 @@ export type RelayContext = "discovery" | "read" | "write" | "explicit" | "auth";
 
 export interface RelayPolicyOptions {
   readonly allowInsecureLocalhost?: boolean;
+  readonly allowInsecure?: boolean;
   readonly allow?: readonly string[];
   readonly deny?: readonly string[];
   readonly maximumRelays?: number;
@@ -16,13 +17,14 @@ export interface RelayPolicy {
 export function createRelayPolicy(options: RelayPolicyOptions = {}): RelayPolicy {
   const maximumRelays = options.maximumRelays ?? 10;
   const allowInsecureLocalhost = options.allowInsecureLocalhost ?? false;
+  const allowInsecure = options.allowInsecure ?? false;
   const normalizeUnchecked = (raw: string): string => {
     let url: URL;
     try { url = new URL(raw); } catch { throw new Error("Malformed relay URL"); }
     if (url.username || url.password) throw new Error("Relay URL credentials forbidden");
     if (url.hash) throw new Error("Relay URL fragment forbidden");
     const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-    if (url.protocol !== "wss:" && !(url.protocol === "ws:" && local && allowInsecureLocalhost)) throw new Error("Relay scheme forbidden");
+    if (url.protocol !== "wss:" && !(url.protocol === "ws:" && (allowInsecure || (local && allowInsecureLocalhost)))) throw new Error("Relay scheme forbidden");
     url.search = ""; url.hash = "";
     if ((url.protocol === "wss:" && url.port === "443") || (url.protocol === "ws:" && url.port === "80")) url.port = "";
     url.pathname = url.pathname.replace(/\/+$/, "") || "/";

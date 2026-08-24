@@ -15,6 +15,11 @@ describe("relay policy", () => {
     expect(() => policy.normalize("wss://relay.example/#x", "read")).toThrow("fragment");
     expect(policy.normalize("ws://localhost:8080", "read")).toBe("ws://localhost:8080/");
   });
+  it("allows insecure LAN relays only when explicitly enabled for local development", () => {
+    expect(() => createRelayPolicy().normalize("ws://10.0.0.2:7777", "read")).toThrow("scheme");
+    expect(createRelayPolicy({ allowInsecure: true }).normalize("ws://10.0.0.2:7777", "read"))
+      .toBe("ws://10.0.0.2:7777/");
+  });
 });
 
 describe("event ingress", () => {

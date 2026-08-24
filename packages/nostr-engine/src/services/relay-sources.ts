@@ -5,9 +5,15 @@ import {
 } from "rxjs";
 import { accountManager } from "./accounts.js";
 import { eventStore } from "./event-store.js";
+import { relayPolicy } from "./relay-policy.js";
 
 const sameList = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((value, index) => value === right[index]);
+
+/** Drop malformed or forbidden relay URLs before any reactive consumer can open a socket. */
+export const usableRelays = (relays: readonly string[]): string[] => relays.flatMap((relay) => {
+  try { return [relayPolicy.normalize(relay, "read")]; } catch { return []; }
+});
 
 /** Replay for the lifetime of the process: these feed the loader, which must never lose its value. */
 const HOLD = { bufferSize: 1, refCount: false };
@@ -47,7 +53,10 @@ const preferOwn = (
   owned$: Observable<readonly string[] | undefined>,
   fallback$: Observable<readonly string[]>
 ): Observable<readonly string[]> => combineLatest([owned$, fallback$]).pipe(
-  map(([owned, fallback]) => (owned && owned.length > 0 ? owned : fallback)),
+  map(([owned, fallback]) => {
+    const usableOwned = usableRelays(owned ?? []);
+    return usableOwned.length > 0 ? usableOwned : usableRelays(fallback);
+  }),
   distinctUntilChanged(sameList),
   shareReplay(HOLD)
 );
@@ -56,8 +65,8 @@ const preferOwn = (
 export const activeProfile$ = own((user) => user.profile$);
 
 /** The account's own NIP-65 lists, unmixed with any fallback. */
-export const outboxes$ = own<string[]>((user) => user.outboxes$);
-export const inboxes$ = own<string[]>((user) => user.inboxes$);
+export const outboxes$ = own<string[]>((user) => user.outboxes$).pipe(map((relays) => relays && usableRelays(relays)));
+export const inboxes$ = own<string[]>((user) => user.inboxes$).pipe(map((relays) => relays && usableRelays(relays)));
 export const mailboxes$ = own<{ inboxes: string[]; outboxes: string[] }>((user) => user.mailboxes$);
 
 /** The account's own BUD-03 media servers (kind 10063), as strings. */
@@ -66,7 +75,7 @@ export const ownBlossomServers$: Observable<readonly string[] | undefined> =
 
 /** The account's own lookup / indexer relays (kind 10086). */
 export const ownLookupRelays$: Observable<readonly string[] | undefined> =
-  own((user) => user.lookupRelayList$).pipe(map((list) => list?.relays));
+  own((user) => user.lookupRelayList$).pipe(map((list) => list && usableRelays(list.relays)));
 
 export const writeRelays$ = preferOwn(outboxes$, fallbackRelays$);
 export const readRelays$ = preferOwn(inboxes$, fallbackRelays$);
