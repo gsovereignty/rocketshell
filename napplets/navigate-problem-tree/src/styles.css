@@ -73,7 +73,7 @@ button { color: inherit; }
   position: absolute;
   top: 0;
   left: 0;
-  height: var(--active-connector-end, 0);
+  height: var(--active-connector-draw, 0);
   border-left: 1px solid var(--blue);
   content: "";
 }
@@ -95,8 +95,10 @@ button { color: inherit; }
   clip-path: polygon(0 0, 100% 50%, 0 100%);
   content: "";
 }
-.branch > ul > .branch.connector-path::before { border-color: var(--blue); }
-.branch > ul > .branch.connector-path::after { background: var(--blue); }
+.incoming-connector { position: absolute; top: 21px; left: -12px; width: 15px; height: 8px; pointer-events: none; }
+.incoming-connector > i:first-child { position: absolute; top: 4px; left: 0; width: 9px; height: 1px; background: var(--blue); transform: scaleX(0); transform-origin: left center; }
+.incoming-connector > i:last-child { position: absolute; top: 0; left: 9px; width: 6px; height: 8px; background: var(--blue); clip-path: polygon(0 0, 100% 50%, 0 100%); transform: scale(0); transform-origin: left center; }
+.tree-root > .branch > .incoming-connector { display: none; }
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: transparent; text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }

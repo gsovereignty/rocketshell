@@ -37,6 +37,8 @@ let problemViewerBusy = false;
 let problemEvents: RelayEventResult[] = [];
 let problemSubscription: OutboxSubscription | undefined;
 let loadGeneration = 0;
+let connectorTimeline: gsap.core.Timeline | undefined;
+let hoverIntent: gsap.core.Tween | undefined;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
@@ -100,7 +102,8 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
   const children = visibleTreeChildren(dag, coordinate);
   const isSelected = selected === coordinate;
   const isOnSelectedPath = ancestorCoordinates(dag, selected).has(coordinate);
-  return `<li class="branch" data-coordinate="${coordinate}" style="--depth:${depth}">
+  return `<li class="branch" data-coordinate="${coordinate}" data-depth="${depth}" style="--depth:${depth}">
+    <span class="incoming-connector" aria-hidden="true"><i></i><i></i></span>
     <button class="tree-node${isSelected ? " selected" : ""}${isOnSelectedPath ? " selected-path" : ""}" data-select="${coordinate}" data-tree-node aria-current="${isSelected ? "true" : "false"}">
       <span>${escapeHtml(node.title)}</span>
       <span class="node-meta">${node.forkCount ? `<b>${node.forkCount + 1} heads</b>` : ""}<small>${descendantsCount(dag, coordinate)}</small></span>
@@ -118,9 +121,9 @@ function filterCounts(nodes: ProblemNode[]) {
   ] as const;
 }
 
-function positionTreeConnectors() {
-  const activePath = dag && (hoveredProblem || selected)
-    ? ancestorCoordinates(dag, hoveredProblem || selected).add(hoveredProblem || selected)
+function layoutTreeConnectors(activeCoordinate = hoveredProblem || selected) {
+  const activePath = dag && activeCoordinate
+    ? ancestorCoordinates(dag, activeCoordinate).add(activeCoordinate)
     : new Set<string>();
   app.querySelectorAll<HTMLElement>(".branch[data-coordinate]").forEach((branch) => {
     branch.classList.toggle("connector-path", activePath.has(branch.dataset.coordinate ?? ""));
@@ -136,13 +139,72 @@ function positionTreeConnectors() {
     children.style.setProperty("--connector-end", `${connectorEnd}px`);
     const activeBranch = Array.from(children.children).find((child) => child.classList.contains("connector-path"));
     if (!activeBranch) {
-      children.style.removeProperty("--active-connector-end");
+      delete children.dataset.activeConnectorEnd;
       return;
     }
     const activeBranchBox = activeBranch.getBoundingClientRect();
     const activeConnectorEnd = activeBranchBox.top - childrenBox.top + branchTop;
-    children.style.setProperty("--active-connector-end", `${activeConnectorEnd}px`);
+    children.dataset.activeConnectorEnd = String(activeConnectorEnd);
   });
+}
+
+function connectorAnimationTargets() {
+  return {
+    stems: Array.from(app.querySelectorAll<HTMLElement>(".branch > ul")),
+    lines: Array.from(app.querySelectorAll<HTMLElement>(".incoming-connector > i:first-child")),
+    arrows: Array.from(app.querySelectorAll<HTMLElement>(".incoming-connector > i:last-child"))
+  };
+}
+
+function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
+  connectorTimeline?.kill();
+  hoverIntent?.kill();
+  layoutTreeConnectors(activeCoordinate);
+  const { stems, lines, arrows } = connectorAnimationTargets();
+  gsap.killTweensOf([...stems, ...lines, ...arrows]);
+  gsap.set(stems, { "--active-connector-draw": "0px" });
+  gsap.set(lines, { scaleX: 0 });
+  gsap.set(arrows, { scale: 0 });
+  const pathBranches = Array.from(app.querySelectorAll<HTMLElement>(".branch.connector-path"))
+    .filter((branch) => branch.parentElement?.parentElement?.classList.contains("branch"))
+    .sort((left, right) => Number(left.dataset.depth) - Number(right.dataset.depth));
+  if (!animate || reducedMotion.matches) {
+    pathBranches.forEach((branch) => {
+      const stem = branch.parentElement as HTMLElement;
+      const end = stem.dataset.activeConnectorEnd;
+      if (end) gsap.set(stem, { "--active-connector-draw": `${end}px` });
+      gsap.set(branch.querySelectorAll(".incoming-connector > i"), { scaleX: 1, scale: 1 });
+    });
+    return;
+  }
+  connectorTimeline = gsap.timeline();
+  pathBranches.forEach((branch, index) => {
+    const stem = branch.parentElement as HTMLElement;
+    const end = stem.dataset.activeConnectorEnd;
+    const line = branch.querySelector<HTMLElement>(".incoming-connector > i:first-child");
+    const arrow = branch.querySelector<HTMLElement>(".incoming-connector > i:last-child");
+    if (!end || !line || !arrow) return;
+    const start = index * 0.035;
+    connectorTimeline!
+      .to(stem, { "--active-connector-draw": `${end}px`, duration: 0.12, ease: "power2.out" }, start)
+      .to(line, { scaleX: 1, duration: 0.08, ease: "power2.out" }, start + 0.06)
+      .to(arrow, { scale: 1, duration: 0.06, ease: "power2.out" }, start + 0.11);
+  });
+}
+
+function restoreSelectedConnectorPath(previousHover: string) {
+  hoverIntent?.kill();
+  if (!previousHover || previousHover === selected || reducedMotion.matches) {
+    showTreeConnectorPath(selected, false);
+    return;
+  }
+  connectorTimeline?.kill();
+  const { stems, lines, arrows } = connectorAnimationTargets();
+  gsap.killTweensOf([...stems, ...lines, ...arrows]);
+  connectorTimeline = gsap.timeline({ onComplete: () => showTreeConnectorPath(selected, true) })
+    .to(lines, { scaleX: 0, duration: 0.08, ease: "power1.in" }, 0)
+    .to(arrows, { scale: 0, duration: 0.08, ease: "power1.in" }, 0)
+    .to(stems, { "--active-connector-draw": "0px", duration: 0.1, ease: "power1.in" }, 0);
 }
 
 function renderList(animateRows = true) {
@@ -177,7 +239,7 @@ function renderList(animateRows = true) {
   }
 }
 
-function renderApp(animateListRows = true) {
+function renderApp(animateListRows = true, animateConnectorPath = false) {
   if (!dag) return;
   const currentDag = dag;
   app.innerHTML = `
@@ -201,22 +263,28 @@ function renderApp(animateListRows = true) {
     </div>`;
   bindWorkspace();
   renderList(animateListRows);
-  positionTreeConnectors();
+  showTreeConnectorPath(selected, animateConnectorPath);
 }
 
 function bindWorkspace() {
   app.onpointerover = (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
     if (!button?.dataset.select) return;
-    hoveredProblem = button.dataset.select;
-    positionTreeConnectors();
+    if (event.relatedTarget instanceof Node && button.contains(event.relatedTarget)) return;
+    const coordinate = button.dataset.select;
+    hoverIntent?.kill();
+    hoverIntent = gsap.delayedCall(0.04, () => {
+      hoveredProblem = coordinate;
+      showTreeConnectorPath(coordinate, true);
+    });
   };
   app.onpointerout = (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
     if (!button) return;
     if (event.relatedTarget instanceof Node && button.contains(event.relatedTarget)) return;
+    const previousHover = hoveredProblem;
     hoveredProblem = "";
-    positionTreeConnectors();
+    restoreSelectedConnectorPath(previousHover);
   };
   app.onclick = (event) => {
     const target = event.target as Element;
@@ -225,11 +293,13 @@ function bindWorkspace() {
     if (selectButton?.dataset.select) {
       selected = selectButton.dataset.select;
       const selectedFromTree = selectButton.hasAttribute("data-tree-node");
+      hoveredProblem = "";
+      hoverIntent?.kill();
       if (selectedFromTree) {
         listScope = selected;
         activeFilter = "all";
       }
-      renderApp(selectedFromTree);
+      renderApp(selectedFromTree, selectedFromTree);
       void openProblem(selected);
     } else if (filterButton?.dataset.filter) {
       activeFilter = filterButton.dataset.filter;
@@ -374,4 +444,4 @@ async function loadDag(value: string) {
 if (ROOT_A_TAG) void loadDag(ROOT_A_TAG);
 else showSetup();
 
-window.addEventListener("resize", positionTreeConnectors);
+window.addEventListener("resize", () => showTreeConnectorPath(hoveredProblem || selected, false));
