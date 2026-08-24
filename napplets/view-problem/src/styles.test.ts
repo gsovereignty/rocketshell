@@ -18,4 +18,14 @@ describe("discussion layout", () => {
   it("does not render a related-problems section", () => {
     expect(main).not.toContain('<section class="related"');
   });
+
+  it("keeps readable identity fallbacks while GSAP owns shimmer motion", () => {
+    expect(main).toContain("pubkeyDisplay(author)");
+    expect(main).toContain('gsap.fromTo(names');
+    expect(main).toContain('gsap.fromTo(avatars');
+    expect(main).toContain("profileLoadingAuthors.delete(author)");
+    expect(main).toContain("avatarLoadingAuthors.delete(author)");
+    expect(styles).toContain(".profile-name-loading");
+    expect(styles).toContain("@media(prefers-reduced-motion:reduce)");
+  });
 });

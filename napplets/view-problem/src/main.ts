@@ -13,7 +13,7 @@ import {
   selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
-import { pubkeyAvatarHue, pubkeyAvatarLabel } from "./avatar";
+import { pubkeyAvatarHue, pubkeyAvatarLabel, pubkeyDisplay } from "./avatar";
 import { profileFromEvents, type ProfileData } from "./profile";
 import { formatRelativeTime } from "./time";
 import { renderMarkdown } from "./markdown";
@@ -40,9 +40,12 @@ let countdownTimer: ReturnType<typeof setInterval> | undefined;
 const profiles = new Map<string, ProfileData>();
 const avatarHandles = new Map<string, { url: string; revoke(): void }>();
 const avatarRequestVersions = new Map<string, number>();
+const profileLoadingAuthors = new Set<string>();
+const avatarLoadingAuthors = new Set<string>();
 const mediaObjectUrls = new Set<string>();
 let mediaRenderVersion = 0;
 let recordEntrancePending = true;
+let profileShimmerTweens: gsap.core.Tween[] = [];
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function refreshAncestorOwners(coordinate: string): void {
@@ -131,8 +134,20 @@ function stopDiscussionSubscription() {
 const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
 const commentEvents = () => comments.filter(({ event }) => !event.tags.some((tag) => tag[0] === "patched"));
 
-const authorName = (author: string) => profiles.get(author)?.name ?? shortKey(author);
-const fallbackAvatar = (author: string) => `<span class="avatar" style="--avatar-hue:${pubkeyAvatarHue(author)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(authorName(author)))}</span>`;
+const displayNpub = (author: string) => {
+  try {
+    return pubkeyDisplay(author);
+  } catch (error) {
+    console.warn("Profile npub encoding failed; using shortened public key", { author, error });
+    return shortKey(author);
+  }
+};
+const authorName = (author: string) => {
+  const name = profiles.get(author)?.name;
+  return name && name !== author ? name : displayNpub(author);
+};
+const profileNameClass = (author: string) => profileLoadingAuthors.has(author) ? "profile-name-loading" : "";
+const fallbackAvatar = (author: string) => `<span class="avatar generated-avatar${avatarLoadingAuthors.has(author) ? " profile-avatar-loading" : ""}" style="--avatar-hue:${pubkeyAvatarHue(author)}" aria-hidden="true">${escapeHtml(pubkeyAvatarLabel(author))}</span>`;
 const authorAvatar = (author: string) => {
   const profile = profiles.get(author);
   const handle = avatarHandles.get(author);
@@ -153,6 +168,7 @@ const renderChanges = (changes: ReturnType<typeof compareProblemRevisions>) => c
 
 function render() {
   if (!problem) return;
+  stopProfileShimmers();
   resetMedia();
   const discussion = commentEvents().sort((a, b) => a.event.created_at - b.event.created_at);
   const revisions = problemRevisionHistory(problem.coordinate, relatedEvents);
@@ -169,7 +185,7 @@ function render() {
   const canEdit = mayEditProblem(problem, pubkey, ancestorOwners);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
-    <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
+    <div><span>Claimed by</span><strong class="${profileNameClass(effectiveClaim.claimant)}" title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
     <div class="claim-deadline"><span>Time left for PR</span>${effectiveClaim.expiresAt
       ? `<time data-claim-deadline="${effectiveClaim.expiresAt}" datetime="${new Date(effectiveClaim.expiresAt * 1000).toISOString()}">${formatClaimCountdown(effectiveClaim.expiresAt - Date.now() / 1000)}</time>`
       : `<strong>Deadline unavailable</strong>`}</div>
@@ -181,7 +197,7 @@ function render() {
       <h1 id="problem-title">${escapeHtml(problem.title)}</h1>
       <div class="problem-author">
         ${authorAvatar(problem.owner)}
-        <div><span>Problem author</span><strong title="${escapeHtml(problem.owner)}">${escapeHtml(authorName(problem.owner))}</strong></div>
+        <div><span>Problem author</span><strong class="${profileNameClass(problem.owner)}" title="${escapeHtml(problem.owner)}">${escapeHtml(authorName(problem.owner))}</strong></div>
       </div>
       <div class="description markdown-body">${renderMarkdown(problem.description)}</div>
       <div class="actions">
@@ -195,11 +211,11 @@ function render() {
       <h2 id="discussion-title">Discussion · ${discussion.length} comment${discussion.length === 1 ? "" : "s"}${edits.length ? ` · ${edits.length} edit${edits.length === 1 ? "" : "s"}` : ""}</h2>
       <ol>${activity.length ? activity.map((item) => item.type === "revision" ? `<li class="revision-entry${item.revision.id === problem?.revisionId ? " current" : ""}">
         ${authorAvatar(item.revision.author)}
-        <details${item.revision.id === problem?.revisionId ? " open" : ""}><summary><span class="history-summary"><span><strong class="activity-kind">Edit</strong><span class="status status-${escapeHtml(item.revision.status)}"><i></i>${escapeHtml(statusLabel(item.revision.status))}</span>${item.revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</span><strong>${escapeHtml(item.revision.title)}</strong><small><span title="${escapeHtml(item.revision.author)}">${escapeHtml(authorName(item.revision.author))}</span><time datetime="${new Date(item.revision.createdAt * 1000).toISOString()}" title="${new Date(item.revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(item.revision.createdAt)}</time><code title="${item.revision.id}">${shortKey(item.revision.id)}</code></small></span></summary>
+        <details${item.revision.id === problem?.revisionId ? " open" : ""}><summary><span class="history-summary"><span><strong class="activity-kind">Edit</strong><span class="status status-${escapeHtml(item.revision.status)}"><i></i>${escapeHtml(statusLabel(item.revision.status))}</span>${item.revision.id === problem?.revisionId ? '<strong class="current-label">Current</strong>' : ""}</span><strong>${escapeHtml(item.revision.title)}</strong><small><span class="${profileNameClass(item.revision.author)}" title="${escapeHtml(item.revision.author)}">${escapeHtml(authorName(item.revision.author))}</span><time datetime="${new Date(item.revision.createdAt * 1000).toISOString()}" title="${new Date(item.revision.createdAt * 1000).toLocaleString()}">${formatRelativeTime(item.revision.createdAt)}</time><code title="${item.revision.id}">${shortKey(item.revision.id)}</code></small></span></summary>
         ${revisionChanges(item.revision, revisions)}</details>
       </li>` : `<li class="comment-entry-row">
         ${authorAvatar(item.result.event.pubkey)}
-        <div><header><strong title="${escapeHtml(item.result.event.pubkey)}">${escapeHtml(authorName(item.result.event.pubkey))}</strong><time datetime="${new Date(item.result.event.created_at * 1000).toISOString()}" title="${new Date(item.result.event.created_at * 1000).toLocaleString()}">${formatRelativeTime(item.result.event.created_at)}</time></header><div class="markdown-body comment-body">${renderMarkdown(item.result.event.content)}</div></div>
+        <div><header><strong class="${profileNameClass(item.result.event.pubkey)}" title="${escapeHtml(item.result.event.pubkey)}">${escapeHtml(authorName(item.result.event.pubkey))}</strong><time datetime="${new Date(item.result.event.created_at * 1000).toISOString()}" title="${new Date(item.result.event.created_at * 1000).toLocaleString()}">${formatRelativeTime(item.result.event.created_at)}</time></header><div class="markdown-body comment-body">${renderMarkdown(item.result.event.content)}</div></div>
       </li>`).join("") : `<li class="empty">No discussion or edit history yet.</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>
@@ -210,12 +226,34 @@ function render() {
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
+  startProfileShimmers();
   void hydrateMedia(mediaRenderVersion);
   syncClaimCountdown(effectiveClaim?.expiresAt);
   if (recordEntrancePending && !reducedMotion) {
     gsap.fromTo(".problem-copy > *, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
   }
   recordEntrancePending = false;
+}
+
+function stopProfileShimmers(): void {
+  profileShimmerTweens.forEach((tween) => tween.kill());
+  profileShimmerTweens = [];
+}
+
+function startProfileShimmers(): void {
+  if (reducedMotion) return;
+  const names = gsap.utils.toArray<HTMLElement>(".profile-name-loading");
+  const avatars = gsap.utils.toArray<HTMLElement>(".profile-avatar-loading");
+  if (names.length) {
+    profileShimmerTweens.push(gsap.fromTo(names, { backgroundPositionX: "145%" }, {
+      backgroundPositionX: "-45%", duration: 1.65, ease: "none", repeat: -1
+    }));
+  }
+  if (avatars.length) {
+    profileShimmerTweens.push(gsap.fromTo(avatars, { backgroundPositionX: "165%, 0%" }, {
+      backgroundPositionX: "-65%, 0%", duration: 1.65, delay: .14, ease: "none", repeat: -1
+    }));
+  }
 }
 
 function resetMedia(): void {
@@ -388,14 +426,23 @@ function receiveDiscussion(result: RelayEventResult) {
 }
 
 async function loadProfiles(authors: string[]) {
-  const missing = [...new Set(authors)].filter((author) => !profiles.has(author));
+  const missing = [...new Set(authors)].filter((author) => !profiles.has(author) && !profileLoadingAuthors.has(author));
   if (!missing.length) return;
-  missing.forEach((author) => profiles.set(author, { name: shortKey(author) }));
+  missing.forEach((author) => {
+    profileLoadingAuthors.add(author);
+    avatarLoadingAuthors.add(author);
+  });
+  if (problem) render();
   try {
     const response = await outbox.query({ kinds: [0], authors: missing, limit: missing.length }, { limit: missing.length, timeoutMs: 8000 });
     const loadProfile = async (author: string) => {
       const profile = profileFromEvents(author, response.events.map(({ event }) => event));
-      if (!profile) return;
+      profileLoadingAuthors.delete(author);
+      if (!profile) {
+        avatarLoadingAuthors.delete(author);
+        if (problem) render();
+        return;
+      }
       profiles.set(author, profile);
       const version = (avatarRequestVersions.get(author) ?? 0) + 1;
       avatarRequestVersions.set(author, version);
@@ -403,11 +450,14 @@ async function loadProfiles(authors: string[]) {
       avatarHandles.delete(author);
       const resourceAvailable = Boolean((window as Window & { napplet?: { resource?: unknown } }).napplet?.resource);
       if (!profile.picture || !resourceAvailable) {
+        avatarLoadingAuthors.delete(author);
         if (profile.picture && !resourceAvailable) {
           console.warn("Profile picture unavailable; shell resource domain is missing", { author });
         }
+        if (problem) render();
         return;
       }
+      if (problem) render();
       try {
         const blob = await resource.bytes(profile.picture);
         if (!blob.type.startsWith("image/")) {
@@ -420,9 +470,11 @@ async function loadProfiles(authors: string[]) {
           return;
         }
         avatarHandles.set(author, { url, revoke: () => URL.revokeObjectURL(url) });
-        if (problem) render();
       } catch (error) {
         console.warn("Profile picture fetch failed; using generated avatar", { author, picture: profile.picture, error });
+      } finally {
+        avatarLoadingAuthors.delete(author);
+        if (problem) render();
       }
     };
     const queue = [...missing];
@@ -435,6 +487,11 @@ async function loadProfiles(authors: string[]) {
     if (problem) render();
   } catch (error) {
     console.warn("Profile metadata query failed; using pubkey fallbacks", { authors: missing, error });
+    missing.forEach((author) => {
+      profileLoadingAuthors.delete(author);
+      avatarLoadingAuthors.delete(author);
+    });
+    if (problem) render();
   }
 }
 
@@ -609,6 +666,7 @@ async function start() {
 }
 
 addEventListener("beforeunload", () => {
+  stopProfileShimmers();
   discussionSubscription?.close(); identitySubscription?.close(); intentSubscription?.close();
   if (countdownTimer) clearInterval(countdownTimer);
   avatarHandles.forEach((handle) => handle.revoke());

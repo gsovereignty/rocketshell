@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@napplet/sdk": "0.27.2",
-    "gsap": "3.15.0"
+    "gsap": "3.15.0",
+    "nostr-tools": "2.24.0"
   },
   "devDependencies": {
     "@napplet/conformance-cli": "0.2.18",
