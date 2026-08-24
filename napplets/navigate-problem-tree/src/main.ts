@@ -103,7 +103,11 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
   const isSelected = selected === coordinate;
   const isOnSelectedPath = ancestorCoordinates(dag, selected).has(coordinate);
   return `<li class="branch" data-coordinate="${coordinate}" data-depth="${depth}" style="--depth:${depth}">
-    <span class="incoming-connector" aria-hidden="true"><i></i><i></i></span>
+    <span class="incoming-connector" aria-hidden="true">
+      <i class="connector-line"></i><i class="connector-arrow"></i>
+      <i class="connector-line active-connector-line" data-active-connector></i>
+      <i class="connector-arrow active-connector-arrow" data-active-connector></i>
+    </span>
     <button class="tree-node${isSelected ? " selected" : ""}${isOnSelectedPath ? " selected-path" : ""}" data-select="${coordinate}" data-tree-node aria-current="${isSelected ? "true" : "false"}">
       <span>${escapeHtml(node.title)}</span>
       <span class="node-meta">${node.forkCount ? `<b>${node.forkCount + 1} heads</b>` : ""}<small>${descendantsCount(dag, coordinate)}</small></span>
@@ -131,19 +135,21 @@ function layoutTreeConnectors(activeCoordinate = hoveredProblem || selected) {
   app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
     const lastBranch = children.lastElementChild;
     if (!lastBranch) return;
-    const branchTop = Number.parseFloat(getComputedStyle(lastBranch, "::before").top);
-    if (!Number.isFinite(branchTop)) return;
+    const lastLine = lastBranch.querySelector<HTMLElement>(":scope > .incoming-connector > .connector-line");
+    if (!lastLine) return;
     const childrenBox = children.getBoundingClientRect();
-    const branchBox = lastBranch.getBoundingClientRect();
-    const connectorEnd = branchBox.top - childrenBox.top + branchTop;
+    const lastLineBox = lastLine.getBoundingClientRect();
+    const connectorEnd = lastLineBox.top - childrenBox.top + lastLineBox.height / 2;
     children.style.setProperty("--connector-end", `${connectorEnd}px`);
     const activeBranch = Array.from(children.children).find((child) => child.classList.contains("connector-path"));
     if (!activeBranch) {
       delete children.dataset.activeConnectorEnd;
       return;
     }
-    const activeBranchBox = activeBranch.getBoundingClientRect();
-    const activeConnectorEnd = activeBranchBox.top - childrenBox.top + branchTop;
+    const activeLine = activeBranch.querySelector<HTMLElement>(":scope > .incoming-connector > .connector-line");
+    if (!activeLine) return;
+    const activeLineBox = activeLine.getBoundingClientRect();
+    const activeConnectorEnd = activeLineBox.top - childrenBox.top + activeLineBox.height / 2;
     children.dataset.activeConnectorEnd = String(activeConnectorEnd);
   });
 }
@@ -151,8 +157,8 @@ function layoutTreeConnectors(activeCoordinate = hoveredProblem || selected) {
 function connectorAnimationTargets() {
   return {
     stems: Array.from(app.querySelectorAll<HTMLElement>(".branch > ul")),
-    lines: Array.from(app.querySelectorAll<HTMLElement>(".incoming-connector > i:first-child")),
-    arrows: Array.from(app.querySelectorAll<HTMLElement>(".incoming-connector > i:last-child"))
+    lines: Array.from(app.querySelectorAll<HTMLElement>(".active-connector-line")),
+    arrows: Array.from(app.querySelectorAll<HTMLElement>(".active-connector-arrow"))
   };
 }
 
@@ -173,7 +179,7 @@ function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
       const stem = branch.parentElement as HTMLElement;
       const end = stem.dataset.activeConnectorEnd;
       if (end) gsap.set(stem, { "--active-connector-draw": `${end}px` });
-      gsap.set(branch.querySelectorAll(".incoming-connector > i"), { scaleX: 1, scale: 1 });
+      gsap.set(branch.querySelectorAll("[data-active-connector]"), { scaleX: 1, scale: 1 });
     });
     return;
   }
@@ -181,8 +187,8 @@ function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
   pathBranches.forEach((branch, index) => {
     const stem = branch.parentElement as HTMLElement;
     const end = stem.dataset.activeConnectorEnd;
-    const line = branch.querySelector<HTMLElement>(".incoming-connector > i:first-child");
-    const arrow = branch.querySelector<HTMLElement>(".incoming-connector > i:last-child");
+    const line = branch.querySelector<HTMLElement>(".active-connector-line");
+    const arrow = branch.querySelector<HTMLElement>(".active-connector-arrow");
     if (!end || !line || !arrow) return;
     const start = index * 0.035;
     connectorTimeline!
