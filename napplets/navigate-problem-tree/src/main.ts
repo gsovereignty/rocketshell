@@ -269,7 +269,7 @@ async function openProblem(coordinate: string) {
   try {
     const result = await openProblemViewer(intent, node.revisionId);
     if (!result.ok || !result.handled) throw new Error(result.error ?? "View Problem did not accept this problem.");
-    status.textContent = `${node.title} opened in problem viewer.`;
+    status.textContent = "";
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : "Problem could not be opened.";
   } finally {
