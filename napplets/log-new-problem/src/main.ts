@@ -9,6 +9,7 @@ import {
 } from "./problem";
 import { publishSuccessMessage } from "./publish-result";
 import { attachmentMarkdown } from "./attachment";
+import { collectProblemFields, resetProblemEditorFields } from "./editor-state";
 
 const root = document.querySelector<HTMLElement>("#app");
 if (!root) throw new Error("Application root is missing.");
@@ -259,21 +260,6 @@ try {
   });
 }
 
-function collectProblemFields(): FormData {
-  const data = new FormData();
-  problemEditor.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
-    if (!control.disabled) data.append(control.name, control.value);
-  });
-  return data;
-}
-
-function resetProblemFields(): void {
-  problemEditor.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
-    if (control instanceof HTMLSelectElement) control.selectedIndex = 0;
-    else control.value = "";
-  });
-}
-
 async function uploadAttachment() {
   const file = attachmentInput.files?.[0];
   if (!file || uploading || !uploadAvailable) return;
@@ -305,15 +291,13 @@ async function publishProblem() {
   publishButton.disabled = true;
   setStatus("Preparing event for shell approval…", "busy");
   try {
-    const draft = readDraft(collectProblemFields(), markdownEditor.getValue());
+    const draft = readDraft(collectProblemFields(problemEditor), markdownEditor.getValue());
     const random = crypto.getRandomValues(new Uint8Array(32));
     const template = buildProblemTemplate(pubkey, createProblemId(random), draft, Math.floor(Date.now() / 1000), parent);
     const recipients = parent ? Array.from(new Set([parent.owner, parent.rootOwner])) : [];
     const result = await outbox.publish(template, recipients.length ? { toInboxes: recipients } : undefined);
     setStatus(publishSuccessMessage(result), "success");
-    resetProblemFields();
-    markdownEditor.setValue("");
-    count.value = "0";
+    resetProblemEditorFields(problemEditor, markdownEditor, count);
     animate(statusLine, {});
   } catch (error) {
     console.error("Problem publication failed", { mode: parent ? "child" : "root", parentProblemId: parent?.problemId, error });

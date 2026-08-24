@@ -4,11 +4,11 @@ export default defineConfig({
   testDir: "tests/browser",
   testMatch: "shell.spec.ts",
   timeout: 30_000,
-  use: { baseURL: "http://127.0.0.1:4173/shell/", trace: "retain-on-failure" },
+  use: { baseURL: "http://127.0.0.1:4173/rocketshell/", trace: "retain-on-failure" },
   webServer: {
     // Blossom servers are no longer a build-time env var: the upload spec seeds the settings store instead.
     command: "VITE_INSTALL_FIXTURE=true pnpm --filter @platform/shell build:github && PLATFORM_TEST_BLOSSOM=true pnpm --filter @platform/shell preview:github --host 127.0.0.1 --port 4173",
-    url: "http://127.0.0.1:4173/shell/",
+    url: "http://127.0.0.1:4173/rocketshell/",
     reuseExistingServer: false,
     timeout: 120_000
   },

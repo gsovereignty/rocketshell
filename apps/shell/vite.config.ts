@@ -73,7 +73,7 @@ const testResourceServer = (): Plugin => ({
   configurePreviewServer(server) {
     server.middlewares.use((request, response, next) => {
       const pathname = new URL(request.url ?? "/", "http://vite.local").pathname;
-      if (pathname !== "/shell/resource-test.png") { next(); return; }
+      if (pathname !== "/rocketshell/resource-test.png") { next(); return; }
       response.statusCode = 200;
       response.setHeader("Content-Type", "text/plain");
       response.end(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));

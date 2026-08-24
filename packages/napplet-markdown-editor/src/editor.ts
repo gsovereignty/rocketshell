@@ -83,6 +83,10 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
       ...defaultKeymap, ...historyKeymap, indentWithTab
     ])),
     collapseOnSelectionFacet.of(true), mouseSelectingField, livePreviewPlugin,
+    // Stock codeBlockField pulls lowlight's dynamic highlighter path into the
+    // napplet bundle. That path references runtime-loaded language modules and
+    // forbidden browser globals, breaking single-file NAP web conformance.
+    // Keep highlighting curated and build-time bundled in codeFencePreview.
     markdownStylePlugin, editorTheme, tableEditorPlugin(), codeFencePreview(report), nonNavigatingLinkPreview(),
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({ "aria-label": options.ariaLabel, "aria-multiline": "true" }),

@@ -315,10 +315,10 @@ importers:
       codemirror-live-markdown:
         specifier: 0.5.1-alpha.1
         version: 0.5.1-alpha.1(@codemirror/lang-markdown@6.5.2)(@codemirror/language@6.12.4)(@codemirror/state@6.7.1)(@codemirror/view@6.43.9)(@lezer/markdown@1.7.2)
+    devDependencies:
       highlight.js:
         specifier: 11.11.1
         version: 11.11.1
-    devDependencies:
       jsdom:
         specifier: 26.1.0
         version: 26.1.0
@@ -1688,7 +1688,7 @@ packages:
   /highlight.js@11.11.1:
     resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
     engines: {node: '>=12.0.0'}
-    dev: false
+    dev: true
 
   /html-encoding-sniffer@4.0.0:
     resolution: {integrity: sha512-Y22oTqIU4uuPgEemfz7NDJz6OeKf12Lsu+QC+s3BVpda64lTiMYCyGwg5ki4vFxkMwQdeZDl2adZoqUgdFuTgQ==}

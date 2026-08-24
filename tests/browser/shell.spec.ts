@@ -19,17 +19,17 @@ test("starts under repository subpath and gains service-worker control", async (
   await page.goto("./");
   await expect(page).toHaveTitle("Rocketshell");
   await expect(page.locator("#status")).toHaveText("Platform ready");
-  expect(await page.evaluate(async () => Boolean(await navigator.serviceWorker.getRegistration("/shell/")))).toBe(true);
+  expect(await page.evaluate(async () => Boolean(await navigator.serviceWorker.getRegistration("/rocketshell/")))).toBe(true);
   await page.reload();
   await expect(page.locator("#status")).toHaveText("Platform ready");
-  expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/shell/service-worker.js"))).toBe(true);
+  expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/rocketshell/service-worker.js"))).toBe(true);
 });
 
 test("build contains no root-relative project asset URLs", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
   const urls = await page.locator("script[src],link[href]").evaluateAll((elements) => elements.map((element) => element.getAttribute("src") ?? element.getAttribute("href")));
-  expect(urls.filter(Boolean).every((url) => url!.startsWith("/shell/") || url!.startsWith("./"))).toBe(true);
+  expect(urls.filter(Boolean).every((url) => url!.startsWith("/rocketshell/") || url!.startsWith("./"))).toBe(true);
 });
 
 test("isolates package, public event, and private account persistence", async ({ page }) => {
@@ -63,7 +63,7 @@ test("runs verified fixture as opaque network-isolated Napplet", async ({ page }
 });
 
 test("fetches resource bytes through the sandbox bridge", async ({ page, context }) => {
-  const resourceUrl = "http://127.0.0.1:4173/shell/resource-test.png";
+  const resourceUrl = "http://127.0.0.1:4173/rocketshell/resource-test.png";
   const requests: { method: string; authorization: string; cookie: string; referer: string }[] = [];
   page.on("request", (request) => {
     if (request.url() !== resourceUrl) return;
@@ -644,6 +644,58 @@ test("dock always includes built-in Napplets", async ({ page }) => {
   await expect(page.locator('iframe[title="log-new-problem"]')).toHaveCount(0);
   await launcher.click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Log New Problem is built in to Rocketshell" })).toBeDisabled();
+});
+
+test("edits new-problem Markdown inside packaged sandbox", async ({ page }) => {
+  const browserErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => browserErrors.push(error.message));
+  await page.addInitScript(() => {
+    localStorage.setItem("platform:settings:v1", JSON.stringify({ backupBlossomServers: ["http://127.0.0.1:4173/mock-blossom"] }));
+  });
+  const secret = new Uint8Array(32); secret[31] = 12;
+  const pubkey = getPublicKey(secret);
+  await page.exposeFunction("__platformTestSignProblem", (template: Parameters<typeof finalizeEvent>[0]) => finalizeEvent(template, secret));
+  await page.addInitScript((activePubkey) => {
+    Object.defineProperty(window, "nostr", { value: {
+      getPublicKey: async () => activePubkey,
+      signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) =>
+        (window as unknown as { __platformTestSignProblem(value: typeof template): Promise<unknown> }).__platformTestSignProblem(template)
+    }, configurable: true });
+  }, pubkey);
+
+  await page.goto("./");
+  await expect(page.getByRole("button", { name: "Open Log New Problem" })).toBeVisible();
+  await page.evaluate(() => window.__platformTest?.connectExtension());
+  await page.getByRole("button", { name: "Open Log New Problem" }).click();
+  const iframe = page.locator('iframe[title="log-new-problem"]');
+  await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
+  const frame = page.frameLocator('iframe[title="log-new-problem"]');
+  await expect(frame.getByRole("toolbar", { name: "Markdown formatting" })).toBeVisible();
+  await expect(frame.getByRole("button", { name: "Bold" })).toBeEnabled();
+  await expect(frame.locator("form")).toHaveCount(0);
+
+  await frame.getByRole("button", { name: "Bold" }).click();
+  await expect(frame.locator("#count")).not.toHaveText("0");
+  const content = frame.locator(".cm-content");
+  await content.click();
+  await content.press("End");
+  await content.press("Enter");
+  await content.pressSequentially("second line");
+  await expect(frame.locator(".cm-line")).toHaveCount(2);
+
+  await frame.locator("#attachment").setInputFiles({ name: "proof.png", mimeType: "image/png", buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]) });
+  await expect(frame.locator("#attachment-status")).toContainText("proof.png added to description");
+  await expect(frame.locator("#count")).not.toHaveText("0");
+
+  await content.press("Control+Enter");
+  await expect(frame.locator("#status-line")).toHaveText("Add a problem title.");
+  expect(browserErrors.filter((message) => /allow-forms|form submission/i.test(message))).toEqual([]);
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect.poll(() => frame.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 });
 
 test("dock icon override persists and can be reset", async ({ page }) => {
