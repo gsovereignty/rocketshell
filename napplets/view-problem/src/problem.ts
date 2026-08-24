@@ -172,10 +172,18 @@ const directParentCoordinates = (event: NostrEvent): string[] => event.tags
   .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
   .map((item) => item[1]);
 
+const selectedProblemRevision = (problem: ProblemView, results: RelayEventResult[]): NostrEvent => {
+  const selected = results.find(({ event }) => event.id === problem.revisionId &&
+    event.kind === PROBLEM_KIND && tagValue(event, "d") === problem.problemId &&
+    tagValue(event, "a", "origin") === problem.coordinate)?.event;
+  if (!selected) throw new Error(`Selected problem revision ${problem.revisionId} was not found.`);
+  return selected;
+};
+
 export function missingProblemAncestorCoordinates(problem: ProblemView, results: RelayEventResult[]): string[] {
   const missing = new Set<string>();
   const visited = new Set<string>();
-  const pending = [...directParentCoordinates(currentProblemHead(problem.coordinate, results).event)];
+  const pending = [...directParentCoordinates(selectedProblemRevision(problem, results))];
   while (pending.length) {
     const coordinate = pending.pop()!;
     if (visited.has(coordinate)) continue;
@@ -194,7 +202,7 @@ export function resolveProblemAncestorOwners(problem: ProblemView, results: Rela
   const owners = new Set<string>();
   const visited = new Set<string>();
   const visiting = new Set<string>();
-  const selected = currentProblemHead(problem.coordinate, results).event;
+  const selected = selectedProblemRevision(problem, results);
   const visit = (coordinate: string) => {
     if (visiting.has(coordinate)) throw new Error("Problem ancestry contains a cycle.");
     if (visited.has(coordinate)) return;

@@ -133,6 +133,20 @@ describe("problem view", () => {
     expect(ancestors).toEqual([rootOwner, parentOwner].sort());
     expect(mayEditProblem(problem, rootOwner, ancestors)).toBe(true);
   });
+  it("keeps selected ancestry stable when another target head arrives", () => {
+    const parentOwner = "e".repeat(64);
+    const parentId = "2".repeat(64);
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const baseEvent = (result as unknown as { event: { tags: string[][] } }).event;
+    const selectedResult = { event: { ...baseEvent, tags: [...baseEvent.tags, ["a", parentCoordinate]] } } as never;
+    const problem = selectProblem(coordinate, [selectedResult]);
+    const fork = { event: { ...baseEvent, id: "9".repeat(64), created_at: 2,
+      tags: [...baseEvent.tags, ["title", "Competing head"]] } } as never;
+    const parent = { event: { ...baseEvent, id: "8".repeat(64), pubkey: parentOwner,
+      tags: [["d", parentId], ["a", parentCoordinate, "", "origin"]] } } as never;
+    expect(missingProblemAncestorCoordinates(problem, [selectedResult, fork, parent])).toEqual([]);
+    expect(resolveProblemAncestorOwners(problem, [selectedResult, fork, parent])).toEqual([parentOwner]);
+  });
   it("resolves intent event targets to logical coordinates", () =>
     expect(coordinateFromProblemEvent((result as { event: never }).event)).toBe(coordinate));
   it("builds NIP-22 workflow tags", () => {
