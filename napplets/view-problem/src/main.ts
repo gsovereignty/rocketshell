@@ -192,10 +192,6 @@ function render() {
       ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
     </section>
-    <section class="related" aria-labelledby="related-title">
-      <h2 id="related-title">Related · ${related.length}</h2>
-      ${related.length ? `<ul>${related.map((coordinate) => `<li><button type="button" data-related="${coordinate}"><span>Problem ${escapeHtml(shortKey(coordinate.split(":")[2]))}</span><code>${escapeHtml(shortKey(coordinate))}</code></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
-    </section>
     <section class="discussion" aria-labelledby="discussion-title">
       <h2 id="discussion-title">Discussion · ${discussion.length} comment${discussion.length === 1 ? "" : "s"}${edits.length ? ` · ${edits.length} edit${edits.length === 1 ? "" : "s"}` : ""}</h2>
       <ol>${activity.length ? activity.map((item) => item.type === "revision" ? `<li class="revision-entry${item.revision.id === problem?.revisionId ? " current" : ""}">
@@ -211,6 +207,10 @@ function render() {
         <textarea id="comment" rows="1" maxlength="4000" placeholder="Leave a comment…" ${pubkey && !busy ? "" : "disabled"}></textarea>
         <button id="post-comment" type="button" ${pubkey && !busy ? "" : "disabled"}>Post</button>
       </div>
+    </section>
+    <section class="related" aria-labelledby="related-title">
+      <h2 id="related-title">Related · ${related.length}</h2>
+      ${related.length ? `<ul>${related.map((coordinate) => `<li><button type="button" data-related="${coordinate}"><span>Problem ${escapeHtml(shortKey(coordinate.split(":")[2]))}</span><code>${escapeHtml(shortKey(coordinate))}</code></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
     </section>
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
