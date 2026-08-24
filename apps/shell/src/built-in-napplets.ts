@@ -36,6 +36,12 @@ export async function installBuiltInNapplets(store: PackageStore, applicationBas
     const aggregate = await aggregateHash(napplet.files);
     const existing = await store.getActive(napplet.dTag);
     if (existing?.aggregateHash === aggregate) { installed.push(napplet.dTag); continue; }
+    const committed = await store.get(napplet.dTag, aggregate);
+    if (committed) {
+      await store.activate(napplet.dTag, aggregate);
+      installed.push(napplet.dTag);
+      continue;
+    }
     const inputs = new Map<string, ArtifactInput>();
     for (const declaration of napplet.files) {
       const response = await fetch(artifactUrl(napplet, declaration.path), { cache: "no-store" });

@@ -40,6 +40,41 @@ describe("built-in Napplet installation", () => {
     await expect(installBuiltInNapplets(new MemoryPackageStore(), "/")).rejects.toThrow("artifact changed");
   });
 
+  it("reactivates an inactive committed built-in version", async () => {
+    const versions = await Promise.all(["A", "B"].map(async (version) => {
+      const bytes = new TextEncoder().encode(`<!doctype html><title>${version}</title>`);
+      const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };
+      return { bytes, artifact, aggregateHash: await aggregateHash([artifact]) };
+    }));
+    let requestedVersion = 0;
+    const artifactFetches = vi.fn();
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (/napplets(?:\.dev)?\.json$/.test(url)) {
+        const version = versions[requestedVersion]!;
+        return new Response(JSON.stringify({
+          version: 1,
+          napplets: [{ name: "viewer", dTag: "viewer", url: "/napplets/viewer/index.html", requires: [], files: [version.artifact] }]
+        }));
+      }
+      if (url === "/napplets/viewer/index.html") {
+        artifactFetches();
+        return new Response(versions[requestedVersion]!.bytes);
+      }
+      return new Response("missing", { status: 404 });
+    }) as typeof fetch;
+    const store = new MemoryPackageStore();
+
+    await expect(installBuiltInNapplets(store, "/")).resolves.toEqual(["viewer"]);
+    requestedVersion = 1;
+    await expect(installBuiltInNapplets(store, "/")).resolves.toEqual(["viewer"]);
+    requestedVersion = 0;
+    await expect(installBuiltInNapplets(store, "/")).resolves.toEqual(["viewer"]);
+
+    expect((await store.getActive("viewer"))?.aggregateHash).toBe(versions[0]!.aggregateHash);
+    expect(artifactFetches).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps shell startup available when registry is offline", async () => {
     globalThis.fetch = vi.fn(async () => { throw new TypeError("offline"); }) as typeof fetch;
     await expect(installBuiltInNapplets(new MemoryPackageStore(), "/")).resolves.toEqual([]);
