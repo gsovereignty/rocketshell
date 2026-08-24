@@ -117,7 +117,7 @@ function filterCounts(nodes: ProblemNode[]) {
   ] as const;
 }
 
-function renderList() {
+function renderList(animateRows = true) {
   if (!dag) return;
   const parent = dag.nodes.get(listScope);
   if (!parent) return;
@@ -144,12 +144,12 @@ function renderList() {
       </button>
     </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
   const rows = list.querySelectorAll<HTMLElement>(".problem-row");
-  if (!reducedMotion.matches && rows.length > 0) {
+  if (animateRows && !reducedMotion.matches && rows.length > 0) {
     gsap.fromTo(rows, { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
   }
 }
 
-function renderApp() {
+function renderApp(animateListRows = true) {
   if (!dag) return;
   const currentDag = dag;
   app.innerHTML = `
@@ -172,7 +172,7 @@ function renderApp() {
       </section>
     </div>`;
   bindWorkspace();
-  renderList();
+  renderList(animateListRows);
 }
 
 function bindWorkspace() {
@@ -182,11 +182,12 @@ function bindWorkspace() {
     const filterButton = target.closest<HTMLButtonElement>("[data-filter]");
     if (selectButton?.dataset.select) {
       selected = selectButton.dataset.select;
-      if (selectButton.hasAttribute("data-tree-node")) {
+      const selectedFromTree = selectButton.hasAttribute("data-tree-node");
+      if (selectedFromTree) {
         listScope = selected;
         activeFilter = "all";
       }
-      renderApp();
+      renderApp(selectedFromTree);
       void openProblem(selected);
     } else if (filterButton?.dataset.filter) {
       activeFilter = filterButton.dataset.filter;
