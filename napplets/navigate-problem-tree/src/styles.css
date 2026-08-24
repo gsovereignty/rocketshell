@@ -83,7 +83,7 @@ button { color: inherit; }
 .active-connector-line { background: var(--blue); transform: scaleX(0); }
 .active-connector-arrow { background: var(--blue); transform: scale(0); }
 .tree-root > .branch > .incoming-connector { display: none; }
-.tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: transparent; text-align: left; cursor: pointer; }
+.tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: var(--white); text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }
 .tree-node.selected { color: white; background: var(--blue); }
