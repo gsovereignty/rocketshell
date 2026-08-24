@@ -154,9 +154,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .relay-connected-dot { width: .48rem; height: .48rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 #relay-popover-list code { overflow-wrap: anywhere; font: .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 #status {
+  display: grid;
+  width: 2rem;
   min-width: 0;
+  height: var(--bar-height);
+  place-items: center;
   overflow: hidden;
-  padding: 0 .75rem;
+  padding: 0;
   color: var(--accent);
   font-size: .72rem;
   font-variant-numeric: tabular-nums;
@@ -164,6 +168,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.platform-loader {
+  position: relative;
+  width: .9rem;
+  height: .9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 50%;
+}
+.platform-loader-spark {
+  position: absolute;
+  top: -.14rem;
+  left: calc(50% - .14rem);
+  width: .28rem;
+  height: .28rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 .08rem .35rem var(--accent-glow);
 }
 #screen-nav {
   display: flex;
@@ -850,7 +871,7 @@ p { margin: 0; }
   #napplet-loader button { grid-column: 1 / -1; min-height: 2.4rem; }
   #loader-status { grid-column: 1 / -1; }
   main { width: calc(100% - 1rem); }
-  #status { padding: 0 .4rem; font-size: .68rem; }
+  #status { width: 1.6rem; }
   #windows { --widget-row-height: max(22rem, calc(100dvh - var(--bar-height) - 1rem)); }
   #dock-shell { padding-right: .5rem; padding-left: .5rem; }
   #napplet-dock { max-width: 100%; overflow-x: auto; scrollbar-color: var(--accent) transparent; }

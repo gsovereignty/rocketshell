@@ -79,6 +79,15 @@ const consoleOutput = document.querySelector<HTMLElement>("#napplet-console-outp
 const consoleEmpty = document.querySelector<HTMLElement>("#napplet-console-empty");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(hover: none)");
+const platformLoader = status?.querySelector<HTMLElement>(".platform-loader");
+const platformLoadingTween = platformLoader && !reducedMotion.matches
+  ? gsap.to(platformLoader, { rotation: 360, duration: 1.15, ease: "none", repeat: -1, transformOrigin: "center" })
+  : null;
+const syncPlatformLoader = (): void => {
+  if (document.hidden) platformLoadingTween?.pause();
+  else platformLoadingTween?.resume();
+};
+document.addEventListener("visibilitychange", syncPlatformLoader);
 const widgetGrid = windowsContainer
   ? createWidgetGrid(windowsContainer, reducedMotion, window.localStorage, screenNavigation ?? undefined)
   : null;
@@ -905,7 +914,9 @@ void bootstrap().then(async (platform) => {
   void renderDock();
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });
-  if (status) status.textContent = "Platform ready";
+  platformLoadingTween?.kill();
+  document.removeEventListener("visibilitychange", syncPlatformLoader);
+  if (status) status.hidden = true;
   void (async () => {
     const restoredIds = new Map<string, string>();
     const launchers = await platform.dockLaunchers();
