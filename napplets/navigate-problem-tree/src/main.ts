@@ -27,6 +27,7 @@ const app = (() => {
 
 let dag: ProblemDag | undefined;
 let selected = "";
+let hoveredProblem = "";
 let listScope = "";
 let activeFilter = "all";
 let noteHandlerAvailable = false;
@@ -99,7 +100,7 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
   const children = visibleTreeChildren(dag, coordinate);
   const isSelected = selected === coordinate;
   const isOnSelectedPath = ancestorCoordinates(dag, selected).has(coordinate);
-  return `<li class="branch" style="--depth:${depth}">
+  return `<li class="branch" data-coordinate="${coordinate}" style="--depth:${depth}">
     <button class="tree-node${isSelected ? " selected" : ""}${isOnSelectedPath ? " selected-path" : ""}" data-select="${coordinate}" data-tree-node aria-current="${isSelected ? "true" : "false"}">
       <span>${escapeHtml(node.title)}</span>
       <span class="node-meta">${node.forkCount ? `<b>${node.forkCount + 1} heads</b>` : ""}<small>${descendantsCount(dag, coordinate)}</small></span>
@@ -118,6 +119,12 @@ function filterCounts(nodes: ProblemNode[]) {
 }
 
 function positionTreeConnectors() {
+  const activePath = dag && (hoveredProblem || selected)
+    ? ancestorCoordinates(dag, hoveredProblem || selected).add(hoveredProblem || selected)
+    : new Set<string>();
+  app.querySelectorAll<HTMLElement>(".branch[data-coordinate]").forEach((branch) => {
+    branch.classList.toggle("connector-path", activePath.has(branch.dataset.coordinate ?? ""));
+  });
   app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
     const lastBranch = children.lastElementChild;
     if (!lastBranch) return;
@@ -127,6 +134,14 @@ function positionTreeConnectors() {
     const branchBox = lastBranch.getBoundingClientRect();
     const connectorEnd = branchBox.top - childrenBox.top + branchTop;
     children.style.setProperty("--connector-end", `${connectorEnd}px`);
+    const activeBranch = Array.from(children.children).find((child) => child.classList.contains("connector-path"));
+    if (!activeBranch) {
+      children.style.removeProperty("--active-connector-end");
+      return;
+    }
+    const activeBranchBox = activeBranch.getBoundingClientRect();
+    const activeConnectorEnd = activeBranchBox.top - childrenBox.top + branchTop;
+    children.style.setProperty("--active-connector-end", `${activeConnectorEnd}px`);
   });
 }
 
@@ -190,6 +205,19 @@ function renderApp(animateListRows = true) {
 }
 
 function bindWorkspace() {
+  app.onpointerover = (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
+    if (!button?.dataset.select) return;
+    hoveredProblem = button.dataset.select;
+    positionTreeConnectors();
+  };
+  app.onpointerout = (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
+    if (!button) return;
+    if (event.relatedTarget instanceof Node && button.contains(event.relatedTarget)) return;
+    hoveredProblem = "";
+    positionTreeConnectors();
+  };
   app.onclick = (event) => {
     const target = event.target as Element;
     const selectButton = target.closest<HTMLButtonElement>("[data-select]");

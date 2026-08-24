@@ -69,6 +69,14 @@ button { color: inherit; }
   border-left: 1px solid var(--connector);
   content: "";
 }
+.branch ul::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: var(--active-connector-end, 0);
+  border-left: 1px solid var(--blue);
+  content: "";
+}
 .branch > ul > .branch::before {
   position: absolute;
   top: 25px;
@@ -87,6 +95,8 @@ button { color: inherit; }
   clip-path: polygon(0 0, 100% 50%, 0 100%);
   content: "";
 }
+.branch > ul > .branch.connector-path::before { border-color: var(--blue); }
+.branch > ul > .branch.connector-path::after { background: var(--blue); }
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: transparent; text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }
