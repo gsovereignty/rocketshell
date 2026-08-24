@@ -9,7 +9,7 @@ import { intent, outbox, type OutboxSubscription, type RelayEventResult } from "
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel,
+  ROOT_A_TAG, ancestorCoordinates, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants, statusLabel,
   visibleTreeChildren, visibleTreeRoots,
   type ProblemDag, type ProblemNode, type ProblemStatus
 } from "./problem-dag";
@@ -27,6 +27,7 @@ const app = (() => {
 
 let dag: ProblemDag | undefined;
 let selected = "";
+let listScope = "";
 let activeFilter = "all";
 let noteHandlerAvailable = false;
 let problemChildHandlerAvailable = false;
@@ -86,6 +87,7 @@ function receiveProblemEvents(rootCoordinate: string, incoming: RelayEventResult
   if (!merged.changed || !dag || dag.rootCoordinate !== rootCoordinate) return;
   dag = buildProblemDag(rootCoordinate, problemEvents);
   if (!dag.nodes.has(selected)) selected = rootCoordinate;
+  if (!dag.nodes.has(listScope)) listScope = rootCoordinate;
   renderApp();
 }
 
@@ -96,8 +98,9 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
   const nextTrail = new Set(trail).add(coordinate);
   const children = visibleTreeChildren(dag, coordinate);
   const isSelected = selected === coordinate;
+  const isOnSelectedPath = ancestorCoordinates(dag, selected).has(coordinate);
   return `<li class="branch" style="--depth:${depth}">
-    <button class="tree-node${isSelected ? " selected" : ""}" data-select="${coordinate}" aria-current="${isSelected ? "true" : "false"}">
+    <button class="tree-node${isSelected ? " selected" : ""}${isOnSelectedPath ? " selected-path" : ""}" data-select="${coordinate}" data-tree-node aria-current="${isSelected ? "true" : "false"}">
       <span>${escapeHtml(node.title)}</span>
       <span class="node-meta">${node.forkCount ? `<b>${node.forkCount + 1} heads</b>` : ""}<small>${descendantsCount(dag, coordinate)}</small></span>
     </button>
@@ -116,9 +119,9 @@ function filterCounts(nodes: ProblemNode[]) {
 
 function renderList() {
   if (!dag) return;
-  const parent = dag.nodes.get(selected);
+  const parent = dag.nodes.get(listScope);
   if (!parent) return;
-  const actionable = leafDescendants(dag, selected);
+  const actionable = leafDescendants(dag, listScope);
   const visible = activeFilter === "all" ? actionable : actionable.filter((node) => node.status === activeFilter);
   const list = document.querySelector<HTMLElement>("#problem-list");
   const filters = document.querySelector<HTMLElement>("#filters");
@@ -187,7 +190,10 @@ function bindWorkspace() {
     const filterButton = target.closest<HTMLButtonElement>("[data-filter]");
     if (selectButton?.dataset.select) {
       selected = selectButton.dataset.select;
-      activeFilter = "all";
+      if (selectButton.hasAttribute("data-tree-node")) {
+        listScope = selected;
+        activeFilter = "all";
+      }
       renderApp();
       void openProblem(selected);
     } else if (filterButton?.dataset.filter) {
@@ -322,6 +328,7 @@ async function loadDag(value: string) {
     problemEvents = mergeProblemEvents(problemEvents, events).events;
     dag = buildProblemDag(coordinate, problemEvents);
     selected = coordinate;
+    listScope = coordinate;
     noteHandlerAvailable = hasProblemViewer(noteAvailability);
     problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
     renderApp();

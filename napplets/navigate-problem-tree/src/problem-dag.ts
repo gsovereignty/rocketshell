@@ -142,6 +142,20 @@ export function leafDescendants(dag: ProblemDag, coordinate: string): ProblemNod
   return leaves.sort((a, b) => a.title.localeCompare(b.title));
 }
 
+export function ancestorCoordinates(dag: ProblemDag, coordinate: string): Set<string> {
+  const ancestors = new Set<string>();
+  const visit = (childCoordinate: string) => {
+    const child = dag.nodes.get(childCoordinate);
+    for (const parentCoordinate of child?.parentCoordinates ?? []) {
+      if (ancestors.has(parentCoordinate)) continue;
+      ancestors.add(parentCoordinate);
+      visit(parentCoordinate);
+    }
+  };
+  visit(coordinate);
+  return ancestors;
+}
+
 export function statusLabel(status: ProblemStatus): string {
   return status === "rfm" ? "RFM" : status[0].toUpperCase() + status.slice(1);
 }

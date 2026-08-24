@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
 import {
-  ROOT_A_TAG, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants,
+  ROOT_A_TAG, ancestorCoordinates, assertRootCoordinate, buildProblemDag, descendantsCount, leafDescendants,
   visibleTreeChildren, visibleTreeRoots
 } from "./problem-dag";
 
@@ -82,5 +82,19 @@ describe("problem DAG", () => {
     expect(leafDescendants(dag, root).map((node) => node.coordinate)).toEqual([grandchild, closedLeaf]);
     expect(leafDescendants(dag, child).map((node) => node.coordinate)).toEqual([grandchild]);
     expect(leafDescendants(dag, grandchild)).toEqual([]);
+  });
+
+  it("finds every ancestor path for a selected leaf", () => {
+    const parentA = `31971:${hex("2")}:${hex("3")}`;
+    const parentB = `31971:${hex("4")}:${hex("5")}`;
+    const leaf = `31971:${hex("6")}:${hex("7")}`;
+    const dag = buildProblemDag(root, [
+      problem(root, hex("1")),
+      problem(parentA, hex("2"), [["a", root, ""]]),
+      problem(parentB, hex("3"), [["a", root, ""]]),
+      problem(leaf, hex("4"), [["a", parentA, ""], ["a", parentB, ""]])
+    ]);
+
+    expect(ancestorCoordinates(dag, leaf)).toEqual(new Set([parentA, root, parentB]));
   });
 });
