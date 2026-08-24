@@ -70,8 +70,10 @@ export function coordinateFromProblemEvent(event: NostrEvent) {
 
 export function selectProblem(coordinate: string, results: RelayEventResult[]): ProblemView {
   const { owner, problemId } = parseCoordinate(coordinate);
-  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
-    tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
+  const candidates = Array.from(new Map(results
+    .filter(({ event }) => event.kind === PROBLEM_KIND &&
+      tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate)
+    .map((result) => [result.event.id, result])).values());
   if (!candidates.length) throw new Error("Problem was not found.");
   const previous = new Set(candidates.flatMap(({ event }) => event.tags
     .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));

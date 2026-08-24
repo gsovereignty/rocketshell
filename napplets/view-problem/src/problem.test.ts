@@ -17,6 +17,9 @@ describe("problem view", () => {
     expect(problemRevisionAuthors({ owner, maintainers: [maintainer, owner], parentOwners: [parentOwner] })).toEqual([owner, maintainer, parentOwner]);
   });
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
+  it("treats repeated delivery of one revision as one head", () => {
+    expect(selectProblem(coordinate, [result, result]).revisionId).toBe(revision);
+  });
   it("logs competing heads when current revision is ambiguous", () => {
     const competingId = "e".repeat(64);
     const competing = { event: {
