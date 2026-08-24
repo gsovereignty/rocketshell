@@ -33,6 +33,24 @@ describe("problem Markdown editor", () => {
     editor.destroy();
   });
 
+  it("restores media action when read-only editor becomes writable", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const onAddMedia = vi.fn();
+    const editor = createProblemMarkdownEditor({ parent, value: "draft", disabled: true, ariaLabel: "Problem description", onAddMedia });
+    const media = parent.querySelector<HTMLButtonElement>('[data-command="media"]')!;
+    expect(media).toBeTruthy();
+    expect(media.disabled).toBe(true);
+    editor.setDisabled(false);
+    expect(media.disabled).toBe(false);
+    media.click();
+    expect(onAddMedia).toHaveBeenCalledOnce();
+    expect(editor.getValue()).toBe("draft");
+    editor.setDisabled(true);
+    expect(media.disabled).toBe(true);
+    editor.destroy();
+  });
+
   it("supports keyboard formatting and toolbar activation", () => {
     const parent = document.createElement("div");
     document.body.append(parent);

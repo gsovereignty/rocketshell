@@ -129,7 +129,7 @@ function renderEditor(problem: EditableProblem): void {
       ariaLabel: "Problem description",
       placeholder: "Describe current behavior, impact, and context.",
       loadResource: (url, signal) => resource.bytes(url, { signal }),
-      onAddMedia: uploadAvailable && !disabled ? () => attachmentInput?.click() : undefined,
+      onAddMedia: uploadAvailable ? () => attachmentInput?.click() : undefined,
       onChange: (value) => { const count = document.querySelector<HTMLOutputElement>("#description-count"); if (count) count.value = String(value.length); },
       onError: (operation, error, details) => console.error(`Problem revision Markdown editor failed to ${operation}`, { problemId: problem.problemId, ...details, error })
     });
@@ -138,6 +138,7 @@ function renderEditor(problem: EditableProblem): void {
     const host = document.querySelector<HTMLElement>("#description-editor")!;
     const fallbackUpload = document.createElement("button");
     fallbackUpload.type = "button";
+    fallbackUpload.dataset.editorMedia = "true";
     fallbackUpload.textContent = "Add image or video";
     fallbackUpload.disabled = disabled || !uploadAvailable;
     fallbackUpload.addEventListener("click", () => attachmentInput?.click());

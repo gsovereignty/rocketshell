@@ -8,7 +8,7 @@ export function applyEditorAccessState(
 ): string {
   const disabled = !mayEdit || busy;
   editor?.setDisabled(disabled);
-  scope.querySelectorAll<HTMLInputElement | HTMLSelectElement>("#title, #problem-status, #child-status, #attachment").forEach((control) => { control.disabled = disabled; });
+  scope.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("#title, #problem-status, #child-status, #attachment, [data-editor-media]").forEach((control) => { control.disabled = disabled; });
   const publishButton = scope.querySelector<HTMLButtonElement>("#publish");
   if (publishButton) publishButton.disabled = disabled;
   const authority = scope.querySelector<HTMLElement>(".authority");
