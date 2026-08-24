@@ -1,5 +1,3 @@
-import "./styles.css";
-
 export { createPlainMarkdownEditorFallback, createProblemMarkdownEditor } from "./editor";
 export type {
   ProblemMarkdownEditor,

@@ -1,6 +1,7 @@
 import { identity, inc, outbox, resource, upload } from "@napplet/sdk";
 import type { OutboxSubscription, RelayEventResult, Subscription } from "@napplet/sdk";
 import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
+import "@platform/napplet-markdown-editor/styles.css";
 import { gsap } from "gsap";
 import "./styles.css";
 import {

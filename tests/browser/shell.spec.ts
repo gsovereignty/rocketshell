@@ -674,10 +674,15 @@ test("edits new-problem Markdown inside packaged sandbox", async ({ page }) => {
   await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
   const frame = page.frameLocator('iframe[title="log-new-problem"]');
   await expect(frame.getByRole("toolbar", { name: "Markdown formatting" })).toBeVisible();
-  await expect(frame.getByRole("button", { name: "Bold" })).toBeEnabled();
+  const boldButton = frame.getByRole("button", { name: "Bold" });
+  await expect(boldButton).toBeEnabled();
+  await expect(boldButton).toHaveCSS("width", "36px");
+  await expect(boldButton).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(boldButton.locator("svg")).toHaveCSS("width", "18px");
+  await expect(boldButton.locator("svg")).toHaveCSS("stroke-width", "1.8px");
   await expect(frame.locator("form")).toHaveCount(0);
 
-  await frame.getByRole("button", { name: "Bold" }).click();
+  await boldButton.click();
   await expect(frame.locator("#count")).not.toHaveText("0");
   const content = frame.locator(".cm-content");
   await content.click();

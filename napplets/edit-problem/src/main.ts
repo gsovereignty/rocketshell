@@ -1,5 +1,6 @@
 import { identity, inc, intent, outbox, resource, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
+import "@platform/napplet-markdown-editor/styles.css";
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";

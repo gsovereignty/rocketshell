@@ -11,10 +11,14 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./styles.css": {
+      "source": "./src/styles.css",
+      "default": "./dist/styles.css"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --inject-style",
+    "build": "tsup src/index.ts --format esm --dts --clean && cp src/styles.css dist/styles.css",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "prepack": "pnpm build"
