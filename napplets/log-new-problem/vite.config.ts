@@ -8,7 +8,7 @@ export default defineConfig({
       nappletType: "log-new-problem",
       title: "Log New Problem",
       description: "Create and publish NIP-1971 root and child problems.",
-      requires: ["identity", "outbox", "inc", "upload"],
+      requires: ["identity", "outbox", "inc", "upload", "resource"],
       archetypes: [{ slug: "composer", convention: "napplet:composer/problem-child" }],
       artifactMode: "single-file"
     })

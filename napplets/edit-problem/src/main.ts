@@ -1,9 +1,10 @@
-import { identity, inc, intent, outbox, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
+import { identity, inc, intent, outbox, resource, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
+import { createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
 import gsap from "gsap";
 import "./styles.css";
 import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
-import { attachmentMarkdown, insertAtSelection } from "./attachment";
+import { attachmentMarkdown } from "./attachment";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("App root is missing.");
@@ -19,6 +20,7 @@ let loadGeneration = 0;
 let pubkey = "";
 let busy = false;
 let uploading = false;
+let markdownEditor: ProblemMarkdownEditor | undefined;
 const uploadAvailable = Boolean((window as Window & { napplet?: { upload?: unknown } }).napplet?.upload);
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
@@ -32,6 +34,8 @@ function status(message: string, error = false): void {
 }
 
 function renderWaiting(message = "Waiting for problem…"): void {
+  markdownEditor?.destroy();
+  markdownEditor = undefined;
   current = undefined;
   app.innerHTML = `<section class="waiting" aria-labelledby="waiting-title">
     <div class="mark" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -53,10 +57,9 @@ function stopProblemSubscription(): void {
 
 function editorIsDirty(problem: EditableProblem): boolean {
   const title = document.querySelector<HTMLInputElement>("#title");
-  const description = document.querySelector<HTMLTextAreaElement>("#description");
   const problemStatus = document.querySelector<HTMLSelectElement>("#problem-status");
   const childStatus = document.querySelector<HTMLSelectElement>("#child-status");
-  return Boolean(title && (title.value !== problem.title || description?.value !== problem.description ||
+  return Boolean(title && (title.value !== problem.title || markdownEditor?.isDirtyComparedWith(problem.description) ||
     problemStatus?.value !== problem.status || childStatus?.value !== (problem.childStatus ?? "")));
 }
 
@@ -78,6 +81,7 @@ function receiveProblemRevision(problemId: string, result: RelayEventResult): vo
     }
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) publishButton.disabled = !next.mayEdit;
+    markdownEditor?.setDisabled(!next.mayEdit || busy);
     status(next.mayEdit
       ? "Current head changed. Your draft will publish from latest revision."
       : "Current head changed and removed your edit permission.", !next.mayEdit);
@@ -88,6 +92,8 @@ function receiveProblemRevision(problemId: string, result: RelayEventResult): vo
 }
 
 function renderEditor(problem: EditableProblem): void {
+  markdownEditor?.destroy();
+  markdownEditor = undefined;
   const disabled = !problem.mayEdit || busy;
   app.innerHTML = `<article class="editor-shell">
     <header class="masthead">
@@ -98,10 +104,9 @@ function renderEditor(problem: EditableProblem): void {
       <section class="edit-panel" aria-labelledby="editor-title">
         <div class="section-title"><h1 id="editor-title">Next revision</h1><p>Update problem details, then publish complete snapshot.</p></div>
         <div class="field"><label for="title">Title</label><input id="title" maxlength="180" value="${escapeHtml(problem.title)}" ${disabled ? "disabled" : ""}></div>
-        <div class="field grow"><label for="description">Description</label><textarea id="description" rows="10" ${disabled ? "disabled" : ""}>${escapeHtml(problem.description)}</textarea></div>
+        <div class="field grow"><span class="field-label" id="description-label">Description</span><div id="description-editor"></div><span class="hint"><output id="description-count">${problem.description.length}</output> characters</span></div>
         <div class="attachment-field">
           <input id="attachment" type="file" accept="image/*,video/*" hidden ${disabled || !uploadAvailable ? "disabled" : ""}>
-          <button id="attach-media" type="button" ${disabled || !uploadAvailable || uploading ? "disabled" : ""}>${uploading ? "Uploading…" : "Add image or video"}</button>
           <span id="attachment-status">${uploadAvailable ? "Uploads insert a Markdown reference into description." : "Media uploads are unavailable in this shell."}</span>
         </div>
         <div class="field-row">
@@ -114,8 +119,45 @@ function renderEditor(problem: EditableProblem): void {
   </article>`;
   document.querySelector("#publish")?.addEventListener("click", () => void publishRevision());
   const attachmentInput = document.querySelector<HTMLInputElement>("#attachment");
-  document.querySelector("#attach-media")?.addEventListener("click", () => attachmentInput?.click());
   attachmentInput?.addEventListener("change", () => void uploadAttachment(attachmentInput));
+  try {
+    markdownEditor = createProblemMarkdownEditor({
+      parent: document.querySelector<HTMLElement>("#description-editor")!,
+      value: problem.description,
+      disabled,
+      ariaLabel: "Problem description",
+      placeholder: "Describe current behavior, impact, and context.",
+      loadResource: (url, signal) => resource.bytes(url, { signal }),
+      onAddMedia: uploadAvailable && !disabled ? () => attachmentInput?.click() : undefined,
+      onChange: (value) => { const count = document.querySelector<HTMLOutputElement>("#description-count"); if (count) count.value = String(value.length); },
+      onError: (operation, error, details) => console.error(`Problem revision Markdown editor failed to ${operation}`, { problemId: problem.problemId, ...details, error })
+    });
+  } catch (error) {
+    console.error("Problem revision Markdown editor initialization failed", { problemId: problem.problemId, error });
+    const host = document.querySelector<HTMLElement>("#description-editor")!;
+    const fallback = document.createElement("textarea");
+    fallback.rows = 10;
+    fallback.value = problem.description;
+    fallback.disabled = disabled;
+    fallback.setAttribute("aria-label", "Problem description");
+    host.replaceChildren(fallback);
+    const fallbackUpload = document.createElement("button");
+    fallbackUpload.type = "button";
+    fallbackUpload.textContent = "Add image or video";
+    fallbackUpload.disabled = disabled || !uploadAvailable;
+    fallbackUpload.addEventListener("click", () => attachmentInput?.click());
+    const attachmentStatus = document.querySelector<HTMLElement>("#attachment-status");
+    if (attachmentStatus) {
+      attachmentStatus.before(fallbackUpload);
+      attachmentStatus.textContent = "Rich editor unavailable. Plain Markdown editing remains available.";
+    }
+    markdownEditor = {
+      getValue: () => fallback.value, setValue: (value) => { fallback.value = value; },
+      insertMarkdown: (value) => { fallback.setRangeText(value, fallback.selectionStart, fallback.selectionEnd, "end"); },
+      focus: () => fallback.focus(), setDisabled: (value) => { fallback.disabled = value; },
+      isDirtyComparedWith: (value) => fallback.value !== value, destroy: () => fallback.remove()
+    };
+  }
   document.querySelector(".edit-panel")?.addEventListener("keydown", (event) => {
     const keyboardEvent = event as KeyboardEvent;
     if (keyboardEvent.key === "Enter" && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
@@ -130,29 +172,26 @@ function renderEditor(problem: EditableProblem): void {
 
 async function uploadAttachment(input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
-  const description = document.querySelector<HTMLTextAreaElement>("#description");
   const attachmentStatus = document.querySelector<HTMLElement>("#attachment-status");
-  if (!file || !description || !attachmentStatus || uploading || !uploadAvailable) return;
+  if (!file || !markdownEditor || !attachmentStatus || uploading || !uploadAvailable) return;
   uploading = true;
-  const button = document.querySelector<HTMLButtonElement>("#attach-media");
   const publishButton = document.querySelector<HTMLButtonElement>("#publish");
-  if (button) { button.disabled = true; button.textContent = "Uploading…"; }
   if (publishButton) publishButton.disabled = true;
   attachmentStatus.textContent = `Uploading ${file.name}…`;
   try {
     const result = await upload.upload({ data: file, filename: file.name, mimeType: file.type || undefined });
     if (!result.ok || result.status !== "complete" || !result.url) throw new Error(result.error ?? "Media upload did not complete.");
     const caption = file.name.replace(/\.[^.]+$/, "") || "Attached media";
-    insertAtSelection(description, attachmentMarkdown(result.url, caption));
+    markdownEditor.insertMarkdown(attachmentMarkdown(result.url, caption));
     attachmentStatus.textContent = `${file.name} added to description.`;
-    description.focus();
+    markdownEditor.focus();
   } catch (error) {
     console.error("Problem revision media upload failed", { problemId: current?.problemId, filename: file.name, mimeType: file.type, size: file.size, error });
     attachmentStatus.textContent = error instanceof Error ? error.message : "Media upload failed. Try again.";
   } finally {
     uploading = false;
     input.value = "";
-    if (button) { button.disabled = !current?.mayEdit; button.textContent = "Add image or video"; }
+    markdownEditor?.setDisabled(!current?.mayEdit || busy);
     if (publishButton) publishButton.disabled = !current?.mayEdit || busy;
   }
 }
@@ -222,7 +261,7 @@ async function publishRevision(): Promise<void> {
   }
   const publishingProblem = current;
   const title = document.querySelector<HTMLInputElement>("#title")?.value ?? "";
-  const description = document.querySelector<HTMLTextAreaElement>("#description")?.value ?? "";
+  const description = markdownEditor?.getValue() ?? "";
   const selectedStatus = document.querySelector<HTMLSelectElement>("#problem-status")?.value as ProblemStatus;
   const childValue = document.querySelector<HTMLSelectElement>("#child-status")?.value;
   let relayOutcomes: Readonly<Record<string, boolean>> | undefined;
@@ -320,5 +359,5 @@ async function start(): Promise<void> {
   }
 }
 
-addEventListener("beforeunload", () => { problemSubscription?.close(); identitySubscription?.close(); intentSubscription?.close(); themeSubscription?.close(); });
+addEventListener("beforeunload", () => { markdownEditor?.destroy(); problemSubscription?.close(); identitySubscription?.close(); intentSubscription?.close(); themeSubscription?.close(); });
 void start();

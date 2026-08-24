@@ -1,0 +1,149 @@
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { markdown } from "@codemirror/lang-markdown";
+import { Compartment, EditorState } from "@codemirror/state";
+import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
+import { Table } from "@lezer/markdown";
+import {
+  collapseOnSelectionFacet, editorTheme, livePreviewPlugin,
+  markdownStylePlugin, mouseSelectingField, setMouseSelecting, tableEditorPlugin
+} from "codemirror-live-markdown";
+import { applyMarkdownCommand, markdownCommandSpecs, type MarkdownCommandName } from "./commands";
+import { codeFencePreview, resourceImagePreview, type ErrorReporter, type ResourceLoader } from "./media";
+
+export type ProblemMarkdownEditorResourceLoader = ResourceLoader;
+
+export interface ProblemMarkdownEditorOptions {
+  parent: HTMLElement;
+  value: string;
+  disabled?: boolean;
+  ariaLabel: string;
+  placeholder?: string;
+  loadResource?: ProblemMarkdownEditorResourceLoader;
+  onChange?: (value: string) => void;
+  onError?: ErrorReporter;
+  onAddMedia?: () => void;
+}
+
+export interface ProblemMarkdownEditor {
+  getValue(): string;
+  setValue(value: string): void;
+  insertMarkdown(markdown: string): void;
+  focus(): void;
+  setDisabled(disabled: boolean): void;
+  isDirtyComparedWith(value: string): boolean;
+  destroy(): void;
+}
+
+const fallbackReporter: ErrorReporter = (operation, error, details) => console.error(`Markdown editor failed to ${operation}`, { ...details, error });
+
+function insertWithParagraphSpacing(state: EditorState, value: string) {
+  const range = state.selection.main;
+  const before = state.sliceDoc(0, range.from);
+  const after = state.sliceDoc(range.to);
+  const prefix = before && !before.endsWith("\n") ? "\n\n" : "";
+  const suffix = after && !after.startsWith("\n") ? "\n\n" : "";
+  const insert = `${prefix}${value}${suffix}`;
+  return { changes: { from: range.from, to: range.to, insert }, selection: { anchor: range.from + insert.length - suffix.length }, scrollIntoView: true };
+}
+
+export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOptions): ProblemMarkdownEditor {
+  const report = options.onError ?? fallbackReporter;
+  const shell = document.createElement("div");
+  shell.className = "napplet-md-editor";
+  const toolbar = document.createElement("div");
+  toolbar.className = "napplet-md-toolbar";
+  toolbar.setAttribute("role", "toolbar");
+  toolbar.setAttribute("aria-label", "Markdown formatting");
+  const editorHost = document.createElement("div");
+  editorHost.className = "napplet-md-surface";
+  shell.append(toolbar, editorHost);
+  options.parent.replaceChildren(shell);
+
+  const readOnly = new Compartment();
+  let destroyed = false;
+  const extensions = [
+    markdown({ extensions: [Table] }), history(),
+    keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+    collapseOnSelectionFacet.of(true), mouseSelectingField, livePreviewPlugin,
+    markdownStylePlugin, editorTheme, tableEditorPlugin(), codeFencePreview(report),
+    EditorView.lineWrapping,
+    EditorView.contentAttributes.of({ "aria-label": options.ariaLabel, "aria-multiline": "true" }),
+    EditorView.updateListener.of((update) => { if (update.docChanged) options.onChange?.(update.state.doc.toString()); }),
+    readOnly.of(EditorState.readOnly.of(Boolean(options.disabled)))
+  ];
+  if (options.placeholder) extensions.push(placeholderExtension(options.placeholder));
+  if (options.loadResource) extensions.push(resourceImagePreview(options.loadResource, report));
+
+  const view = new EditorView({ state: EditorState.create({ doc: options.value, extensions }), parent: editorHost });
+  const setMouse = (selecting: boolean) => {
+    if (!destroyed) view.dispatch({ effects: setMouseSelecting.of(selecting) });
+  };
+  const mouseDown = () => setMouse(true);
+  const mouseUp = () => requestAnimationFrame(() => setMouse(false));
+  view.contentDOM.addEventListener("mousedown", mouseDown);
+  document.addEventListener("mouseup", mouseUp);
+
+  const run = (name: MarkdownCommandName) => {
+    if (view.state.readOnly) return;
+    try { view.dispatch(applyMarkdownCommand(view.state, name)); view.focus(); }
+    catch (error) { report(`apply ${name} formatting`, error); }
+  };
+  for (const command of markdownCommandSpecs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "napplet-md-tool";
+    button.dataset.command = command.name;
+    button.disabled = Boolean(options.disabled);
+    button.setAttribute("aria-label", command.label);
+    button.title = command.shortcut ? `${command.title} (${command.shortcut})` : command.title;
+    button.innerHTML = command.icon;
+    button.addEventListener("click", () => run(command.name));
+    toolbar.append(button);
+  }
+  if (options.onAddMedia) {
+    const separator = document.createElement("span");
+    separator.className = "napplet-md-separator";
+    separator.setAttribute("aria-hidden", "true");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "napplet-md-tool";
+    button.dataset.command = "media";
+    button.disabled = Boolean(options.disabled);
+    button.setAttribute("aria-label", "Add image or video");
+    button.title = "Add image or video";
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m4 18 5-5 3 3 3-4 5 6"/></svg>';
+    button.addEventListener("click", options.onAddMedia);
+    toolbar.append(separator, button);
+  }
+
+  const setDisabled = (disabled: boolean) => {
+    view.dispatch({ effects: readOnly.reconfigure(EditorState.readOnly.of(disabled)) });
+    toolbar.querySelectorAll<HTMLButtonElement>("button").forEach((button) => { button.disabled = disabled; });
+    shell.dataset.disabled = String(disabled);
+  };
+  setDisabled(Boolean(options.disabled));
+
+  return {
+    getValue: () => view.state.doc.toString(),
+    setValue(value) {
+      if (destroyed || value === view.state.doc.toString()) return;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+    },
+    insertMarkdown(value) {
+      if (destroyed || view.state.readOnly) return;
+      view.dispatch(insertWithParagraphSpacing(view.state, value));
+      view.focus();
+    },
+    focus: () => view.focus(),
+    setDisabled,
+    isDirtyComparedWith: (value) => view.state.doc.toString() !== value,
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      view.contentDOM.removeEventListener("mousedown", mouseDown);
+      document.removeEventListener("mouseup", mouseUp);
+      view.destroy();
+      shell.remove();
+    }
+  };
+}

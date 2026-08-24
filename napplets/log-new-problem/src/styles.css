@@ -32,14 +32,17 @@ h1 { margin: 4px 0 0; font-size: clamp(2rem, 7vw, 3.6rem); line-height: .98; let
 .parent-card code { display: block; max-width: 100%; margin-top: 7px; overflow: hidden; color: #76412e; font-size: .7rem; text-overflow: ellipsis; }
 form { padding-top: 30px; }
 .field { margin-bottom: 25px; }
-label, legend { display: block; margin-bottom: 8px; font-size: .76rem; font-weight: 760; letter-spacing: .055em; text-transform: uppercase; }
+label, legend, .field-label { display: block; margin-bottom: 8px; font-size: .76rem; font-weight: 760; letter-spacing: .055em; text-transform: uppercase; }
+.field #description-editor { --md-border:var(--rule); --md-surface:#fff; --md-text:var(--ink); --md-muted:var(--muted); --md-accent:var(--signal); --md-error:var(--error); --md-radius:0; --md-min-height:290px; }
+.field #description-editor:focus-within .napplet-md-editor { border-color:var(--ink); box-shadow:0 8px 22px rgba(16,40,50,.12); }
 input, textarea, select { width: 100%; border: 1px solid var(--rule); border-radius: 0; outline: none; color: var(--ink); background: #fff; }
 input, select { min-height: 46px; padding: 10px 12px; }
 textarea { padding: 13px 14px; resize: vertical; line-height: 1.55; }
 input:focus, textarea:focus, select:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(16, 40, 50, .12); }
 .hint { display: flex; justify-content: flex-end; margin-top: 6px; color: var(--muted); font-size: .75rem; }
+.hint output { margin-inline-end:.25em; }
 .field .hint:first-of-type { justify-content: flex-start; }
-.attachment-field { display:flex; align-items:center; gap:14px; margin:-8px 0 25px; }
+.attachment-field { display:flex; align-items:center; min-width:0; gap:14px; margin:-8px 0 25px; }
 .attachment-field button { flex:none; min-height:42px; border:1px solid var(--ink); padding:0 14px; color:var(--ink); background:transparent; font-weight:720; cursor:pointer; }
 .attachment-field button:hover:not(:disabled) { color:#fff; background:var(--ink); }
 .attachment-field button:focus-visible { outline:3px solid var(--signal); outline-offset:3px; }

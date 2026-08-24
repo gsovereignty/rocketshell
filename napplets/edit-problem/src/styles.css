@@ -24,7 +24,10 @@ code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:.78rem; }
 .section-title h1 { margin:0; font-size:clamp(2.35rem,5.4vw,4.5rem); line-height:1.02; letter-spacing:-.035em; text-wrap:balance; }
 .section-title p { max-width:52ch; margin:14px 0 0; color:var(--muted); line-height:1.55; }
 .field { display:grid; gap:8px; margin-bottom:22px; }
-.field label { font-size:.76rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
+.field label,.field-label { font-size:.76rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
+.field #description-editor { --md-border:color-mix(in srgb,var(--fg) 24%,transparent); --md-surface:var(--surface); --md-text:var(--fg); --md-muted:var(--muted); --md-accent:var(--accent); --md-error:var(--error); --md-radius:10px; --md-min-height:220px; }
+.field #description-editor:focus-within .napplet-md-editor { border-color:var(--accent); box-shadow:0 8px 24px color-mix(in srgb,var(--fg) 9%,transparent); }
+.hint { color:var(--muted); font-size:.78rem; line-height:1.4; }
 .field input,.field textarea,.field select { width:100%; border:1px solid color-mix(in srgb,var(--fg) 24%,transparent); border-radius:10px; background:var(--surface); color:var(--fg); padding:14px 15px; caret-color:var(--accent); }
 .field input:hover:not(:disabled),.field textarea:hover:not(:disabled),.field select:hover:not(:disabled) { border-color:color-mix(in srgb,var(--fg) 42%,transparent); }
 .field input:focus,.field textarea:focus,.field select:focus { border-color:var(--accent); }

@@ -1,5 +1,6 @@
-import { identity, inc, outbox, upload } from "@napplet/sdk";
+import { identity, inc, outbox, resource, upload } from "@napplet/sdk";
 import type { OutboxSubscription, RelayEventResult, Subscription } from "@napplet/sdk";
+import { createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
 import { gsap } from "gsap";
 import "./styles.css";
 import {
@@ -7,7 +8,7 @@ import {
   parentGraphRoot, resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
 } from "./problem";
 import { publishSuccessMessage } from "./publish-result";
-import { attachmentMarkdown, insertAtSelection } from "./attachment";
+import { attachmentMarkdown } from "./attachment";
 
 const root = document.querySelector<HTMLElement>("#app");
 if (!root) throw new Error("Application root is missing.");
@@ -29,13 +30,12 @@ root.innerHTML = `
         <span class="hint">Name the undesirable condition, not a proposed fix.</span>
       </div>
       <div class="field">
-        <label for="description">What is happening?</label>
-        <textarea id="description" name="description" rows="12" required placeholder="Describe current behavior, impact, and enough context to understand the problem."></textarea>
+        <span class="field-label" id="description-label">What is happening?</span>
+        <div id="description-editor"></div>
         <span class="hint"><output id="count">0</output> characters</span>
       </div>
       <div class="attachment-field" id="attachment-field">
         <input id="attachment" type="file" accept="image/*,video/*" hidden>
-        <button id="attach-media" type="button">Add image or video</button>
         <span id="attachment-status">Uploads insert a Markdown reference into description.</span>
       </div>
       <details id="advanced">
@@ -67,7 +67,6 @@ root.innerHTML = `
 const form = document.querySelector<HTMLFormElement>("#problem-form")!;
 const publishButton = document.querySelector<HTMLButtonElement>("#publish")!;
 const statusLine = document.querySelector<HTMLOutputElement>("#status-line")!;
-const description = document.querySelector<HTMLTextAreaElement>("#description")!;
 const count = document.querySelector<HTMLOutputElement>("#count")!;
 const parentCard = document.querySelector<HTMLElement>("#parent-card")!;
 const parentTitle = document.querySelector<HTMLElement>("#parent-title")!;
@@ -85,6 +84,7 @@ let intentSubscription: Subscription | undefined;
 let parentSubscription: OutboxSubscription | undefined;
 let parentEvents: RelayEventResult[] = [];
 let parentLoadGeneration = 0;
+let markdownEditor: ProblemMarkdownEditor;
 
 const animate = (target: gsap.TweenTarget, vars: gsap.TweenVars) => {
   if (reducedMotion) return;
@@ -204,9 +204,9 @@ function optionalContext(data: FormData, prefix: "rocket" | "repo") {
   return { owner, id, relay };
 }
 
-function readDraft(data: FormData): ProblemDraft {
+function readDraft(data: FormData, markdown: string): ProblemDraft {
   const title = String(data.get("title") ?? "").trim();
-  const body = String(data.get("description") ?? "").trim();
+  const body = markdown.trim();
   if (!title) throw new Error("Add a problem title.");
   if (!body) throw new Error("Add a complete problem description.");
   const maintainers = String(data.get("maintainers") ?? "").split(/\s+/).filter(Boolean);
@@ -222,41 +222,70 @@ function readDraft(data: FormData): ProblemDraft {
   };
 }
 
-description.addEventListener("input", () => { count.value = String(description.value.length); });
 advanced.addEventListener("toggle", () => {
   if (advanced.open) animate(advanced.querySelector(".advanced-grid"), { duration: 0.24 });
 });
 
 const attachmentInput = document.querySelector<HTMLInputElement>("#attachment")!;
-const attachButton = document.querySelector<HTMLButtonElement>("#attach-media")!;
 const attachmentStatus = document.querySelector<HTMLElement>("#attachment-status")!;
-if (!uploadAvailable) {
-  attachButton.disabled = true;
-  attachmentStatus.textContent = "Media uploads are unavailable in this shell.";
-}
-attachButton.addEventListener("click", () => attachmentInput.click());
+if (!uploadAvailable) attachmentStatus.textContent = "Media uploads are unavailable in this shell.";
 attachmentInput.addEventListener("change", () => void uploadAttachment());
+
+try {
+  markdownEditor = createProblemMarkdownEditor({
+    parent: document.querySelector<HTMLElement>("#description-editor")!,
+    value: "",
+    ariaLabel: "Problem description",
+    placeholder: "Describe current behavior, impact, and enough context to understand the problem.",
+    loadResource: (url, signal) => resource.bytes(url, { signal }),
+    onAddMedia: uploadAvailable ? () => attachmentInput.click() : undefined,
+    onChange: (value) => { count.value = String(value.length); },
+    onError: (operation, error, details) => console.error(`Problem Markdown editor failed to ${operation}`, { ...details, error })
+  });
+} catch (error) {
+  console.error("Problem Markdown editor initialization failed", { error });
+  const host = document.querySelector<HTMLElement>("#description-editor")!;
+  const fallback = document.createElement("textarea");
+  fallback.id = "description-fallback";
+  fallback.rows = 12;
+  fallback.placeholder = "Describe current behavior, impact, and enough context to understand the problem.";
+  fallback.setAttribute("aria-label", "Problem description");
+  host.replaceChildren(fallback);
+  const fallbackUpload = document.createElement("button");
+  fallbackUpload.type = "button";
+  fallbackUpload.textContent = "Add image or video";
+  fallbackUpload.disabled = !uploadAvailable;
+  fallbackUpload.addEventListener("click", () => attachmentInput.click());
+  attachmentStatus.before(fallbackUpload);
+  fallback.addEventListener("input", () => { count.value = String(fallback.value.length); });
+  attachmentStatus.textContent = "Rich editor unavailable. Plain Markdown editing remains available.";
+  markdownEditor = {
+    getValue: () => fallback.value,
+    setValue: (value) => { fallback.value = value; count.value = String(value.length); },
+    insertMarkdown: (value) => { fallback.setRangeText(value, fallback.selectionStart, fallback.selectionEnd, "end"); fallback.dispatchEvent(new Event("input")); },
+    focus: () => fallback.focus(), setDisabled: (value) => { fallback.disabled = value; },
+    isDirtyComparedWith: (value) => fallback.value !== value, destroy: () => fallback.remove()
+  };
+}
 
 async function uploadAttachment() {
   const file = attachmentInput.files?.[0];
   if (!file || uploading || !uploadAvailable) return;
   uploading = true;
-  attachButton.disabled = true;
   publishButton.disabled = true;
   attachmentStatus.textContent = `Uploading ${file.name}…`;
   try {
     const result = await upload.upload({ data: file, filename: file.name, mimeType: file.type || undefined });
     if (!result.ok || result.status !== "complete" || !result.url) throw new Error(result.error ?? "Media upload did not complete.");
     const caption = file.name.replace(/\.[^.]+$/, "") || "Attached media";
-    insertAtSelection(description, attachmentMarkdown(result.url, caption));
+    markdownEditor.insertMarkdown(attachmentMarkdown(result.url, caption));
     attachmentStatus.textContent = `${file.name} added to description.`;
-    description.focus();
+    markdownEditor.focus();
   } catch (error) {
     console.error("Problem media upload failed", { filename: file.name, mimeType: file.type, size: file.size, error });
     attachmentStatus.textContent = error instanceof Error ? error.message : "Media upload failed. Try again.";
   } finally {
     uploading = false;
-    attachButton.disabled = !uploadAvailable;
     publishButton.disabled = !pubkey || childRequestPending || (mode.textContent === "Child" && !parent);
     attachmentInput.value = "";
   }
@@ -270,16 +299,18 @@ async function publishProblem() {
   publishButton.disabled = true;
   setStatus("Preparing event for shell approval…", "busy");
   try {
-    const draft = readDraft(new FormData(form));
+    const draft = readDraft(new FormData(form), markdownEditor.getValue());
     const random = crypto.getRandomValues(new Uint8Array(32));
     const template = buildProblemTemplate(pubkey, createProblemId(random), draft, Math.floor(Date.now() / 1000), parent);
     const recipients = parent ? Array.from(new Set([parent.owner, parent.rootOwner])) : [];
     const result = await outbox.publish(template, recipients.length ? { toInboxes: recipients } : undefined);
     setStatus(publishSuccessMessage(result), "success");
     form.reset();
+    markdownEditor.setValue("");
     count.value = "0";
     animate(statusLine, {});
   } catch (error) {
+    console.error("Problem publication failed", { mode: parent ? "child" : "root", parentProblemId: parent?.problemId, error });
     setStatus(error instanceof Error ? error.message : "Problem could not be published.", "error");
   } finally {
     publishButton.disabled = !pubkey || childRequestPending || (mode.textContent === "Child" && !parent);
@@ -311,5 +342,5 @@ async function start() {
   }
 }
 
-addEventListener("beforeunload", () => { parentSubscription?.close(); intentSubscription?.close(); });
+addEventListener("beforeunload", () => { markdownEditor.destroy(); parentSubscription?.close(); intentSubscription?.close(); });
 void start();

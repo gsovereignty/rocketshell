@@ -18,6 +18,11 @@ Authorized editors may upload images and videos through required shell-owned
 NAP-UPLOAD. Returned HTTPS URLs are inserted into description as direct Markdown
 media references.
 
+Descriptions remain plain Markdown while shared rich live preview supplies
+formatting tools, editable tables, code blocks, and image previews loaded only
+through required NAP-RESOURCE. Unfinished Markdown survives a newer live head;
+publication still derives from newest confirmed revision.
+
 Editor preserves current snapshot metadata and graph structure. It replaces
 title, description, status, optional child default, and revision lineage. Owner,
 listed maintainers, and resolved ancestor owners may publish. Owner revisions
