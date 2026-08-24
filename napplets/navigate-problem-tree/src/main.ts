@@ -127,14 +127,8 @@ function renderList() {
   const filters = document.querySelector<HTMLElement>("#filters");
   const sectionTitle = document.querySelector<HTMLElement>("#section-title");
   const logChildButton = document.querySelector<HTMLButtonElement>("#log-child");
-  const openSelectedButton = document.querySelector<HTMLButtonElement>("#open-selected");
-  if (!list || !filters || !sectionTitle || !logChildButton || !openSelectedButton) return;
+  if (!list || !filters || !sectionTitle || !logChildButton) return;
   sectionTitle.textContent = "Actionable problems";
-  openSelectedButton.disabled = !noteHandlerAvailable || problemViewerBusy;
-  openSelectedButton.textContent = problemViewerBusy ? "Opening problem…" : "Open selected problem";
-  openSelectedButton.title = noteHandlerAvailable
-    ? `Open ${parent.title} in problem viewer`
-    : "Problem viewer is not installed";
   logChildButton.disabled = !problemChildHandlerAvailable || childComposerBusy;
   logChildButton.title = problemChildHandlerAvailable
     ? `Log a child problem under ${parent.title}`
@@ -170,7 +164,7 @@ function renderApp() {
       </aside>
       <section class="list-pane" aria-labelledby="section-title">
         <header class="list-header">
-          <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="open-selected" type="button">Open selected problem</button><button id="log-child" type="button">Log child problem</button></div></div>
+          <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="log-child" type="button">Log child problem</button></div></div>
           <div id="filters" class="filters" aria-label="Filter children"></div>
         </header>
         <ol id="problem-list" class="problem-list"></ol>
@@ -198,8 +192,6 @@ function bindWorkspace() {
     } else if (filterButton?.dataset.filter) {
       activeFilter = filterButton.dataset.filter;
       renderList();
-    } else if (target.closest("#open-selected")) {
-      void openProblem(selected);
     } else if (target.closest("#log-child")) {
       void logChildProblem();
     } else if (target.closest("#log-root-child")) {
@@ -273,7 +265,6 @@ async function openProblem(coordinate: string) {
     return;
   }
   problemViewerBusy = true;
-  renderList();
   status.textContent = `Opening ${node.title}…`;
   try {
     const result = await openProblemViewer(intent, node.revisionId);
@@ -283,7 +274,6 @@ async function openProblem(coordinate: string) {
     status.textContent = error instanceof Error ? error.message : "Problem could not be opened.";
   } finally {
     problemViewerBusy = false;
-    renderList();
   }
 }
 

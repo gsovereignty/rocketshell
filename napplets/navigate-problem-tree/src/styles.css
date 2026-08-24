@@ -75,13 +75,10 @@ button { color: inherit; }
 .list-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; }
 .list-pane h2 { max-width: 70ch; }
 .list-actions { display: flex; flex: none; gap: 8px; }
-#log-child, #open-selected { flex: none; min-height: 38px; border: 0; border-radius: 9px; padding: 0 14px; font-size: .78rem; font-weight: 700; cursor: pointer; }
-#log-child { color: white; background: var(--blue); }
+#log-child { flex: none; min-height: 38px; border: 0; border-radius: 9px; padding: 0 14px; color: white; background: var(--blue); font-size: .78rem; font-weight: 700; cursor: pointer; }
 #log-child:hover:not(:disabled) { background: var(--blue-dark); }
-#open-selected { border: 1px solid #b8bbc4; color: var(--ink); background: var(--white); }
-#open-selected:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
-#log-child:active:not(:disabled), #open-selected:active:not(:disabled) { transform: translateY(1px); }
-#log-child:disabled, #open-selected:disabled { border-color: transparent; color: var(--muted); background: var(--line); cursor: not-allowed; }
+#log-child:active:not(:disabled) { transform: translateY(1px); }
+#log-child:disabled { border-color: transparent; color: var(--muted); background: var(--line); cursor: not-allowed; }
 .filters { display: flex; max-width: 100%; overflow-x: auto; border-radius: 12px; padding: 3px; background: #ececef; scrollbar-width: thin; }
 .filters button { flex: none; border: 0; border-radius: 9px; padding: 9px 15px; color: #4d5260; background: transparent; cursor: pointer; }
 .filters button[aria-pressed="true"] { color: var(--ink); background: white; box-shadow: 0 2px 8px rgba(23, 26, 34, .13); }
@@ -122,7 +119,7 @@ button { color: inherit; }
   .list-header { padding: 20px 16px 12px; }
   .list-heading { flex-direction: column; gap: 12px; }
   .list-actions { width: 100%; flex-direction: column; }
-  #log-child, #open-selected { width: 100%; min-height: 44px; }
+  #log-child { width: 100%; min-height: 44px; }
   .problem-list { padding: 8px 10px 60px; }
   .row-main { min-height: 60px; gap: 6px; }
   .status { padding: 4px 7px; }
