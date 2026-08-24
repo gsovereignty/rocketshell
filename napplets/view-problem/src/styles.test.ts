@@ -29,7 +29,9 @@ describe("discussion layout", () => {
     expect(styles).toContain("@media(prefers-reduced-motion:reduce)");
   });
 
-  it("starts profile loading when first cached preview renders", () => {
-    expect(main).toMatch(/initialPreviewRendered = true;\s+render\(\);\s+void loadProfiles\(\[problem\.owner, result\.event\.pubkey\]\);/);
+  it("renders and hydrates profiles from each incremental delivery", () => {
+    expect(main).toMatch(/const authors = ingestResults\(\[result\], target\.coordinate\);[\s\S]*void loadProfiles\(authors\);/);
+    expect(main).not.toContain("initialHydrated");
+    expect(main).toMatch(/const discussionPromise = outbox\.query[\s\S]*const problemResponse = await outbox\.query/);
   });
 });

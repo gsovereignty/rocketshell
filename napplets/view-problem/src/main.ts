@@ -17,6 +17,7 @@ import { pubkeyAvatarHue, pubkeyAvatarLabel, pubkeyDisplay } from "./avatar";
 import { profileFromEvents, type ProfileData } from "./profile";
 import { formatRelativeTime } from "./time";
 import { renderMarkdown } from "./markdown";
+import { ingestUniqueResults } from "./incremental";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -27,6 +28,7 @@ const app = (() => {
 let problem: ProblemView | undefined;
 let comments: RelayEventResult[] = [];
 let relatedEvents: RelayEventResult[] = [];
+const resultsById = new Map<string, RelayEventResult>();
 let ancestorOwners: string[] = [];
 let pubkey = "";
 let discussionSubscription: OutboxSubscription | undefined;
@@ -47,6 +49,47 @@ let mediaRenderVersion = 0;
 let recordEntrancePending = true;
 let profileShimmerTweens: gsap.core.Tween[] = [];
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+type LoadTask = "problem" | "discussion" | "graph" | "ancestors" | "children";
+type LoadState = "idle" | "loading" | "complete" | "failed";
+const loadStates: Record<LoadTask, LoadState> = {
+  problem: "idle", discussion: "idle", graph: "idle", ancestors: "idle", children: "idle"
+};
+
+function resetResults(): void {
+  resultsById.clear();
+  comments = [];
+  relatedEvents = [];
+  for (const task of Object.keys(loadStates) as LoadTask[]) loadStates[task] = "idle";
+}
+
+function backgroundStatus(): string {
+  const loading = (Object.keys(loadStates) as LoadTask[]).filter((task) => loadStates[task] === "loading");
+  const failed = (Object.keys(loadStates) as LoadTask[]).filter((task) => loadStates[task] === "failed");
+  if (loading.length) return `Refreshing ${loading.join(", ")}…`;
+  if (failed.length) return `Some background data unavailable (${failed.join(", ")}). Reopen to retry.`;
+  return "";
+}
+
+function setLoadState(task: LoadTask, state: LoadState): void {
+  loadStates[task] = state;
+  if (problem) render();
+}
+
+function ingestResults(results: RelayEventResult[], coordinate: string): string[] {
+  const added = ingestUniqueResults(resultsById, results);
+  if (!added.length) return [];
+  const authors = new Set(added.map(({ event }) => event.pubkey));
+  comments = [...resultsById.values()].filter(({ event }) => event.kind === COMMENT_KIND);
+  relatedEvents = [...resultsById.values()].filter(({ event }) => event.kind === 31971);
+  try {
+    problem = selectProblem(coordinate, relatedEvents);
+    refreshAncestorOwners(coordinate);
+  } catch (error) {
+    console.warn("Incremental problem event set is not renderable yet", { coordinate, error });
+  }
+  if (problem) render();
+  return [...authors];
+}
 
 function refreshAncestorOwners(coordinate: string): void {
   if (!problem) return;
@@ -58,13 +101,13 @@ function refreshAncestorOwners(coordinate: string): void {
   }
 }
 
-async function hydrateProblemAncestors(selected: ProblemView, initial: RelayEventResult[]): Promise<RelayEventResult[]> {
-  const results = [...initial];
+async function hydrateProblemAncestors(selected: ProblemView, generation: number): Promise<void> {
   const attempted = new Set<string>();
   while (true) {
-    const missing = missingProblemAncestorCoordinates(selected, results)
+    if (generation !== loadGeneration) return;
+    const missing = missingProblemAncestorCoordinates(selected, relatedEvents)
       .filter((coordinate) => !attempted.has(coordinate));
-    if (!missing.length) return results;
+    if (!missing.length) return;
     missing.forEach((coordinate) => attempted.add(coordinate));
     const responses = await Promise.all(missing.map(async (coordinate) => {
       const [, owner = "", problemId = ""] = coordinate.split(":");
@@ -74,13 +117,9 @@ async function hydrateProblemAncestors(selected: ProblemView, initial: RelayEven
       );
       return problemResultsAtCoordinate(coordinate, response.events);
     }));
-    const known = new Set(results.map(({ event }) => event.id));
-    for (const result of responses.flat()) {
-      if (!known.has(result.event.id)) {
-        results.push(result);
-        known.add(result.event.id);
-      }
-    }
+    if (generation !== loadGeneration) return;
+    const authors = ingestResults(responses.flat(), selected.coordinate);
+    void loadProfiles(authors);
   }
 }
 
@@ -179,9 +218,10 @@ function render() {
   ].sort((a, b) => a.createdAt - b.createdAt);
   const effectiveClaim = selectEffectiveClaim(problem, comments, revisions);
   const hasChildren = hasProblemChildren(problem.coordinate, relatedEvents);
+  const childrenKnown = loadStates.children === "complete";
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
-  const canClaim = problem.status === "open" && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
+  const canClaim = problem.status === "open" && childrenKnown && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
   const canEdit = mayEditProblem(problem, pubkey, ancestorOwners);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
@@ -202,7 +242,7 @@ function render() {
       <div class="description markdown-body">${renderMarkdown(problem.description)}</div>
       <div class="actions">
         <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
-        <span>${hasChildren ? "Problems with children cannot be claimed." : claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
+        <span>${!childrenKnown ? "Checking child problems before enabling claims…" : hasChildren ? "Problems with children cannot be claimed." : claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
       </div>
       ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
@@ -216,14 +256,14 @@ function render() {
       </li>` : `<li class="comment-entry-row">
         ${authorAvatar(item.result.event.pubkey)}
         <div><header><strong class="${profileNameClass(item.result.event.pubkey)}" title="${escapeHtml(item.result.event.pubkey)}">${escapeHtml(authorName(item.result.event.pubkey))}</strong><time datetime="${new Date(item.result.event.created_at * 1000).toISOString()}" title="${new Date(item.result.event.created_at * 1000).toLocaleString()}">${formatRelativeTime(item.result.event.created_at)}</time></header><div class="markdown-body comment-body">${renderMarkdown(item.result.event.content)}</div></div>
-      </li>`).join("") : `<li class="empty">No discussion or edit history yet.</li>`}</ol>
+      </li>`).join("") : `<li class="empty">${loadStates.discussion === "loading" || loadStates.graph === "loading" ? "Loading discussion and edit history…" : loadStates.discussion === "failed" ? "Discussion unavailable. Reopen to retry." : "No discussion or edit history yet."}</li>`}</ol>
       <div class="comment-entry" id="comment-entry">
         <label class="sr-only" for="comment">Leave a comment</label>
         <textarea id="comment" rows="1" maxlength="4000" placeholder="Leave a comment…" ${pubkey && !busy ? "" : "disabled"}></textarea>
         <button id="post-comment" type="button" ${pubkey && !busy ? "" : "disabled"}>Post</button>
       </div>
     </section>
-    <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
+    <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || backgroundStatus() || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
   startProfileShimmers();
@@ -410,19 +450,9 @@ function setLiveStatus(message: string) {
 }
 
 function receiveDiscussion(result: RelayEventResult) {
-  const collection = result.event.kind === COMMENT_KIND ? comments : relatedEvents;
-  if (collection.some(({ event }) => event.id === result.event.id)) return;
-  collection.push(result);
-  if (problem && result.event.kind === 31971) {
-    try {
-      problem = selectProblem(problem.coordinate, relatedEvents);
-    } catch (error) {
-      console.warn("Live problem revision could not become current", { coordinate: problem.coordinate, eventId: result.event.id, error });
-      liveMessage = error instanceof Error ? error.message : "Live problem revision could not be applied.";
-    }
-  }
-  render();
-  void loadProfiles([result.event.pubkey]);
+  if (!problem) return;
+  const authors = ingestResults([result], problem.coordinate);
+  void loadProfiles(authors);
 }
 
 async function loadProfiles(authors: string[]) {
@@ -495,52 +525,121 @@ async function loadProfiles(authors: string[]) {
   }
 }
 
+async function loadChildRevisions(coordinate: string, generation: number): Promise<void> {
+  if (generation !== loadGeneration) return;
+  const childProblemIds = [...new Set(relatedEvents.flatMap(({ event }) =>
+    event.tags.some((tag) => tag[0] === "a" && tag[3] === undefined && tag[1] === coordinate)
+      ? event.tags.filter((tag) => tag[0] === "d" && tag[1]).map((tag) => tag[1])
+      : []))];
+  setLoadState("children", "loading");
+  if (!childProblemIds.length) {
+    setLoadState("children", "complete");
+    return;
+  }
+  try {
+    const response = await outbox.query(
+      { kinds: [31971], "#d": childProblemIds, limit: 300 },
+      { limit: 300, timeoutMs: 8000 }
+    );
+    if (generation !== loadGeneration) return;
+    const authors = ingestResults(response.events, coordinate);
+    setLoadState("children", "complete");
+    void loadProfiles(authors);
+  } catch (error) {
+    if (generation !== loadGeneration) return;
+    console.warn("Child problem revision query failed", { coordinate, childProblemIds, error });
+    setLoadState("children", "failed");
+  }
+}
+
+async function loadProblemGraph(
+  selected: ProblemView,
+  initialOwner: string,
+  generation: number,
+  initialFilters: Parameters<typeof outbox.subscribe>[0],
+  replaceSubscription: (subscription: OutboxSubscription) => void
+): Promise<void> {
+  setLoadState("graph", "loading");
+  try {
+    const graphResponse = await outbox.query(
+      { kinds: [31971], "#A": [selected.rootCoordinate], limit: 1000 },
+      { limit: 1000, timeoutMs: 8000 }
+    );
+    if (generation !== loadGeneration) return;
+    const authors = ingestResults(graphResponse.events, selected.coordinate);
+    setLoadState("graph", "complete");
+    void loadProfiles(authors);
+    const current = problem;
+    if (!current) return;
+    setLoadState("ancestors", "loading");
+    try {
+      await hydrateProblemAncestors(current, generation);
+      if (generation !== loadGeneration) return;
+      refreshAncestorOwners(selected.coordinate);
+      setLoadState("ancestors", "complete");
+    } catch (error) {
+      if (generation !== loadGeneration) return;
+      console.warn("Problem ancestor background query failed", { coordinate: selected.coordinate, error });
+      setLoadState("ancestors", "failed");
+    }
+
+    if (generation !== loadGeneration || !problem) return;
+    const routedAuthors = [...new Set([...problemRevisionAuthors(problem), ...ancestorOwners])];
+    if (!routedAuthors.some((author) => author !== initialOwner)) return;
+    const expandedFilters = [
+      ...(Array.isArray(initialFilters) ? initialFilters : [initialFilters]),
+      { kinds: [31971], "#A": [problem.rootCoordinate] }
+    ];
+    const nextSubscription = outbox.subscribe(expandedFilters, { authors: routedAuthors, timeoutMs: 8000 });
+    replaceSubscription(nextSubscription);
+    nextSubscription.on("event", (result) => {
+      if (generation !== loadGeneration || discussionSubscription !== nextSubscription) return;
+      const nextAuthors = ingestResults([result], selected.coordinate);
+      void loadProfiles(nextAuthors);
+    });
+    nextSubscription.on("closed", (reason) => {
+      if (generation !== loadGeneration || discussionSubscription !== nextSubscription) return;
+      discussionSubscription = undefined;
+      console.warn("Expanded live problem subscription closed", { coordinate: selected.coordinate, reason });
+      setLiveStatus("Live updates stopped. Reopen problem to reconnect.");
+    });
+    const routedResponse = await outbox.query(
+      { kinds: [31971], "#d": [selected.problemId], limit: 200 },
+      { authors: routedAuthors, limit: 200, timeoutMs: 8000 }
+    );
+    if (generation !== loadGeneration) return;
+    const routedProfiles = ingestResults(routedResponse.events, selected.coordinate);
+    void loadProfiles(routedProfiles);
+  } catch (error) {
+    if (generation !== loadGeneration) return;
+    console.warn("Problem graph background query failed", { coordinate: selected.coordinate, error });
+    setLoadState("graph", "failed");
+    setLoadState("ancestors", "failed");
+  }
+}
+
 async function loadProblem(value: string) {
   const status = document.querySelector<HTMLOutputElement>("#setup-status");
   let generation = loadGeneration;
-  let initialPreviewRendered = false;
   try {
     const target = parseCoordinate(value);
-    if (status) status.textContent = "Loading current revision and discussion…";
+    if (status) status.textContent = "Loading current revision…";
     stopDiscussionSubscription();
     generation = loadGeneration;
     problem = undefined;
-    comments = [];
-    relatedEvents = [];
+    resetResults();
     ancestorOwners = [];
-    liveMessage = "Syncing discussion and revisions…";
+    liveMessage = "";
     let filters = [
       { kinds: [31971], "#d": [target.problemId] },
       { kinds: [COMMENT_KIND], "#A": [target.coordinate] },
       { kinds: [31971], "#a": [target.coordinate] }
     ];
-    let initialHydrated = false;
     const receiveInitial = (result: RelayEventResult) => {
       if (generation !== loadGeneration) return;
-      const collection = result.event.kind === COMMENT_KIND ? comments : relatedEvents;
-      if (collection.some(({ event }) => event.id === result.event.id)) return;
-      collection.push(result);
-      if (result.event.kind === 31971) {
-        try {
-          problem = selectProblem(target.coordinate, relatedEvents);
-          if (initialHydrated) refreshAncestorOwners(target.coordinate);
-        } catch (error) {
-          console.warn("Cached problem revision set is not renderable yet", {
-            coordinate: target.coordinate, eventId: result.event.id, error
-          });
-        }
-      }
-      if (!problem) return;
-      if (!initialHydrated) {
-        if (!initialPreviewRendered) {
-          initialPreviewRendered = true;
-          render();
-          void loadProfiles([problem.owner, result.event.pubkey]);
-        }
-        return;
-      }
-      render();
-      void loadProfiles([problem.owner, result.event.pubkey]);
+      const authors = ingestResults([result], target.coordinate);
+      if (problem) authors.push(problem.owner);
+      void loadProfiles(authors);
     };
     const subscribe = (authors: string[]) => {
       const subscription = outbox.subscribe(filters, { authors, timeoutMs: 8000 });
@@ -559,61 +658,41 @@ async function loadProblem(value: string) {
     };
     let subscription = subscribe([target.owner]);
     const problemFilter = { kinds: [31971], "#d": [target.problemId], limit: 200 };
-    const [problemResponse, response] = await Promise.all([
-      outbox.query(problemFilter, { authors: [target.owner], limit: 200, timeoutMs: 8000 }),
-      outbox.query(filters.slice(1), { authors: [target.owner], limit: 300, timeoutMs: 8000 })
-    ]);
+    setLoadState("problem", "loading");
+    setLoadState("discussion", "loading");
+    const discussionPromise = outbox.query(filters.slice(1), { authors: [target.owner], limit: 300, timeoutMs: 8000 })
+      .then((response) => {
+        if (generation !== loadGeneration) return;
+        const authors = ingestResults(response.events, target.coordinate);
+        setLoadState("discussion", "complete");
+        void loadProfiles(authors);
+        void loadChildRevisions(target.coordinate, generation);
+      }).catch((error: unknown) => {
+        if (generation !== loadGeneration) return;
+        console.warn("Problem discussion background query failed", { coordinate: target.coordinate, error });
+        setLoadState("discussion", "failed");
+        setLoadState("children", "failed");
+      });
+    void discussionPromise;
+    const problemResponse = await outbox.query(problemFilter, { authors: [target.owner], limit: 200, timeoutMs: 8000 });
     if (generation !== loadGeneration) return;
-    let problemResults = problemResponse.events;
-    const initialProblem = selectProblem(target.coordinate, problemResults);
-    const graphResponse = await outbox.query({ kinds: [31971], "#A": [initialProblem.rootCoordinate], limit: 1000 }, { limit: 1000, timeoutMs: 8000 });
-    if (generation !== loadGeneration) return;
-    const graphEvents = graphResponse.events;
-    const graphProblem = selectProblem(target.coordinate, [...problemResults, ...graphEvents]);
-    const hydratedGraphEvents = await hydrateProblemAncestors(graphProblem, [...problemResults, ...graphEvents]);
-    if (generation !== loadGeneration) return;
-    problem = graphProblem;
-    relatedEvents = hydratedGraphEvents;
-    refreshAncestorOwners(target.coordinate);
-    const routedAuthors = [...new Set([...problemRevisionAuthors(graphProblem), ...ancestorOwners])];
-    filters = [...filters, { kinds: [31971], "#A": [graphProblem.rootCoordinate] }];
-    if (routedAuthors.some((author) => author !== target.owner)) {
-      const previousSubscription = subscription;
-      subscription = subscribe(routedAuthors);
-      previousSubscription.close();
-      const routedResponse = await outbox.query(problemFilter, { authors: routedAuthors, limit: 200, timeoutMs: 8000 });
-      if (generation !== loadGeneration) return;
-      problemResults = [...problemResults, ...routedResponse.events];
-    }
-    const initialRelated = response.events;
-    const childProblemIds = [...new Set(initialRelated.flatMap(({ event }) => event.kind === 31971 &&
-      event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === target.coordinate)
-      ? event.tags.filter((item) => item[0] === "d").map((item) => item[1]) : []))];
-    const childRevisions = childProblemIds.length
-      ? (await outbox.query({ kinds: [31971], "#d": childProblemIds, limit: 300 }, { limit: 300, timeoutMs: 8000 })).events
-      : [];
-    if (generation !== loadGeneration) return;
-    const allResults = [...problemResults, ...hydratedGraphEvents, ...initialRelated, ...childRevisions];
-    const uniqueResults = Array.from(new Map(allResults.map((result) => [result.event.id, result])).values());
-    relatedEvents = uniqueResults.filter(({ event }) => event.kind === 31971);
-    problem = selectProblem(target.coordinate, relatedEvents);
-    refreshAncestorOwners(target.coordinate);
-    comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
-    liveMessage = "";
-    initialHydrated = true;
-    render();
-    const effectiveClaim = selectEffectiveClaim(problem, comments, problemRevisionHistory(problem.coordinate, relatedEvents));
-    void loadProfiles([
-      problem.owner,
-      ...comments.map(({ event }) => event.pubkey),
-      ...relatedEvents.filter(({ event }) => event.kind === 31971).map(({ event }) => event.pubkey),
-      ...(effectiveClaim ? [effectiveClaim.claimant] : [])
-    ]);
+    const authors = ingestResults(problemResponse.events, target.coordinate);
+    const loadedProblem = selectProblem(target.coordinate, relatedEvents);
+    problem = loadedProblem;
+    setLoadState("problem", "complete");
+    void loadProfiles([...authors, loadedProblem.owner]);
+    void loadProblemGraph(loadedProblem, target.owner, generation, filters, (next) => {
+      const previous = subscription;
+      subscription = next;
+      discussionSubscription = next;
+      previous.close();
+    });
   } catch (error) {
     if (generation !== loadGeneration) return;
     console.error("Problem load failed", { value, error });
-    if (initialPreviewRendered && problem) {
-      setLiveStatus("Background sync failed. Showing cached problem data; reopen to retry.");
+    setLoadState("problem", "failed");
+    if (problem) {
+      setLiveStatus("Current problem query failed. Showing locally received data; reopen to retry.");
       return;
     }
     showSetup(error instanceof Error ? error.message : "Problem could not be loaded.");
