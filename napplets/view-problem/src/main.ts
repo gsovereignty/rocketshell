@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates,
-  mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
+  mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
   selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
@@ -64,15 +64,16 @@ async function hydrateProblemAncestors(selected: ProblemView, initial: RelayEven
       .filter((coordinate) => !attempted.has(coordinate));
     if (!missing.length) return results;
     missing.forEach((coordinate) => attempted.add(coordinate));
-    const responses = await Promise.all(missing.map((coordinate) => {
+    const responses = await Promise.all(missing.map(async (coordinate) => {
       const [, owner = "", problemId = ""] = coordinate.split(":");
-      return outbox.query(
+      const response = await outbox.query(
         { kinds: [31971], "#d": [problemId], limit: 200 },
         { authors: [owner], limit: 200, timeoutMs: 8000 }
       );
+      return problemResultsAtCoordinate(coordinate, response.events);
     }));
     const known = new Set(results.map(({ event }) => event.id));
-    for (const result of responses.flatMap(({ events }) => events)) {
+    for (const result of responses.flat()) {
       if (!known.has(result.event.id)) {
         results.push(result);
         known.add(result.event.id);
@@ -474,7 +475,7 @@ async function loadProblem(value: string) {
       if (result.event.kind === 31971) {
         try {
           problem = selectProblem(target.coordinate, relatedEvents);
-          refreshAncestorOwners(target.coordinate);
+          if (initialHydrated) refreshAncestorOwners(target.coordinate);
         } catch (error) {
           console.warn("Cached problem revision set is not renderable yet", {
             coordinate: target.coordinate, eventId: result.event.id, error

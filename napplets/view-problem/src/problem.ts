@@ -151,10 +151,15 @@ export function mayEditProblem(problem: ProblemView, currentPubkey: string, ance
     (currentPubkey === problem.owner || problem.maintainers.includes(currentPubkey) || ancestorOwners.includes(currentPubkey));
 }
 
+export const problemResultsAtCoordinate = (coordinate: string, results: RelayEventResult[]): RelayEventResult[] => {
+  const problemId = coordinate.split(":")[2] ?? "";
+  return results.filter(({ event }) => event.kind === PROBLEM_KIND &&
+    tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
+};
+
 const currentProblemHead = (coordinate: string, results: RelayEventResult[]): RelayEventResult => {
   const problemId = coordinate.split(":")[2] ?? "";
-  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
-    tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
+  const candidates = problemResultsAtCoordinate(coordinate, results);
   if (!candidates.length) throw new Error(`Ancestor problem ${problemId} was not found.`);
   const previous = new Set(candidates.flatMap(({ event }) => event.tags
     .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
