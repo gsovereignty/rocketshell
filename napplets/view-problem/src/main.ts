@@ -8,7 +8,7 @@ import { identity, inc, intent, outbox, resource, type OutboxSubscription, type 
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates, relatedProblemSummary,
+  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate,
   mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
   selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
@@ -28,7 +28,6 @@ let problem: ProblemView | undefined;
 let comments: RelayEventResult[] = [];
 let relatedEvents: RelayEventResult[] = [];
 let ancestorOwners: string[] = [];
-let related: string[] = [];
 let pubkey = "";
 let discussionSubscription: OutboxSubscription | undefined;
 let loadGeneration = 0;
@@ -168,7 +167,6 @@ function render() {
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
   const canEdit = mayEditProblem(problem, pubkey, ancestorOwners);
-  const relatedProblems = related.map((coordinate) => ({ coordinate, ...relatedProblemSummary(coordinate, relatedEvents) }));
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
     <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
@@ -209,17 +207,13 @@ function render() {
         <button id="post-comment" type="button" ${pubkey && !busy ? "" : "disabled"}>Post</button>
       </div>
     </section>
-    <section class="related" aria-labelledby="related-title">
-      <h2 id="related-title">Related · ${related.length}</h2>
-      ${relatedProblems.length ? `<ul>${relatedProblems.map(({ coordinate, owner, title }) => `<li><button type="button" data-related="${coordinate}" title="${escapeHtml(coordinate)}"><strong>${escapeHtml(title ?? "Problem title unavailable")}</strong><span>By ${escapeHtml(authorName(owner))}</span></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
-    </section>
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
   bind();
   void hydrateMedia(mediaRenderVersion);
   syncClaimCountdown(effectiveClaim?.expiresAt);
   if (recordEntrancePending && !reducedMotion) {
-    gsap.fromTo(".problem-copy > *, .related, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
+    gsap.fromTo(".problem-copy > *, .discussion", { y: 9, opacity: 0 }, { y: 0, opacity: 1, duration: .38, stagger: .045, ease: "expo.out" });
   }
   recordEntrancePending = false;
 }
@@ -315,9 +309,6 @@ function bind() {
     event.preventDefault();
     void postComment();
   });
-  document.querySelectorAll<HTMLButtonElement>("[data-related]").forEach((button) => button.addEventListener("click", () => {
-    if (button.dataset.related) void loadProblem(button.dataset.related);
-  }));
 }
 
 async function publishAction(content: string, action?: "claim") {
@@ -392,9 +383,8 @@ function receiveDiscussion(result: RelayEventResult) {
       liveMessage = error instanceof Error ? error.message : "Live problem revision could not be applied.";
     }
   }
-  if (problem) related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
   render();
-  void loadProfiles([result.event.pubkey, ...related.map((coordinate) => parseCoordinate(coordinate).owner)]);
+  void loadProfiles([result.event.pubkey]);
 }
 
 async function loadProfiles(authors: string[]) {
@@ -461,7 +451,6 @@ async function loadProblem(value: string) {
     comments = [];
     relatedEvents = [];
     ancestorOwners = [];
-    related = [];
     liveMessage = "Syncing discussion and revisions…";
     let filters = [
       { kinds: [31971], "#d": [target.problemId] },
@@ -485,7 +474,6 @@ async function loadProblem(value: string) {
         }
       }
       if (!problem) return;
-      related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
       if (!initialHydrated) {
         if (!initialPreviewRendered) {
           initialPreviewRendered = true;
@@ -553,7 +541,6 @@ async function loadProblem(value: string) {
     problem = selectProblem(target.coordinate, relatedEvents);
     refreshAncestorOwners(target.coordinate);
     comments = uniqueResults.filter(({ event }) => event.kind === COMMENT_KIND);
-    related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
     liveMessage = "";
     initialHydrated = true;
     render();
@@ -562,7 +549,6 @@ async function loadProblem(value: string) {
       problem.owner,
       ...comments.map(({ event }) => event.pubkey),
       ...relatedEvents.filter(({ event }) => event.kind === 31971).map(({ event }) => event.pubkey),
-      ...related.map((coordinate) => parseCoordinate(coordinate).owner),
       ...(effectiveClaim ? [effectiveClaim.claimant] : [])
     ]);
   } catch (error) {

@@ -15,8 +15,7 @@ describe("discussion layout", () => {
     expect(styles).not.toMatch(/\.discussion li\s*>\s*div/);
   });
 
-  it("places related problems after discussion and comment controls", () => {
-    expect(main.indexOf('<section class="related"')).toBeGreaterThan(main.indexOf('<section class="discussion"'));
-    expect(main.indexOf('<section class="related"')).toBeGreaterThan(main.indexOf('id="comment-entry"'));
+  it("does not render a related-problems section", () => {
+    expect(main).not.toContain('<section class="related"');
   });
 });

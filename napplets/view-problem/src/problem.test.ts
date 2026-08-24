@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, missingProblemAncestorCoordinates, parseCoordinate, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, relatedCoordinates, relatedProblemSummary, resolveProblemAncestorOwners, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, missingProblemAncestorCoordinates, parseCoordinate, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -19,10 +19,6 @@ describe("problem view", () => {
   it("selects current problem", () => expect(selectProblem(coordinate, [result]).title).toBe("Wallet setup is slow"));
   it("treats repeated delivery of one revision as one head", () => {
     expect(selectProblem(coordinate, [result, result]).revisionId).toBe(revision);
-  });
-  it("summarizes related problems by title and owner", () => {
-    expect(relatedProblemSummary(coordinate, [result])).toEqual({ owner, title: "Wallet setup is slow" });
-    expect(relatedProblemSummary(coordinate, [])).toEqual({ owner });
   });
   it("rejects broad outbox results outside the requested coordinate", () => {
     const otherId = "f".repeat(64);
@@ -284,10 +280,6 @@ describe("problem view", () => {
     expect(formatClaimCountdown(86_400)).toBe("24:00:00");
     expect(formatClaimCountdown(3_661)).toBe("01:01:01");
     expect(formatClaimCountdown(-1)).toBe("00:00:00");
-  });
-  it("finds distinct mentioned problem coordinates", () => {
-    const other = `31971:${"e".repeat(64)}:${"f".repeat(64)}`;
-    expect(relatedCoordinates(selectProblem(coordinate, [result]), [{ event: { tags: [["q", other]] } } as never])).toEqual([other]);
   });
   it("counts only current direct child heads", () => {
     const childCoordinate = `31971:${"e".repeat(64)}:${"f".repeat(64)}`;

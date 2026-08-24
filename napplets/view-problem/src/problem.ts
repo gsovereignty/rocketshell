@@ -303,28 +303,6 @@ export function formatClaimCountdown(remainingSeconds: number) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function relatedCoordinates(problem: ProblemView, results: RelayEventResult[]) {
-  const coordinates = new Set<string>();
-  for (const { event } of results) {
-    for (const item of event.tags) {
-      if ((item[0] === "a" || item[0] === "A" || item[0] === "q") &&
-          /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? "") && item[1] !== problem.coordinate) {
-        coordinates.add(item[1]);
-      }
-    }
-  }
-  return Array.from(coordinates);
-}
-
-export function relatedProblemSummary(coordinate: string, results: RelayEventResult[]): { owner: string; title?: string } {
-  const { owner } = parseCoordinate(coordinate);
-  const candidates = problemResultsAtCoordinate(coordinate, results);
-  const previous = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !previous.has(event.id));
-  return { owner, ...(heads.length === 1 ? { title: tagValue(heads[0].event, "title") ?? "Untitled problem" } : {}) };
-}
-
 export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
     HEX_64.test(event.id) && tag(event, "a", "origin")?.[1]?.match(/^31971:[0-9a-f]{64}:[0-9a-f]{64}$/));
