@@ -120,11 +120,12 @@ function filterCounts(nodes: ProblemNode[]) {
 function positionTreeConnectors() {
   app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
     const lastBranch = children.lastElementChild;
-    const lastButton = lastBranch?.querySelector<HTMLElement>(":scope > .tree-node");
-    if (!lastButton) return;
+    if (!lastBranch) return;
+    const branchTop = Number.parseFloat(getComputedStyle(lastBranch, "::before").top);
+    if (!Number.isFinite(branchTop)) return;
     const childrenBox = children.getBoundingClientRect();
-    const buttonBox = lastButton.getBoundingClientRect();
-    const connectorEnd = buttonBox.top - childrenBox.top + buttonBox.height / 2;
+    const branchBox = lastBranch.getBoundingClientRect();
+    const connectorEnd = branchBox.top - childrenBox.top + branchTop;
     children.style.setProperty("--connector-end", `${connectorEnd}px`);
   });
 }
