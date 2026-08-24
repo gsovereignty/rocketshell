@@ -316,6 +316,15 @@ export function relatedCoordinates(problem: ProblemView, results: RelayEventResu
   return Array.from(coordinates);
 }
 
+export function relatedProblemSummary(coordinate: string, results: RelayEventResult[]): { owner: string; title?: string } {
+  const { owner } = parseCoordinate(coordinate);
+  const candidates = problemResultsAtCoordinate(coordinate, results);
+  const previous = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const heads = candidates.filter(({ event }) => !previous.has(event.id));
+  return { owner, ...(heads.length === 1 ? { title: tagValue(heads[0].event, "title") ?? "Untitled problem" } : {}) };
+}
+
 export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
     HEX_64.test(event.id) && tag(event, "a", "origin")?.[1]?.match(/^31971:[0-9a-f]{64}:[0-9a-f]{64}$/));

@@ -8,7 +8,7 @@ import { identity, inc, intent, outbox, resource, type OutboxSubscription, type 
 import { gsap } from "gsap";
 import "./styles.css";
 import {
-  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates,
+  COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates, relatedProblemSummary,
   mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
   selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
@@ -168,6 +168,7 @@ function render() {
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
   const canEdit = mayEditProblem(problem, pubkey, ancestorOwners);
+  const relatedProblems = related.map((coordinate) => ({ coordinate, ...relatedProblemSummary(coordinate, relatedEvents) }));
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
     <div><span>Claimed by</span><strong title="${escapeHtml(effectiveClaim.claimant)}">${escapeHtml(authorName(effectiveClaim.claimant))}</strong></div>
@@ -210,7 +211,7 @@ function render() {
     </section>
     <section class="related" aria-labelledby="related-title">
       <h2 id="related-title">Related · ${related.length}</h2>
-      ${related.length ? `<ul>${related.map((coordinate) => `<li><button type="button" data-related="${coordinate}"><span>Problem ${escapeHtml(shortKey(coordinate.split(":")[2]))}</span><code>${escapeHtml(shortKey(coordinate))}</code></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
+      ${relatedProblems.length ? `<ul>${relatedProblems.map(({ coordinate, owner, title }) => `<li><button type="button" data-related="${coordinate}" title="${escapeHtml(coordinate)}"><strong>${escapeHtml(title ?? "Problem title unavailable")}</strong><span>By ${escapeHtml(authorName(owner))}</span></button></li>`).join("")}</ul>` : `<p>No related problem mentions found yet.</p>`}
     </section>
     <output id="app-status" aria-live="polite">${escapeHtml(liveMessage || (pubkey ? "" : "Sign in through shell to claim or comment."))}</output>
   </article>`;
@@ -393,7 +394,7 @@ function receiveDiscussion(result: RelayEventResult) {
   }
   if (problem) related = relatedCoordinates(problem, [...comments, ...relatedEvents]);
   render();
-  if (result.event.kind === COMMENT_KIND && !profiles.has(result.event.pubkey)) void loadProfiles([result.event.pubkey]);
+  void loadProfiles([result.event.pubkey, ...related.map((coordinate) => parseCoordinate(coordinate).owner)]);
 }
 
 async function loadProfiles(authors: string[]) {
@@ -561,6 +562,7 @@ async function loadProblem(value: string) {
       problem.owner,
       ...comments.map(({ event }) => event.pubkey),
       ...relatedEvents.filter(({ event }) => event.kind === 31971).map(({ event }) => event.pubkey),
+      ...related.map((coordinate) => parseCoordinate(coordinate).owner),
       ...(effectiveClaim ? [effectiveClaim.claimant] : [])
     ]);
   } catch (error) {
