@@ -163,6 +163,28 @@ const currentProblemHead = (coordinate: string, results: RelayEventResult[]): Re
   return heads[0];
 };
 
+const directParentCoordinates = (event: NostrEvent): string[] => event.tags
+  .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
+  .map((item) => item[1]);
+
+export function missingProblemAncestorCoordinates(problem: ProblemView, results: RelayEventResult[]): string[] {
+  const missing = new Set<string>();
+  const visited = new Set<string>();
+  const pending = [...directParentCoordinates(currentProblemHead(problem.coordinate, results).event)];
+  while (pending.length) {
+    const coordinate = pending.pop()!;
+    if (visited.has(coordinate)) continue;
+    visited.add(coordinate);
+    try {
+      pending.push(...directParentCoordinates(currentProblemHead(coordinate, results).event));
+    } catch (error) {
+      if (error instanceof Error && error.message.endsWith(" was not found.")) missing.add(coordinate);
+      else throw error;
+    }
+  }
+  return [...missing].sort();
+}
+
 export function resolveProblemAncestorOwners(problem: ProblemView, results: RelayEventResult[]): string[] {
   const owners = new Set<string>();
   const visited = new Set<string>();
@@ -176,15 +198,11 @@ export function resolveProblemAncestorOwners(problem: ProblemView, results: Rela
     if (!HEX_64.test(owner)) throw new Error("Ancestor problem owner is invalid.");
     const head = currentProblemHead(coordinate, results).event;
     owners.add(owner);
-    for (const parent of head.tags
-      .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
-      .map((item) => item[1])) visit(parent);
+    for (const parent of directParentCoordinates(head)) visit(parent);
     visiting.delete(coordinate);
     visited.add(coordinate);
   };
-  for (const parent of selected.tags
-    .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
-    .map((item) => item[1])) visit(parent);
+  for (const parent of directParentCoordinates(selected)) visit(parent);
   return [...owners].sort();
 }
 

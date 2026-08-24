@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate, relatedCoordinates,
-  mayEditProblem, problemEdits, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
+  mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
   selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
@@ -52,6 +52,31 @@ function refreshAncestorOwners(coordinate: string): void {
   } catch (error) {
     ancestorOwners = [];
     console.warn("Problem ancestor authorization could not be resolved", { coordinate, error });
+  }
+}
+
+async function hydrateProblemAncestors(selected: ProblemView, initial: RelayEventResult[]): Promise<RelayEventResult[]> {
+  const results = [...initial];
+  const attempted = new Set<string>();
+  while (true) {
+    const missing = missingProblemAncestorCoordinates(selected, results)
+      .filter((coordinate) => !attempted.has(coordinate));
+    if (!missing.length) return results;
+    missing.forEach((coordinate) => attempted.add(coordinate));
+    const responses = await Promise.all(missing.map((coordinate) => {
+      const [, owner = "", problemId = ""] = coordinate.split(":");
+      return outbox.query(
+        { kinds: [31971], "#d": [problemId], limit: 200 },
+        { authors: [owner], limit: 200, timeoutMs: 8000 }
+      );
+    }));
+    const known = new Set(results.map(({ event }) => event.id));
+    for (const result of responses.flatMap(({ events }) => events)) {
+      if (!known.has(result.event.id)) {
+        results.push(result);
+        known.add(result.event.id);
+      }
+    }
   }
 }
 
@@ -482,8 +507,10 @@ async function loadProblem(value: string) {
     if (generation !== loadGeneration) return;
     const graphEvents = graphResponse.events;
     const graphProblem = selectProblem(target.coordinate, [...problemResults, ...graphEvents]);
+    const hydratedGraphEvents = await hydrateProblemAncestors(graphProblem, [...problemResults, ...graphEvents]);
+    if (generation !== loadGeneration) return;
     problem = graphProblem;
-    relatedEvents = graphEvents;
+    relatedEvents = hydratedGraphEvents;
     refreshAncestorOwners(target.coordinate);
     const routedAuthors = [...new Set([...problemRevisionAuthors(graphProblem), ...ancestorOwners])];
     filters = [...filters, { kinds: [31971], "#A": [graphProblem.rootCoordinate] }];
@@ -503,7 +530,7 @@ async function loadProblem(value: string) {
       ? (await outbox.query({ kinds: [31971], "#d": childProblemIds, limit: 300 }, { limit: 300, timeoutMs: 8000 })).events
       : [];
     if (generation !== loadGeneration) return;
-    const allResults = [...problemResults, ...graphEvents, ...initialRelated, ...childRevisions];
+    const allResults = [...problemResults, ...hydratedGraphEvents, ...initialRelated, ...childRevisions];
     const uniqueResults = Array.from(new Map(allResults.map((result) => [result.event.id, result])).values());
     relatedEvents = uniqueResults.filter(({ event }) => event.kind === 31971);
     problem = selectProblem(target.coordinate, relatedEvents);
