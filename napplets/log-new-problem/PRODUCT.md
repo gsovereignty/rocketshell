@@ -15,8 +15,8 @@ boundary without handling keys or relays directly.
 ## Experience
 
 - Start with title and complete problem description.
-- Edit descriptions as plain Markdown through a shared rich live-preview editor
-  with formatting tools, editable tables, code blocks, and shell-loaded images.
+- Edit descriptions as plain Markdown through a shared source-visible editor
+  with formatting tools and rendered typography. Markdown markers remain visible.
 - Keep common choices visible and move optional protocol detail behind progressive
   disclosure.
 - Clearly distinguish a new root problem from a child of an existing problem.
@@ -45,8 +45,6 @@ boundary without handling keys or relays directly.
   or EventStore.
 - Fast and minimal by default; advanced fields remain optional.
 - Keyboard accessible, responsive to narrow iframe sizes, reduced-motion safe.
-- Image preview bytes come only from required NAP-RESOURCE and become scoped
-  object URLs inside editor.
 
 ## Assumptions
 

@@ -3,14 +3,10 @@ import { markdown } from "@codemirror/lang-markdown";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
 import { Table } from "@lezer/markdown";
-import {
-  collapseOnSelectionFacet, editorTheme, livePreviewPlugin,
-  markdownStylePlugin, mouseSelectingField, setMouseSelecting, tableEditorPlugin
-} from "codemirror-live-markdown";
+import { editorTheme, markdownStylePlugin } from "codemirror-live-markdown";
 import { applyMarkdownCommand, markdownCommandSpecs, type MarkdownCommandName } from "./commands";
-import { codeFencePreview, nonNavigatingLinkPreview, resourceImagePreview, type ErrorReporter, type ResourceLoader } from "./media";
 
-export type ProblemMarkdownEditorResourceLoader = ResourceLoader;
+export type ErrorReporter = (operation: string, error: unknown, details?: Readonly<Record<string, string>>) => void;
 
 export interface ProblemMarkdownEditorOptions {
   parent: HTMLElement;
@@ -18,7 +14,6 @@ export interface ProblemMarkdownEditorOptions {
   disabled?: boolean;
   ariaLabel: string;
   placeholder?: string;
-  loadResource?: ProblemMarkdownEditorResourceLoader;
   onChange?: (value: string) => void;
   onError?: ErrorReporter;
   onAddMedia?: () => void;
@@ -82,28 +77,17 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
       { key: "Mod-i", run: (view) => runCommand(view, "italic") },
       ...defaultKeymap, ...historyKeymap, indentWithTab
     ])),
-    collapseOnSelectionFacet.of(true), mouseSelectingField, livePreviewPlugin,
-    // Stock codeBlockField pulls lowlight's dynamic highlighter path into the
-    // napplet bundle. That path references runtime-loaded language modules and
-    // forbidden browser globals, breaking single-file NAP web conformance.
-    // Keep highlighting curated and build-time bundled in codeFencePreview.
-    markdownStylePlugin, editorTheme, tableEditorPlugin(), codeFencePreview(report), nonNavigatingLinkPreview(),
+    // Source-visible mode deliberately omits every replacement/collapse plugin.
+    // Markdown markers remain visible on active and inactive lines alike.
+    markdownStylePlugin, editorTheme,
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({ "aria-label": options.ariaLabel, "aria-multiline": "true" }),
     EditorView.updateListener.of((update) => { if (update.docChanged) options.onChange?.(update.state.doc.toString()); }),
     readOnly.of(EditorState.readOnly.of(Boolean(options.disabled)))
   ];
   if (options.placeholder) extensions.push(placeholderExtension(options.placeholder));
-  if (options.loadResource) extensions.push(resourceImagePreview(options.loadResource, report));
 
   const view = new EditorView({ state: EditorState.create({ doc: options.value, extensions }), parent: editorHost });
-  const setMouse = (selecting: boolean) => {
-    if (!destroyed) view.dispatch({ effects: setMouseSelecting.of(selecting) });
-  };
-  const mouseDown = () => setMouse(true);
-  const mouseUp = () => requestAnimationFrame(() => setMouse(false));
-  view.contentDOM.addEventListener("mousedown", mouseDown);
-  document.addEventListener("mouseup", mouseUp);
 
   const run = (name: MarkdownCommandName) => {
     runCommand(view, name);
@@ -161,8 +145,6 @@ export function createProblemMarkdownEditor(options: ProblemMarkdownEditorOption
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      view.contentDOM.removeEventListener("mousedown", mouseDown);
-      document.removeEventListener("mouseup", mouseUp);
       view.destroy();
       shell.remove();
     }

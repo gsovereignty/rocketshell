@@ -2,7 +2,6 @@ export { createPlainMarkdownEditorFallback, createProblemMarkdownEditor } from "
 export type {
   ProblemMarkdownEditor,
   ProblemMarkdownEditorOptions,
-  ProblemMarkdownEditorResourceLoader,
   PlainMarkdownEditorFallbackOptions
 } from "./editor";
 export { applyMarkdownCommand, markdownCommandSpecs } from "./commands";

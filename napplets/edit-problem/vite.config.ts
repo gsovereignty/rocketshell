@@ -8,7 +8,7 @@ export default defineConfig({
     nappletType: "edit-problem",
     title: "Edit Problem",
     description: "Edit and publish a NIP-1971 problem revision.",
-    requires: ["identity", "outbox", "intent", "inc", "upload", "resource"],
+    requires: ["identity", "outbox", "intent", "inc", "upload"],
     archetypes: [{ slug: "composer", convention: "napplet:composer/problem-edit" }],
     artifactMode: "single-file"
   })],

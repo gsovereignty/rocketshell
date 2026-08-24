@@ -685,6 +685,9 @@ test("edits new-problem Markdown inside packaged sandbox", async ({ page }) => {
   await boldButton.click();
   await expect(frame.locator("#count")).not.toHaveText("0");
   const content = frame.locator(".cm-content");
+  await expect(content).toContainText("**bold text**");
+  await expect(content.locator(".cm-strong")).toHaveText("**bold text**");
+  await expect(content.locator(".cm-strong")).toHaveCSS("font-weight", "700");
   await content.click();
   await content.press("End");
   await content.press("Enter");

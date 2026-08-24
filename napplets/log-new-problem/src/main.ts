@@ -1,4 +1,4 @@
-import { identity, inc, outbox, resource, upload } from "@napplet/sdk";
+import { identity, inc, outbox, upload } from "@napplet/sdk";
 import type { OutboxSubscription, RelayEventResult, Subscription } from "@napplet/sdk";
 import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
 import "@platform/napplet-markdown-editor/styles.css";
@@ -239,7 +239,6 @@ try {
     value: "",
     ariaLabel: "Problem description",
     placeholder: "Describe current behavior, impact, and enough context to understand the problem.",
-    loadResource: (url, signal) => resource.bytes(url, { signal }),
     onAddMedia: uploadAvailable ? () => attachmentInput.click() : undefined,
     onChange: (value) => { count.value = String(value.length); },
     onError: (operation, error, details) => console.error(`Problem Markdown editor failed to ${operation}`, { ...details, error })

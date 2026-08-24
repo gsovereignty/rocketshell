@@ -1,4 +1,4 @@
-import { identity, inc, intent, outbox, resource, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
+import { identity, inc, intent, outbox, themeGet, themeOnChanged, upload, type OutboxSubscription, type RelayEventResult, type Subscription, type Theme } from "@napplet/sdk";
 import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type ProblemMarkdownEditor } from "@platform/napplet-markdown-editor";
 import "@platform/napplet-markdown-editor/styles.css";
 import gsap from "gsap";
@@ -129,7 +129,6 @@ function renderEditor(problem: EditableProblem): void {
       disabled,
       ariaLabel: "Problem description",
       placeholder: "Describe current behavior, impact, and context.",
-      loadResource: (url, signal) => resource.bytes(url, { signal }),
       onAddMedia: uploadAvailable ? () => attachmentInput?.click() : undefined,
       onChange: (value) => { const count = document.querySelector<HTMLOutputElement>("#description-count"); if (count) count.value = String(value.length); },
       onError: (operation, error, details) => console.error(`Problem revision Markdown editor failed to ${operation}`, { problemId: problem.problemId, ...details, error })

@@ -8,6 +8,9 @@ beforeAll(() => {
   Range.prototype.getBoundingClientRect = () => ({ left:0,right:0,top:0,bottom:0,width:0,height:0,x:0,y:0,toJSON:() => ({}) });
 });
 
+const visibleSource = (parent: HTMLElement) =>
+  [...parent.querySelectorAll<HTMLElement>(".cm-line")].map((line) => line.textContent ?? "").join("\n");
+
 describe("problem Markdown editor", () => {
   it("keeps plain Markdown canonical across updates and inserts", () => {
     const parent = document.createElement("div");
@@ -21,6 +24,20 @@ describe("problem Markdown editor", () => {
     expect(onChange).toHaveBeenCalled();
     editor.destroy();
     expect(parent.childElementCount).toBe(0);
+  });
+
+  it("keeps Markdown syntax visible when editor loses focus", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const source = "# Heading\n\n**bold** and *italic*\n\n> quote\n\n- item";
+    const editor = createProblemMarkdownEditor({ parent, value: source, ariaLabel: "Problem description" });
+    parent.querySelector<HTMLElement>(".cm-content")!.blur();
+    expect(visibleSource(parent)).toBe(source);
+    expect(parent.querySelector(".cm-header-1")).toBeTruthy();
+    expect(parent.querySelector(".cm-strong")).toBeTruthy();
+    expect(parent.querySelector(".cm-emphasis")).toBeTruthy();
+    expect(parent.querySelector(".cm-table-widget, .napplet-md-code, .napplet-md-link, .napplet-md-media")).toBeNull();
+    editor.destroy();
   });
 
   it("blocks formatting and insertion while read-only", () => {
@@ -63,29 +80,15 @@ describe("problem Markdown editor", () => {
     editor.destroy();
   });
 
-  it("renders links without anchors and reveals source on click", () => {
+  it("keeps complex Markdown constructs visible as source", () => {
     const parent = document.createElement("div");
     document.body.append(parent);
-    const editor = createProblemMarkdownEditor({ parent, value: "x [Docs](https://example.test)", ariaLabel: "Problem description" });
-    const link = parent.querySelector<HTMLElement>(".napplet-md-link")!;
-    expect(link).toBeTruthy();
-    expect(parent.querySelector("a")).toBeNull();
-    link.click();
-    expect(parent.querySelector(".napplet-md-link")).toBeNull();
-    editor.destroy();
-  });
-
-  it("keeps images inside code fences as highlighted code", () => {
-    const parent = document.createElement("div");
-    document.body.append(parent);
-    const loadResource = vi.fn(async () => new Blob(["image"], { type: "image/png" }));
+    const source = 'x\n```javascript\nconst image = "![sample](https://example.test/a.png)";\n```\n\n[Docs](https://example.test)';
     const editor = createProblemMarkdownEditor({
-      parent, value: 'x\n```javascript\nconst image = "![sample](https://example.test/a.png)";\n```', ariaLabel: "Problem description", loadResource
+      parent, value: source, ariaLabel: "Problem description"
     });
-    expect(parent.querySelector(".napplet-md-code")).toBeTruthy();
-    expect(parent.querySelector(".napplet-md-media")).toBeNull();
-    expect(parent.querySelector(".tok-keyword")?.textContent).toBe("const");
-    expect(loadResource).not.toHaveBeenCalled();
+    expect(visibleSource(parent)).toBe(source);
+    expect(parent.querySelector(".napplet-md-code, .napplet-md-link, .napplet-md-media")).toBeNull();
     editor.destroy();
   });
 
