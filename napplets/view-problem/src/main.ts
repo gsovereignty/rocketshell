@@ -535,6 +535,7 @@ async function loadProblem(value: string) {
         if (!initialPreviewRendered) {
           initialPreviewRendered = true;
           render();
+          void loadProfiles([problem.owner, result.event.pubkey]);
         }
         return;
       }

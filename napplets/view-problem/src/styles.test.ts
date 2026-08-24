@@ -28,4 +28,8 @@ describe("discussion layout", () => {
     expect(styles).toContain(".profile-name-loading");
     expect(styles).toContain("@media(prefers-reduced-motion:reduce)");
   });
+
+  it("starts profile loading when first cached preview renders", () => {
+    expect(main).toMatch(/initialPreviewRendered = true;\s+render\(\);\s+void loadProfiles\(\[problem\.owner, result\.event\.pubkey\]\);/);
+  });
 });
