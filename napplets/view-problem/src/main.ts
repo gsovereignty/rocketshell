@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   COMMENT_KIND, buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, parseCoordinate,
-  mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners,
+  mayEditProblem, missingProblemAncestorCoordinates, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwnersIfComplete,
   selectEffectiveClaim, selectProblem, shortKey,
   type ProblemView
 } from "./problem";
@@ -94,7 +94,8 @@ function ingestResults(results: RelayEventResult[], coordinate: string): string[
 function refreshAncestorOwners(coordinate: string): void {
   if (!problem) return;
   try {
-    ancestorOwners = resolveProblemAncestorOwners(problem, relatedEvents);
+    const resolved = resolveProblemAncestorOwnersIfComplete(problem, relatedEvents);
+    ancestorOwners = resolved ?? [];
   } catch (error) {
     ancestorOwners = [];
     console.warn("Problem ancestor authorization could not be resolved", { coordinate, error });
@@ -575,6 +576,8 @@ async function loadProblemGraph(
     try {
       await hydrateProblemAncestors(current, generation);
       if (generation !== loadGeneration) return;
+      const unresolved = missingProblemAncestorCoordinates(current, relatedEvents);
+      if (unresolved.length) throw new Error(`Ancestor problems remain unavailable: ${unresolved.join(", ")}`);
       refreshAncestorOwners(selected.coordinate);
       setLoadState("ancestors", "complete");
     } catch (error) {

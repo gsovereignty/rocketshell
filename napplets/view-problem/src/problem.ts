@@ -219,6 +219,11 @@ export function resolveProblemAncestorOwners(problem: ProblemView, results: Rela
   return [...owners].sort();
 }
 
+export function resolveProblemAncestorOwnersIfComplete(problem: ProblemView, results: RelayEventResult[]): string[] | undefined {
+  if (missingProblemAncestorCoordinates(problem, results).length) return undefined;
+  return resolveProblemAncestorOwners(problem, results);
+}
+
 export function buildWorkflowTemplate(problem: ProblemView, content: string, action?: "claim"): EventTemplate {
   const tags = [
     ["A", problem.coordinate, problem.relay], ["K", String(PROBLEM_KIND)], ["P", problem.owner, problem.relay],

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, missingProblemAncestorCoordinates, parseCoordinate, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners, selectEffectiveClaim, selectProblem } from "./problem";
+import { buildWorkflowTemplate, compareProblemRevisions, coordinateFromProblemEvent, formatClaimCountdown, hasClaimRequest, hasProblemChildren, mayEditProblem, missingProblemAncestorCoordinates, parseCoordinate, problemEdits, problemResultsAtCoordinate, problemRevisionAuthors, problemRevisionHistory, resolveProblemAncestorOwners, resolveProblemAncestorOwnersIfComplete, selectEffectiveClaim, selectProblem } from "./problem";
 
 const owner = "a".repeat(64);
 const id = "b".repeat(64);
@@ -129,8 +129,11 @@ describe("problem view", () => {
     expect(missingProblemAncestorCoordinates(problem, [target])).toEqual([parentCoordinate]);
     expect(missingProblemAncestorCoordinates(problem, [target, parent])).toEqual([rootCoordinate]);
     expect(missingProblemAncestorCoordinates(problem, [target, parent, root])).toEqual([]);
+    expect(resolveProblemAncestorOwnersIfComplete(problem, [target])).toBeUndefined();
+    expect(resolveProblemAncestorOwnersIfComplete(problem, [target, parent])).toBeUndefined();
     const ancestors = resolveProblemAncestorOwners(problem, [target, parent, root]);
     expect(ancestors).toEqual([rootOwner, parentOwner].sort());
+    expect(resolveProblemAncestorOwnersIfComplete(problem, [target, parent, root])).toEqual(ancestors);
     expect(mayEditProblem(problem, rootOwner, ancestors)).toBe(true);
   });
   it("keeps selected ancestry stable when another target head arrives", () => {
