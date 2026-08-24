@@ -12,6 +12,7 @@ import { createDockStore } from "./dock-store.js";
 import type { DockLauncher } from "./dock-launchers.js";
 import { openDockIconStore, type DockIconOverride } from "./dock-icon-store.js";
 import { createSignedEventsView } from "./signed-events-view.js";
+import { createNappletConsoleView } from "./napplet-console-view.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -65,6 +66,14 @@ const dockShell = document.querySelector<HTMLElement>("#dock-shell");
 const dock = document.querySelector<HTMLElement>("#napplet-dock");
 const dockItems = document.querySelector<HTMLUListElement>("#dock-items");
 const dockStatus = document.querySelector<HTMLElement>("#dock-status");
+const consoleTrigger = document.querySelector<HTMLButtonElement>("#napplet-console-trigger");
+const consolePanel = document.querySelector<HTMLElement>("#napplet-console-panel");
+const consoleHeader = document.querySelector<HTMLElement>("#napplet-console-header");
+const consoleClose = document.querySelector<HTMLButtonElement>("#napplet-console-close");
+const consoleClear = document.querySelector<HTMLButtonElement>("#napplet-console-clear");
+const consoleTabs = document.querySelector<HTMLElement>("#napplet-console-tabs");
+const consoleOutput = document.querySelector<HTMLElement>("#napplet-console-output");
+const consoleEmpty = document.querySelector<HTMLElement>("#napplet-console-empty");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(hover: none)");
 const widgetGrid = windowsContainer
@@ -378,6 +387,9 @@ const wireDockMotion = (): void => {
 wireDockMotion();
 
 void bootstrap().then(async (platform) => {
+  const nappletConsoleView = consoleTrigger && consolePanel && consoleHeader && consoleClose && consoleClear && consoleTabs && consoleOutput && consoleEmpty
+    ? createNappletConsoleView({ trigger: consoleTrigger, panel: consolePanel, header: consoleHeader, close: consoleClose, clear: consoleClear, tabs: consoleTabs, output: consoleOutput, empty: consoleEmpty }, platform.windows, platform.nappletConsole, reducedMotion)
+    : null;
   introduceDock();
 
   createThemeController({ settings: platform.settings, publishTheme: platform.publishTheme });
@@ -828,7 +840,7 @@ void bootstrap().then(async (platform) => {
     void renderDock();
     if (!restoringSession) windowSessions.set(currentSession());
   });
-  window.addEventListener("pagehide", () => { unsubscribeWindows(); dockIconStore.close(); }, { once: true });
+  window.addEventListener("pagehide", () => { unsubscribeWindows(); nappletConsoleView?.close(); dockIconStore.close(); }, { once: true });
   void renderDock();
 
   form?.addEventListener("submit", (event) => { event.preventDefault(); void openCoordinate(); });

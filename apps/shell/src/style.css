@@ -236,6 +236,115 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   line-height: 1rem;
 }
 
+#napplet-console-panel {
+  position: fixed;
+  z-index: 260;
+  right: .75rem;
+  bottom: 5.25rem;
+  display: grid;
+  width: min(46rem, calc(100vw - 1.5rem));
+  height: min(28rem, calc(100dvh - var(--bar-height) - 6.5rem));
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: .9rem;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(24px) saturate(140%);
+  transform-origin: 100% 100%;
+}
+#napplet-console-header {
+  display: flex;
+  min-height: 3.35rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .55rem .55rem .55rem .85rem;
+  border-bottom: 1px solid var(--hairline);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+#napplet-console-panel[data-dragging="true"] #napplet-console-header { cursor: grabbing; }
+#napplet-console-header h2 { margin: 0; color: var(--text-strong); font-size: .88rem; font-weight: 720; letter-spacing: -.015em; }
+#napplet-console-header p { margin-top: .1rem; color: var(--muted); font-size: .65rem; }
+.napplet-console-actions { display: flex; align-items: center; gap: .2rem; }
+#napplet-console-clear { min-width: auto; color: var(--text-soft); font-size: .7rem; }
+#napplet-console-tabs {
+  display: flex;
+  min-width: 0;
+  gap: .2rem;
+  overflow-x: auto;
+  padding: .38rem .45rem;
+  border-bottom: 1px solid var(--hairline);
+  scrollbar-color: var(--accent) transparent;
+}
+.napplet-console-tab {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 12rem;
+  height: 1.8rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .35rem;
+  overflow: hidden;
+  padding: 0 .55rem;
+  border: 0;
+  border-radius: .4rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.napplet-console-tab:hover { background: var(--hover); color: var(--text); }
+.napplet-console-tab[aria-selected="true"] { background: var(--control); color: var(--text-strong); box-shadow: inset 0 -2px var(--accent); }
+.napplet-console-unread { min-width: 1rem; height: 1rem; padding: 0 .25rem; border-radius: .5rem; background: var(--accent); color: var(--on-accent); font-size: .58rem; line-height: 1rem; text-align: center; }
+.napplet-console-unread[data-level="error"] { background: var(--danger); color: var(--surface); }
+#napplet-console-output {
+  min-height: 0;
+  overflow: auto;
+  padding: .35rem 0;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text-soft);
+  scrollbar-color: var(--accent) transparent;
+}
+.napplet-console-row {
+  display: grid;
+  grid-template-columns: 4.9rem 3.2rem minmax(0, 1fr);
+  gap: .4rem;
+  padding: .3rem .65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--hairline) 65%, transparent);
+  font: .68rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.napplet-console-row:hover { background: var(--hover); }
+.napplet-console-row time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.napplet-console-level { color: var(--muted); font-weight: 700; }
+.napplet-console-row[data-level="info"] .napplet-console-level { color: #7dd3fc; }
+.napplet-console-row[data-level="warn"] .napplet-console-level { color: var(--warning); }
+.napplet-console-row[data-level="error"] .napplet-console-level { color: var(--danger); }
+.napplet-console-row pre { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+#napplet-console-empty { position: absolute; inset: 7rem 0 0; display: grid; place-items: center; color: var(--muted); font-size: .75rem; pointer-events: none; }
+
+@media (max-width: 38rem) {
+  #napplet-console-panel {
+    top: calc(var(--bar-height) + .5rem) !important;
+    right: .5rem !important;
+    bottom: .5rem !important;
+    left: .5rem !important;
+    width: auto;
+    height: auto;
+    max-height: none;
+    transform-origin: 50% 100%;
+  }
+  #napplet-console-header { cursor: default; }
+  .napplet-console-row { grid-template-columns: 4.6rem minmax(0, 1fr); }
+  .napplet-console-level { grid-column: 1; }
+  .napplet-console-row pre { grid-row: 1 / 3; grid-column: 2; }
+}
+
 #signed-events-panel {
   position: fixed;
   z-index: 125;

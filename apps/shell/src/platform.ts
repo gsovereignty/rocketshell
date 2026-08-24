@@ -16,6 +16,7 @@ import { PlatformMetadataStore } from "./platform-metadata.js";
 import { requireWiredDomains } from "./domain-environment.js";
 import { dockLauncherFromManifest, type DockLauncher } from "./dock-launchers.js";
 import { installBuiltInNapplets } from "./built-in-napplets.js";
+import { createNappletConsoleStore, parseNappletConsoleMessage, type NappletConsoleStore } from "./napplet-console-store.js";
 
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
@@ -32,7 +33,7 @@ export const DEFAULT_SHELL_SETTINGS: ShellSettings = {
 
 class BrowserWindowBridge implements WindowBridge {
   readonly #ready = createReadyRegistry();
-  constructor(private readonly shell: ShellBridge, private readonly wiredDomains: ReadonlySet<string>, private readonly wiredServices: ReadonlySet<string>) {}
+  constructor(private readonly shell: ShellBridge, private readonly wiredDomains: ReadonlySet<string>, private readonly wiredServices: ReadonlySet<string>, private readonly consoleStore: NappletConsoleStore) {}
   register(identity: WindowIdentity): void {
     originRegistry.register(identity.source, identity.windowId, { dTag: identity.dTag, aggregateHash: identity.aggregateHash });
     const domains = requireWiredDomains(identity.requiredDomains, this.wiredDomains);
@@ -53,6 +54,7 @@ class BrowserWindowBridge implements WindowBridge {
   }
   unregister(windowId: string): void {
     this.#ready.remove(windowId);
+    this.consoleStore.remove(windowId);
     this.shell.runtime.destroyWindow(windowId);
     this.shell.runtime.sessionRegistry.unregister(windowId);
     originRegistry.unregister(windowId);
@@ -61,6 +63,7 @@ class BrowserWindowBridge implements WindowBridge {
 
 export interface BrowserPlatform {
   readonly windows: NappletWindowManager;
+  readonly nappletConsole: NappletConsoleStore;
   connectExtension(): Promise<string>;
   connectEphemeral(): Promise<string>;
   signOut(): void;
@@ -151,7 +154,8 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     maxBytes: MAX_MEDIA_BYTES
   });
   wiredDomains.add("upload"); wiredServices.add("upload");
-  const windowBridge = new BrowserWindowBridge(shell, wiredDomains, wiredServices);
+  const nappletConsole = createNappletConsoleStore();
+  const windowBridge = new BrowserWindowBridge(shell, wiredDomains, wiredServices, nappletConsole);
   windows = new NappletWindowManager(packageStore, windowBridge, container, import.meta.env.BASE_URL, telemetry);
   shell.registerConsentHandler((request) => {
     const identity = windows?.findByWindowId(request.windowId)?.identity;
@@ -215,6 +219,9 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   });
   const resolveManifest = createManifestResolver(discoveryRelays);
   const onMessage = (event: MessageEvent): void => {
+    const consoleMessage = parseNappletConsoleMessage(event.data);
+    const sourceWindowId = event.source ? originRegistry.getWindowId(event.source as Window) : undefined;
+    if (consoleMessage && sourceWindowId) nappletConsole.append(sourceWindowId, consoleMessage);
     shell.handleMessage(event);
     windowBridge.accept(event);
     if (event.data?.type === "shell.ready" && event.source && originRegistry.getWindowId(event.source as Window)) {
@@ -254,6 +261,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   let closed = false;
   return {
     windows,
+    nappletConsole,
     connectExtension: () => accounts.connectExtension(),
     connectEphemeral: () => accounts.connectEphemeral(),
     signOut: () => accounts.signOut(),

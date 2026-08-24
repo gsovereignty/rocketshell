@@ -1,4 +1,5 @@
 import type { StoredArtifact } from "./types.js";
+import { consoleCapturePrelude } from "./console-prelude.js";
 
 export const NAPPLET_CSP = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
 
@@ -46,7 +47,7 @@ export function artifactResponse(artifact: StoredArtifact, namespacePrelude = ""
     const nonceBytes = crypto.getRandomValues(new Uint8Array(18));
     const nonce = btoa(String.fromCharCode(...nonceBytes));
     const html = new TextDecoder().decode(artifact.bytes);
-    const prelude = `${sealedGlobalsPrelude}${namespacePrelude}`;
+    const prelude = `${sealedGlobalsPrelude}${consoleCapturePrelude}${namespacePrelude}`;
     const nonceScripts = (value: string): string => value.replace(/<script\b(?![^>]*\bnonce=)/gi, `<script nonce="${nonce}"`);
     csp = NAPPLET_CSP.replace("script-src 'self'", `script-src 'self' 'nonce-${nonce}'`);
     const base = assetBaseUrl ? `<base href="${escapeAttribute(assetBaseUrl)}">` : "";

@@ -118,7 +118,11 @@ describe("package gateway", () => {
     const response = await routeNappletRequest(new Request(`https://host.test${url}`), "/project/", store);
     expect(response?.status).toBe(200); expect(response?.headers.get("content-security-policy")).toContain("connect-src 'none'");
     const html = await response?.text(); expect(html).toContain("<h1>Hello</h1>"); expect(html).toContain("target.napplet"); expect(html).toContain("<script nonce="); expect(html).toContain(`<base href="https://host.test/project/__napplet__/hello%2Fworld/${installed.aggregateHash}/">`);
-    expect(html!.indexOf("Object.defineProperty(globalThis")).toBeLessThan(html!.indexOf("target.napplet"));
+    expect(html!.indexOf("Object.defineProperty(globalThis")).toBeLessThan(html!.indexOf("__rocketshell.console"));
+    expect(html!.indexOf("__rocketshell.console")).toBeLessThan(html!.indexOf("target.napplet"));
+    expect(html).toContain("original.apply(console, args)");
+    expect(html).toContain("[Circular]");
+    expect(html).toContain("limits.total");
     expect(html!.indexOf("target.napplet")).toBeLessThan(html!.indexOf("<h1>Hello</h1>"));
     const csp = response?.headers.get("content-security-policy");
     expect(csp).toContain("'nonce-");
