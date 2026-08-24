@@ -12,7 +12,7 @@ behave like terse form annotations; generous writing fields carry the hierarchy.
 
 ## Composition
 
-- Narrow centered work column, never a dashboard.
+- Full-width work sheet uses available napplet space, never a dashboard.
 - Header states task and current root/child mode.
 - Title and description dominate first viewport.
 - Advanced protocol choices stay in one disclosure section.

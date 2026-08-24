@@ -21,7 +21,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 280px; background: #e9edf0; }
 button, input, textarea, select { font: inherit; }
-.sheet { width: min(760px, 100%); min-height: 100vh; margin: 0 auto; padding: clamp(22px, 5vw, 54px); background: var(--paper); box-shadow: 0 0 0 1px rgba(16, 40, 50, .05), 0 24px 70px rgba(16, 40, 50, .08); }
+.sheet { width: 100%; min-height: 100vh; margin: 0 auto; padding: clamp(22px, 4vw, 64px); background: var(--paper); }
 .masthead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 3px solid var(--ink); }
 h1 { margin: 4px 0 0; font-size: clamp(2rem, 7vw, 3.6rem); line-height: .98; letter-spacing: -.055em; font-weight: 760; }
 .eyebrow, .micro { margin: 0; color: var(--muted); font-size: .68rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }

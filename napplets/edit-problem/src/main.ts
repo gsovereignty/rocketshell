@@ -95,12 +95,6 @@ function renderEditor(problem: EditableProblem): void {
       <span class="authority ${problem.mayEdit ? "allowed" : "denied"}">${problem.mayEdit ? "Authorized editor" : "Read-only identity"}</span>
     </header>
     <div class="workspace">
-      <aside>
-        <h2>Current problem</h2>
-        <p class="current-title">${escapeHtml(problem.title || "Untitled problem")}</p>
-        <dl><div><dt>Status</dt><dd>${escapeHtml(problem.status)}</dd></div><div><dt>Revision</dt><dd><code>${shortKey(problem.event.id)}</code></dd></div><div><dt>Owner</dt><dd><code>${shortKey(problem.owner)}</code></dd></div></dl>
-        <p class="note">Publishing creates complete next snapshot and links current revision as previous.</p>
-      </aside>
       <section class="edit-panel" aria-labelledby="editor-title">
         <div class="section-title"><h1 id="editor-title">Next revision</h1><p>Update problem details, then publish complete snapshot.</p></div>
         <div class="field"><label for="title">Title</label><input id="title" maxlength="180" value="${escapeHtml(problem.title)}" ${disabled ? "disabled" : ""}></div>
@@ -130,7 +124,7 @@ function renderEditor(problem: EditableProblem): void {
     }
   });
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    gsap.fromTo(".masthead, aside, .edit-panel", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .065, ease: "expo.out" });
+    gsap.fromTo(".masthead, .edit-panel", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: .45, stagger: .065, ease: "expo.out" });
   }
 }
 
