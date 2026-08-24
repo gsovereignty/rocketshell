@@ -145,7 +145,7 @@ function renderList() {
     </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
   const rows = list.querySelectorAll<HTMLElement>(".problem-row");
   if (!reducedMotion.matches && rows.length > 0) {
-    gsap.fromTo(rows, { x: 5, opacity: 0 }, { x: 0, opacity: 1, duration: .15, stagger: .0125, ease: "expo.out" });
+    gsap.fromTo(rows, { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
   }
 }
 
