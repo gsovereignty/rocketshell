@@ -80,15 +80,7 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
     console.error("Could not select problem revision because current head count is not one.", {
       coordinate,
       headCount: heads.length,
-      heads: heads.map(({ event, sidecar }) => ({
-        id: event.id,
-        author: event.pubkey,
-        createdAt: event.created_at,
-        previousIds: event.tags
-          .filter((item) => item[0] === "e" && item[3] === "previous")
-          .map((item) => item[1]),
-        relayHints: sidecar?.relayHints ?? []
-      }))
+      heads: heads.map(({ event }) => event)
     });
     throw new Error("Problem has multiple current heads. Merge revisions before viewing it here.");
   }

@@ -33,8 +33,8 @@ describe("problem view", () => {
         coordinate,
         headCount: 2,
         heads: [
-          expect.objectContaining({ id: revision, author: owner, createdAt: 1 }),
-          expect.objectContaining({ id: competingId, author: "f".repeat(64), createdAt: 2 })
+          (result as unknown as { event: unknown }).event,
+          (competing as unknown as { event: unknown }).event
         ]
       })
     );
