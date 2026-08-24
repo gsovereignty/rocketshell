@@ -173,7 +173,6 @@ function renderApp() {
     </div>`;
   bindWorkspace();
   renderList();
-  gsap.fromTo(".workspace", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: .62, ease: "expo.out" });
 }
 
 function bindWorkspace() {
