@@ -60,7 +60,15 @@ button { color: inherit; }
 .tree-root, .tree-root ul { margin: 0; padding: 0; list-style: none; }
 .tree-root { margin-top: 16px; }
 .branch { position: relative; }
-.branch ul { margin-left: 27px; padding-left: 12px; border-left: 1px solid var(--connector); }
+.branch ul { position: relative; margin-left: 27px; padding-left: 12px; }
+.branch ul::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: var(--connector-end, 0);
+  border-left: 1px solid var(--connector);
+  content: "";
+}
 .branch > ul > .branch::before {
   position: absolute;
   top: 25px;

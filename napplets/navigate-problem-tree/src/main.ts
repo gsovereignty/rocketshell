@@ -117,6 +117,18 @@ function filterCounts(nodes: ProblemNode[]) {
   ] as const;
 }
 
+function positionTreeConnectors() {
+  app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
+    const lastBranch = children.lastElementChild;
+    const lastButton = lastBranch?.querySelector<HTMLElement>(":scope > .tree-node");
+    if (!lastButton) return;
+    const childrenBox = children.getBoundingClientRect();
+    const buttonBox = lastButton.getBoundingClientRect();
+    const connectorEnd = buttonBox.top - childrenBox.top + buttonBox.height / 2;
+    children.style.setProperty("--connector-end", `${connectorEnd}px`);
+  });
+}
+
 function renderList(animateRows = true) {
   if (!dag) return;
   const parent = dag.nodes.get(listScope);
@@ -173,6 +185,7 @@ function renderApp(animateListRows = true) {
     </div>`;
   bindWorkspace();
   renderList(animateListRows);
+  positionTreeConnectors();
 }
 
 function bindWorkspace() {
@@ -331,3 +344,5 @@ async function loadDag(value: string) {
 
 if (ROOT_A_TAG) void loadDag(ROOT_A_TAG);
 else showSetup();
+
+window.addEventListener("resize", positionTreeConnectors);
