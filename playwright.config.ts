@@ -10,7 +10,8 @@ export default defineConfig({
     command: "VITE_INSTALL_FIXTURE=true pnpm --filter @platform/shell build:github && PLATFORM_TEST_BLOSSOM=true pnpm --filter @platform/shell preview:github --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173/rocketshell/",
     reuseExistingServer: false,
-    timeout: 120_000
+    // GitHub's shared runners can spend more than two minutes bundling the shell and packaged Napplets.
+    timeout: 300_000
   },
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
