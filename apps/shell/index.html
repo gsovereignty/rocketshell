@@ -4,15 +4,15 @@
   <body>
     <nav id="menu-bar" aria-label="Shell menu">
       <div class="menu-cluster">
-        <button id="dag-viewer-trigger" class="menu-button icon-button" type="button" aria-label="Open DAG viewer" title="Open DAG viewer">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="5" r="2"></circle><circle cx="19" cy="9" r="2"></circle><circle cx="17" cy="18" r="2"></circle><path d="m6.5 10.7 4-4.2M13.8 5.9l3.4 2.2M18.7 11l-1.2 5M7 12.8l8.2 4.3"></path></svg>
-        </button>
         <button id="profile-menu-trigger" class="menu-button profile-trigger" type="button" aria-expanded="false" aria-controls="account-popover" aria-haspopup="true">
           <span class="profile-avatar" aria-hidden="true">
             <img id="profile-avatar-image" alt="" hidden>
             <span id="profile-avatar-fallback">R</span>
           </span>
           <span id="profile-menu-label">Not connected</span>
+        </button>
+        <button id="dag-viewer-trigger" class="menu-button icon-button" type="button" aria-label="Open DAG viewer" title="Open DAG viewer">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="5" r="2"></circle><circle cx="19" cy="9" r="2"></circle><circle cx="17" cy="18" r="2"></circle><path d="m6.5 10.7 4-4.2M13.8 5.9l3.4 2.2M18.7 11l-1.2 5M7 12.8l8.2 4.3"></path></svg>
         </button>
         <div id="account-popover" class="account-popover" hidden>
           <div id="profile-actions" aria-label="Profile options">
@@ -46,9 +46,6 @@
         <nav id="screen-nav" aria-label="Open screens"></nav>
       </div>
       <div class="menu-tools">
-        <button id="hard-reset-trigger" class="menu-button icon-button" type="button" aria-label="Hard reset shell cache" title="Hard reset shell cache">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 0 1 6"></path><path d="M19 3v5h-5"></path></svg>
-        </button>
         <div class="relay-menu">
           <button id="relay-status" type="button" aria-label="0 relays connected" title="0 relays connected" aria-expanded="false" aria-controls="relay-popover" aria-haspopup="true">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5a10 10 0 0 1 14 0M8 19.5a5.8 5.8 0 0 1 8 0"></path><circle cx="12" cy="22" r=".7"></circle></svg>
@@ -121,6 +118,9 @@
       <header id="napplet-console-header">
         <div><h2 id="napplet-console-title">Napplet console</h2><p>Live output from open napplets</p></div>
         <div class="napplet-console-actions">
+          <button id="hard-reset-trigger" class="menu-button icon-button" type="button" aria-label="Hard reset shell cache" title="Hard reset shell cache">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 0 1 6"></path><path d="M19 3v5h-5"></path></svg>
+          </button>
           <button id="napplet-console-clear" class="menu-button" type="button">Clear</button>
           <button id="napplet-console-close" class="icon-button menu-button" type="button" aria-label="Close Napplet console">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>

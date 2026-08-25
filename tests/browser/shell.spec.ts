@@ -755,14 +755,24 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null")?.windows?.[0]?.dTag)).toBe("log-new-problem");
 });
 
-test("DAG viewer replaces dock as first menu control", async ({ page }) => {
+test("profile leads menu bar and DAG viewer replaces dock", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toBeHidden();
   const dagViewer = page.getByRole("button", { name: "Open DAG viewer" });
-  await expect(page.locator("#menu-bar .menu-cluster > button").first()).toHaveAttribute("id", "dag-viewer-trigger");
+  await expect(page.locator("#menu-bar .menu-cluster > button").first()).toHaveAttribute("id", "profile-menu-trigger");
   await expect(page.locator("#dock-shell")).toHaveCount(0);
   await dagViewer.click();
   await expect(page.locator('iframe[title="navigate-problem-tree"]')).toHaveCount(1);
+});
+
+test("hard reset lives in Napplet console instead of menu bar", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+  await expect(page.locator("#menu-bar #hard-reset-trigger")).toHaveCount(0);
+  await page.getByRole("button", { name: "Open Napplet console" }).click();
+  const reset = page.locator("#napplet-console-panel #hard-reset-trigger");
+  await expect(reset).toBeVisible();
+  await expect(reset).toHaveAttribute("title", "Hard reset shell cache");
 });
 
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
