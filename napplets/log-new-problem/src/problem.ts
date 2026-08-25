@@ -33,6 +33,12 @@ export interface ProblemDraft {
   bitcoin?: { height: string; hash: string };
 }
 
+export function normalizeProblemText(title: string, description: string) {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) throw new Error("Add a problem title.");
+  return { title: normalizedTitle, description: description.trim() };
+}
+
 const tag = (event: NostrEvent, name: string, marker?: string) =>
   event.tags.find((item) => item[0] === name && (marker === undefined || item[3] === marker));
 

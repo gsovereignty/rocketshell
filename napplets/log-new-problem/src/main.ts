@@ -6,7 +6,7 @@ import { gsap } from "gsap";
 import "./styles.css";
 import {
   CHILD_CONVENTION, HEX_64, buildProblemTemplate, createProblemId, isChildPayload,
-  parentGraphRoot, resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
+  normalizeProblemText, parentGraphRoot, resolveParent, type ParentContext, type ProblemDraft, type ProblemStatus
 } from "./problem";
 import { publishSuccessMessage } from "./publish-result";
 import { attachmentMarkdown } from "./attachment";
@@ -207,17 +207,14 @@ function optionalContext(data: FormData, prefix: "rocket" | "repo") {
 }
 
 function readDraft(data: FormData, markdown: string): ProblemDraft {
-  const title = String(data.get("title") ?? "").trim();
-  const body = markdown.trim();
-  if (!title) throw new Error("Add a problem title.");
-  if (!body) throw new Error("Add a complete problem description.");
+  const { title, description } = normalizeProblemText(String(data.get("title") ?? ""), markdown);
   const maintainers = String(data.get("maintainers") ?? "").split(/\s+/).filter(Boolean);
   if (maintainers.some((value) => !HEX_64.test(value))) throw new Error("Each maintainer must be a 64-character lowercase hex pubkey.");
   const height = String(data.get("height") ?? "").trim();
   const hash = String(data.get("blockHash") ?? "").trim();
   if ((height || hash) && (!/^\d+$/.test(height) || !HEX_64.test(hash))) throw new Error("Bitcoin context requires block height and 64-character lowercase hash.");
   return {
-    title, description: body, status: String(data.get("status")) as ProblemStatus,
+    title, description, status: String(data.get("status")) as ProblemStatus,
     childStatus: (String(data.get("childStatus") ?? "") || undefined) as ProblemDraft["childStatus"],
     maintainers, rocket: optionalContext(data, "rocket"), repository: optionalContext(data, "repo"),
     bitcoin: height && hash ? { height, hash } : undefined

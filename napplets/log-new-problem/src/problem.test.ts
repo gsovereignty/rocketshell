@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { CHILD_CONVENTION, buildProblemTemplate, createProblemId, isChildPayload, resolveParent } from "./problem";
+import { CHILD_CONVENTION, buildProblemTemplate, createProblemId, isChildPayload, normalizeProblemText, resolveParent } from "./problem";
 
 const hex = (char: string) => char.repeat(64);
 const result = (event: Partial<NostrEvent> & Pick<NostrEvent, "id" | "pubkey" | "tags">): RelayEventResult => ({
@@ -15,6 +15,16 @@ describe("problem events", () => {
 
   it("generates a lowercase 32-byte id", () => {
     expect(createProblemId(new Uint8Array(32).fill(171))).toBe("ab".repeat(32));
+  });
+
+  it("builds a title-only problem while still requiring its title", () => {
+    const text = normalizeProblemText("  Broken thing  ", "   \n");
+    const template = buildProblemTemplate(hex("a"), hex("b"), {
+      ...text, status: "open", maintainers: []
+    }, 10);
+    expect(template.tags).toContainEqual(["title", "Broken thing"]);
+    expect(template.content).toBe("");
+    expect(() => normalizeProblemText("  ", "Description")).toThrow("Add a problem title.");
   });
 
   it("validates exact child intent payloads", () => {
