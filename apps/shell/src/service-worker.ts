@@ -5,7 +5,10 @@ import { isBuiltInNappletRequest, isRetiredShellCache, isShellNavigationRequest,
 declare const __SHELL_BUILD_ID__: string;
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
-const SHELL_CACHE = shellCacheName(__SHELL_BUILD_ID__);
+// Vite's dev middleware transforms this module without applying config-level
+// `define` replacements. Production replaces the build constant; development
+// uses a fixed cache that never serves requests because its fetch path is network-only.
+const SHELL_CACHE = shellCacheName(import.meta.env.DEV ? "development" : __SHELL_BUILD_ID__);
 const storePromise = IndexedDbPackageStore.open();
 
 worker.addEventListener("install", (event: ExtendableEvent) => {
