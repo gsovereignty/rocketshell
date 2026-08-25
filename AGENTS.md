@@ -2,6 +2,8 @@
 
 ## UI requirements
 
+- Always keep the user profile/avatar menu as the leftmost item in the menu bar.
+  No icon, indicator, status, or other control may appear to its left.
 - For UI motion, animation, and transitions, always use GSAP whenever
   technically possible. Prefer GSAP over CSS animations and transitions.
 - Treat intent dispatch, window visibility, focus, replacement, and layout as
