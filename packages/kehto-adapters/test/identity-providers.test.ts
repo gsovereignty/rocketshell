@@ -1,8 +1,95 @@
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
-import { describe, expect, it } from "vitest";
+import { of, throwError } from "rxjs";
+import { describe, expect, it, vi } from "vitest";
 import { freshAdapters } from "./fresh.js";
 
 describe("NAP-IDENTITY providers", () => {
+  it("revalidates a cached replaceable list and keeps the newer relay version", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const secret = generateSecretKey();
+    const cached = finalizeEvent({
+      kind: 30_001,
+      created_at: 1,
+      tags: [["d", "reading"], ["e", "aa".repeat(32)]],
+      content: ""
+    }, secret);
+    const current = finalizeEvent({
+      kind: 30_001,
+      created_at: 2,
+      tags: [["d", "reading"], ["e", "bb".repeat(32)]],
+      content: ""
+    }, secret);
+    engine.ingress.admit(cached, "cache:indexeddb");
+    engine.fallbackLookupRelays$.next(["wss://relay.example"]);
+    const request = vi.spyOn(engine.relayPool, "request").mockImplementation(() => {
+      engine.ingress.admit(current, "wss://relay.example");
+      return of(current) as ReturnType<typeof engine.relayPool.request>;
+    });
+    const identity = adapters.createIdentityProviders(["wss://relay.example"]);
+
+    await expect(identity.getList("reading", cached.pubkey)).resolves.toEqual(["bb".repeat(32)]);
+    expect(request).toHaveBeenCalled();
+    expect(engine.eventStore.getReplaceable(30_001, cached.pubkey, "reading")?.id).toBe(current.id);
+    engine.shutdownNostrServices();
+  });
+
+  it("revalidates a cached query and admits relay results into the shared EventStore", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const userSecret = generateSecretKey();
+    const senderSecret = generateSecretKey();
+    const user = finalizeEvent({ kind: 0, created_at: 1, tags: [], content: "{}" }, userSecret);
+    const cached = finalizeEvent({
+      kind: 9735,
+      created_at: 1,
+      tags: [["p", user.pubkey], ["bolt11", "malformed-cached"]],
+      content: ""
+    }, senderSecret);
+    const current = finalizeEvent({
+      kind: 9735,
+      created_at: 2,
+      tags: [["p", user.pubkey], ["bolt11", "malformed-current"]],
+      content: ""
+    }, senderSecret);
+    engine.ingress.admit(cached, "cache:indexeddb");
+    const request = vi.spyOn(engine.relayPool, "request").mockImplementation(() => {
+      engine.ingress.admit(current, "wss://relay.example");
+      return of(current) as ReturnType<typeof engine.relayPool.request>;
+    });
+    const identity = adapters.createIdentityProviders(["wss://relay.example"]);
+
+    await identity.getZaps(user.pubkey);
+    expect(request).toHaveBeenCalledWith(
+      ["wss://relay.example/"],
+      { kinds: [9735], "#p": [user.pubkey] },
+      expect.objectContaining({ eventStore: engine.eventStore })
+    );
+    expect(engine.eventStore.getEvent(current.id)?.id).toBe(current.id);
+    engine.shutdownNostrServices();
+  });
+
+  it("keeps cached query data when relay revalidation fails", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const userSecret = generateSecretKey();
+    const senderSecret = generateSecretKey();
+    const user = finalizeEvent({ kind: 0, created_at: 1, tags: [], content: "{}" }, userSecret);
+    const cached = finalizeEvent({
+      kind: 9735,
+      created_at: 1,
+      tags: [["p", user.pubkey], ["bolt11", "malformed-cached"]],
+      content: ""
+    }, senderSecret);
+    engine.ingress.admit(cached, "cache:indexeddb");
+    const request = vi.spyOn(engine.relayPool, "request").mockReturnValue(
+      throwError(() => new Error("relay unavailable")) as ReturnType<typeof engine.relayPool.request>
+    );
+    const identity = adapters.createIdentityProviders(["wss://relay.example"]);
+
+    await identity.getZaps(user.pubkey);
+    expect(request).toHaveBeenCalled();
+    expect(engine.eventStore.getEvent(cached.id)?.id).toBe(cached.id);
+    engine.shutdownNostrServices();
+  });
+
   it("resolves every replaceable identity view from the shared EventStore", async () => {
     const { engine, adapters } = await freshAdapters();
     const userSecret = generateSecretKey();

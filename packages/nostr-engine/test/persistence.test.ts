@@ -21,4 +21,40 @@ describe("browser event cache", () => {
     expect(added.some((event) => event.id === live.id)).toBe(true);
     await detach(); shutdownNostrServices(); expect(cache.stop).toHaveBeenCalledOnce();
   });
+
+  it("persists a newer replaceable relay event and hydrates it after restart", async () => {
+    const secret = generateSecretKey();
+    const cached = finalizeEvent({ kind: 0, created_at: 1, content: JSON.stringify({ name: "old" }), tags: [] }, secret);
+    const current = finalizeEvent({ kind: 0, created_at: 2, content: JSON.stringify({ name: "new" }), tags: [] }, secret);
+    const records = new Map([[cached.id, cached]]);
+    const cache: EventCache = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+      query: vi.fn(async () => [...records.values()]),
+      add: vi.fn(async (event) => {
+        for (const [id, stored] of records) {
+          if (stored.kind === event.kind && stored.pubkey === event.pubkey && stored.kind === 0) records.delete(id);
+        }
+        records.set(event.id, event);
+        return true;
+      })
+    };
+
+    const first = await freshServices();
+    const detachFirst = await first.attachEventCache(cache);
+    expect(first.eventStore.getReplaceable(0, cached.pubkey)?.id).toBe(cached.id);
+    first.ingress.admit(current, "wss://relay.example");
+    expect(first.eventStore.getReplaceable(0, cached.pubkey)?.id).toBe(current.id);
+    await detachFirst();
+    first.shutdownNostrServices();
+    expect(cache.add).toHaveBeenCalledWith(expect.objectContaining({ id: current.id }));
+
+    const second = await freshServices();
+    const detachSecond = await second.attachEventCache(cache);
+    expect(second.eventStore.getReplaceable(0, cached.pubkey)?.id).toBe(current.id);
+    second.ingress.admit(cached, "cache:late-old-record");
+    expect(second.eventStore.getReplaceable(0, cached.pubkey)?.id).toBe(current.id);
+    await detachSecond();
+    second.shutdownNostrServices();
+  });
 });
