@@ -123,6 +123,11 @@ button { color: inherit; }
 .empty { padding: 54px 8px; color: var(--muted); text-align: center; }
 .app-status { position: fixed; right: 20px; bottom: 16px; min-height: 1.3em; max-width: min(450px, calc(100vw - 40px)); color: var(--muted); background: rgba(255, 255, 255, .94); font-size: .75rem; }
 
+@media (min-width: 761px) {
+  .workspace { height: 100vh; min-height: 0; overflow: hidden; }
+  .tree-pane, .list-pane { min-height: 0; }
+}
+
 @media (max-width: 760px) {
   .setup { grid-template-columns: 1fr; align-content: start; }
   .setup-mark { min-height: 130px; }

@@ -93,7 +93,7 @@ test("tree selection changes palette without changing card footprint", async ({ 
   expect(unselected.every(({ backgroundColor }) => isOpaqueSurface(backgroundColor))).toBe(true);
 });
 
-test("tree cards keep their width when vertical overflow appears", async ({ page }) => {
+test("tree growth scrolls inside its pane without reflowing cards", async ({ page }) => {
   await page.addInitScript((queryEvents) => {
     Object.defineProperty(window, "napplet", {
       configurable: true,
@@ -115,19 +115,20 @@ test("tree cards keep their width when vertical overflow appears", async ({ page
   const nodes = page.locator(".tree-node");
   await expect(nodes).toHaveCount(5);
 
-  await pane.evaluate((element) => {
-    element.style.height = `${element.scrollHeight + 1}px`;
-    element.style.minHeight = "0";
-  });
   const before = await nodeVisuals(page);
-
   await pane.evaluate((element) => {
-    element.style.height = "240px";
+    const growth = document.createElement("div");
+    growth.dataset.testGrowth = "";
+    growth.style.height = "1000px";
+    element.append(growth);
   });
   await expect.poll(() => pane.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   const after = await nodeVisuals(page);
 
   expect(after.map(({ rect }) => ({ x: rect.x, width: rect.width }))).toEqual(
     before.map(({ rect }) => ({ x: rect.x, width: rect.width }))
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientHeight)
   );
 });
