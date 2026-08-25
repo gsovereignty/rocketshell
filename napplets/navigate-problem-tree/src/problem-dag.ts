@@ -30,6 +30,12 @@ const tagValue = (event: NostrEvent, name: string, marker?: string) => findTag(e
 
 const coordinateOf = (event: NostrEvent) => tagValue(event, "a", "origin") ?? "";
 
+const eligibleHead = (event: NostrEvent): boolean => {
+  const owner = coordinateOf(event).split(":")[1] ?? "";
+  return event.pubkey === owner || event.tags.some((item) =>
+    item[0] === "p" && item[1] === event.pubkey && (item[3] === "maintainer" || item[3] === undefined));
+};
+
 const statusOf = (event: NostrEvent): ProblemStatus => {
   const value = tagValue(event, "status");
   return ["draft", "rfm", "big", "children", "open", "claimed", "patched", "closed"].includes(value ?? "")
@@ -74,10 +80,12 @@ export function buildProblemDag(rootCoordinate: string, results: RelayEventResul
       .filter((item) => item[0] === "e" && item[3] === "previous")
       .map((item) => item[1])));
     const heads = revisions.filter((event) => !previous.has(event.id));
-    const current = [...(heads.length ? heads : revisions)].sort((a, b) =>
-      b.created_at - a.created_at || b.id.localeCompare(a.id))[0];
-    const allHeadParents = heads.flatMap(parentCoordinatesOf);
-    const parentCoordinates = Array.from(new Set(allHeadParents.length ? allHeadParents : parentCoordinatesOf(current))).sort();
+    const eligible = heads.filter(eligibleHead);
+    const newestTimestamp = eligible.length ? Math.max(...eligible.map((event) => event.created_at)) : undefined;
+    const newest = eligible.filter((event) => event.created_at === newestTimestamp);
+    if (newest.length !== 1) throw new Error(`Problem ${coordinate} has unresolved current heads.`);
+    const current = newest[0];
+    const parentCoordinates = parentCoordinatesOf(current).sort();
     nodes.set(coordinate, {
       coordinate,
       problemId: coordinate.split(":")[2],

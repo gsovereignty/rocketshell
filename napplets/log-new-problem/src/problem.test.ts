@@ -92,6 +92,18 @@ describe("problem events", () => {
     const tags = [["d", problemId], ["a", `31971:${owner}:${problemId}`, "", "origin"]];
     expect(() => resolveParent(problemId, [
       result({ id: hex("c"), pubkey: owner, tags }), result({ id: hex("d"), pubkey: owner, tags })
-    ])).toThrow("multiple current heads");
+    ])).toThrow("unresolved current heads");
+  });
+
+  it("selects newest logical-maintainer parent without complete ancestry", () => {
+    const owner = hex("a");
+    const parentOwner = hex("d");
+    const problemId = hex("b");
+    const coordinate = `31971:${owner}:${problemId}`;
+    const tags = [["d", problemId], ["title", "Parent"], ["a", coordinate, "", "origin"], ["A", coordinate]];
+    const genesis = result({ id: hex("c"), pubkey: owner, tags });
+    const latest = result({ id: hex("e"), pubkey: parentOwner, created_at: 20,
+      tags: [...tags, ["p", parentOwner], ["e", hex("f"), "", "previous", parentOwner]] });
+    expect(resolveParent(problemId, [genesis, latest]).revisionId).toBe(latest.event.id);
   });
 });

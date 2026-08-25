@@ -44,6 +44,21 @@ const tag = (event: NostrEvent, name: string, marker?: string) =>
   event.tags.find((item) => item[0] === name && (marker === undefined || item[3] === marker));
 const tagValue = (event: NostrEvent, name: string, marker?: string) => tag(event, name, marker)?.[1];
 
+const selectCurrentHead = (candidates: RelayEventResult[]): RelayEventResult | undefined => {
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const eligible = candidates.filter(({ event }) => {
+    if (referenced.has(event.id)) return false;
+    const owner = tagValue(event, "a", "origin")?.split(":")[1] ?? "";
+    return event.pubkey === owner || event.tags.some((item) =>
+      item[0] === "p" && item[1] === event.pubkey && (item[3] === "maintainer" || item[3] === undefined));
+  });
+  if (!eligible.length) return undefined;
+  const newestTimestamp = Math.max(...eligible.map(({ event }) => event.created_at));
+  const newest = eligible.filter(({ event }) => event.created_at === newestTimestamp);
+  return newest.length === 1 ? newest[0] : undefined;
+};
+
 export function canEditProblem(problem: Pick<EditableProblem, "owner" | "ancestorOwners" | "event">, pubkey: string): boolean {
   if (!HEX_64.test(pubkey)) return false;
   const maintainers = problem.event.tags
@@ -57,11 +72,9 @@ const currentHead = (coordinate: string, results: RelayEventResult[]): RelayEven
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
     tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
   if (!candidates.length) throw new Error(`Ancestor problem ${problemId} was not found.`);
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
-  if (heads.length !== 1) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
-  return heads[0];
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
+  return selected;
 };
 
 const directParentCoordinates = (event: NostrEvent): string[] => event.tags
@@ -80,16 +93,14 @@ export function selectableParentOptions(problem: EditableProblem, results: Relay
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
     PROBLEM_COORDINATE.test(tagValue(event, "a", "origin") ?? "") &&
     tagValue(event, "A") === graphRoot);
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const headsByCoordinate = new Map<string, RelayEventResult[]>();
-  for (const result of candidates.filter(({ event }) => !referenced.has(event.id))) {
+  const revisionsByCoordinate = new Map<string, RelayEventResult[]>();
+  for (const result of candidates) {
     const coordinate = tagValue(result.event, "a", "origin")!;
-    headsByCoordinate.set(coordinate, [...(headsByCoordinate.get(coordinate) ?? []), result]);
+    revisionsByCoordinate.set(coordinate, [...(revisionsByCoordinate.get(coordinate) ?? []), result]);
   }
-  const uniqueHeads = new Map([...headsByCoordinate]
-    .filter(([, heads]) => heads.length === 1)
-    .map(([coordinate, heads]) => [coordinate, heads[0].event]));
+  const uniqueHeads = new Map([...revisionsByCoordinate]
+    .map(([coordinate, revisions]) => [coordinate, selectCurrentHead(revisions)?.event] as const)
+    .filter((entry): entry is readonly [string, NostrEvent] => entry[1] !== undefined));
 
   const descendants = new Set([ownCoordinate]);
   let changed = true;
@@ -185,11 +196,9 @@ export function resolveParentChange(
 export function problemGraphRoot(problemId: string, results: RelayEventResult[]): string {
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND && tagValue(event, "d") === problemId);
   if (!candidates.length) throw new Error("Problem was not found.");
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
-  if (heads.length !== 1) throw new Error("Problem has multiple current heads. Merge revisions before editing.");
-  const root = tagValue(heads[0].event, "A");
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error("Problem has unresolved current heads.");
+  const root = tagValue(selected.event, "A");
   if (!PROBLEM_COORDINATE.test(root ?? "")) throw new Error("Problem graph root is invalid.");
   return root!;
 }
@@ -208,11 +217,8 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
     event.id && HEX_64.test(event.id) && tagValue(event, "d") === problemId &&
     PROBLEM_COORDINATE.test(tagValue(event, "a", "origin") ?? ""));
   if (!candidates.length) throw new Error("Problem was not found.");
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
-  if (heads.length !== 1) throw new Error("Problem has multiple current heads. Merge revisions before editing.");
-  const selected = heads[0];
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error("Problem has unresolved current heads.");
   const origin = tagValue(selected.event, "a", "origin") ?? "";
   const owner = origin.split(":")[1] ?? "";
   const status = tagValue(selected.event, "status") ?? "open";
@@ -239,10 +245,13 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
 export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND && HEX_64.test(event.id) &&
     PROBLEM_COORDINATE.test(tagValue(event, "a", "origin") ?? ""));
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  return candidates.some(({ event }) => !referenced.has(event.id) &&
-    event.tags.some((item) => item[0] === "a" && item[3] === undefined && item[1] === coordinate));
+  const revisionsByCoordinate = new Map<string, RelayEventResult[]>();
+  for (const result of candidates) {
+    const childCoordinate = tagValue(result.event, "a", "origin")!;
+    revisionsByCoordinate.set(childCoordinate, [...(revisionsByCoordinate.get(childCoordinate) ?? []), result]);
+  }
+  return [...revisionsByCoordinate.values()].some((revisions) => selectCurrentHead(revisions)?.event.tags
+    .some((item) => item[0] === "a" && item[3] === undefined && item[1] === coordinate));
 }
 
 export function buildRevisionTemplate(

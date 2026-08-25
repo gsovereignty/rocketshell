@@ -53,7 +53,7 @@ describe("problem DAG", () => {
     expect(visibleTreeChildren(dag, child)).toEqual([]);
   });
 
-  it("keeps parent candidates from forked heads visible", () => {
+  it("uses parents from newest eligible fork head", () => {
     const otherParent = `31971:${hex("e")}:${hex("f")}`;
     const common = [["e", hex("3"), "", "genesis", hex("c")]];
     const dag = buildProblemDag(root, [
@@ -62,7 +62,8 @@ describe("problem DAG", () => {
       problem(child, hex("5"), [...common, ["a", otherParent, ""]], 4)
     ]);
     expect(dag.nodes.get(child)?.forkCount).toBe(1);
-    expect(dag.nodes.get(child)?.parentCoordinates).toEqual([root, otherParent].sort());
+    expect(dag.nodes.get(child)?.parentCoordinates).toEqual([otherParent]);
+    expect(dag.nodes.get(child)?.revisionId).toBe(hex("5"));
   });
 
   it("finds all leaf descendants recursively", () => {

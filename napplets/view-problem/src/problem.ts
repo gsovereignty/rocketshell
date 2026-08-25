@@ -55,6 +55,21 @@ const tag = (event: NostrEvent, name: string, marker?: string) =>
 
 const tagValue = (event: NostrEvent, name: string, marker?: string) => tag(event, name, marker)?.[1];
 
+const selectCurrentHead = (candidates: RelayEventResult[]): RelayEventResult | undefined => {
+  const previous = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const eligible = candidates.filter(({ event }) => {
+    if (previous.has(event.id)) return false;
+    const owner = tagValue(event, "a", "origin")?.split(":")[1] ?? "";
+    return event.pubkey === owner || event.tags.some((item) =>
+      item[0] === "p" && item[1] === event.pubkey && (item[3] === "maintainer" || item[3] === undefined));
+  });
+  if (!eligible.length) return undefined;
+  const newestTimestamp = Math.max(...eligible.map(({ event }) => event.created_at));
+  const newest = eligible.filter(({ event }) => event.created_at === newestTimestamp);
+  return newest.length === 1 ? newest[0] : undefined;
+};
+
 export function parseCoordinate(value: string) {
   const match = /^31971:([0-9a-f]{64}):([0-9a-f]{64})$/.exec(value.trim());
   if (!match) throw new Error("Enter a valid 31971:owner:problem-id coordinate.");
@@ -75,18 +90,14 @@ export function selectProblem(coordinate: string, results: RelayEventResult[]): 
       tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate)
     .map((result) => [result.event.id, result])).values());
   if (!candidates.length) throw new Error("Problem was not found.");
-  const previous = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !previous.has(event.id));
-  if (heads.length !== 1) {
+  const selected = selectCurrentHead(candidates);
+  if (!selected) {
     console.error("Could not select problem revision because current head count is not one.", {
       coordinate,
-      headCount: heads.length,
-      heads: heads.map(({ event }) => event)
+      candidates: candidates.map(({ event }) => event)
     });
-    throw new Error("Problem has multiple current heads. Merge revisions before viewing it here.");
+    throw new Error("Problem has unresolved current heads.");
   }
-  const selected = heads[0];
   const claim = tag(selected.event, "claim");
   return {
     coordinate, rootCoordinate: tagValue(selected.event, "A") ?? coordinate, owner, problemId, revisionId: selected.event.id,
@@ -161,11 +172,9 @@ const currentProblemHead = (coordinate: string, results: RelayEventResult[]): Re
   const problemId = coordinate.split(":")[2] ?? "";
   const candidates = problemResultsAtCoordinate(coordinate, results);
   if (!candidates.length) throw new Error(`Ancestor problem ${problemId} was not found.`);
-  const previous = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !previous.has(event.id));
-  if (heads.length !== 1) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
-  return heads[0];
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
+  return selected;
 };
 
 const directParentCoordinates = (event: NostrEvent): string[] => event.tags

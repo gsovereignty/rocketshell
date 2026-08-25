@@ -31,24 +31,36 @@ describe("problem view", () => {
     const competingId = "e".repeat(64);
     const competing = { event: {
       ...(result as unknown as { event: Record<string, unknown> }).event,
-      id: competingId, pubkey: "f".repeat(64), created_at: 2
+      id: competingId
     }, sidecar: { relayHints: ["wss://other.example"] } } as never;
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     expect(() => selectProblem(coordinate, [result, competing]))
-      .toThrow("Problem has multiple current heads. Merge revisions before viewing it here.");
+      .toThrow("Problem has unresolved current heads.");
     expect(consoleError).toHaveBeenCalledWith(
       "Could not select problem revision because current head count is not one.",
       expect.objectContaining({
         coordinate,
-        headCount: 2,
-        heads: [
+        candidates: [
           (result as unknown as { event: unknown }).event,
           (competing as unknown as { event: unknown }).event
         ]
       })
     );
     consoleError.mockRestore();
+  });
+  it("selects newest logical-maintainer head without complete ancestry", () => {
+    const parentOwner = "f".repeat(64);
+    const latestId = "e".repeat(64);
+    const latest = { event: {
+      ...(result as unknown as { event: Record<string, unknown> }).event,
+      id: latestId, pubkey: parentOwner, created_at: 2,
+      tags: [
+        ["d", id], ["title", "Newest logical-maintainer revision"], ["status", "patched"],
+        ["a", coordinate, "", "origin"], ["p", parentOwner], ["e", "1".repeat(64), "", "previous"]
+      ]
+    } } as never;
+    expect(selectProblem(coordinate, [result, latest]).revisionId).toBe(latestId);
   });
   it("selects a newly received revision as current", () => {
     const next = { event: {

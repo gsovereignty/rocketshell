@@ -44,6 +44,21 @@ const tag = (event: NostrEvent, name: string, marker?: string) =>
 
 const tagValue = (event: NostrEvent, name: string, marker?: string) => tag(event, name, marker)?.[1];
 
+const selectCurrentHead = (candidates: RelayEventResult[]): RelayEventResult | undefined => {
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const eligible = candidates.filter(({ event }) => {
+    if (referenced.has(event.id)) return false;
+    const owner = tagValue(event, "a", "origin")?.split(":")[1] ?? "";
+    return event.pubkey === owner || event.tags.some((item) =>
+      item[0] === "p" && item[1] === event.pubkey && (item[3] === "maintainer" || item[3] === undefined));
+  });
+  if (!eligible.length) return undefined;
+  const newestTimestamp = Math.max(...eligible.map(({ event }) => event.created_at));
+  const newest = eligible.filter(({ event }) => event.created_at === newestTimestamp);
+  return newest.length === 1 ? newest[0] : undefined;
+};
+
 const relayHint = (result: RelayEventResult) =>
   result.sidecar?.relayHints?.[0] ??
   result.event.tags.find((item) => item.length > 2 && item[2]?.startsWith("wss://"))?.[2] ?? "";
@@ -61,12 +76,8 @@ export function resolveParent(problemId: string, results: RelayEventResult[]): P
     event.kind === PROBLEM_KIND && tagValue(event, "d") === problemId && HEX_64.test(event.id));
   if (!candidates.length) throw new Error("Parent problem was not found.");
 
-  const referenced = new Set(candidates.flatMap(({ event }) =>
-    event.tags.filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
-  if (heads.length !== 1) throw new Error("Parent has multiple current heads. Merge its revisions before adding a child.");
-
-  const selected = heads[0];
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error("Parent has unresolved current heads.");
   const event = selected.event;
   const origin = tag(event, "a", "origin");
   if (!origin || !origin[1]?.startsWith(`${PROBLEM_KIND}:`)) throw new Error("Parent has no valid origin tag.");
@@ -106,11 +117,9 @@ const currentHead = (coordinate: string, results: RelayEventResult[]): RelayEven
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
     tagValue(event, "d") === problemId && tagValue(event, "a", "origin") === coordinate);
   if (!candidates.length) throw new Error(`Ancestor problem ${problemId} was not found.`);
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
-  if (heads.length !== 1) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
-  return heads[0];
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error(`Ancestor problem ${problemId} has unresolved revision forks.`);
+  return selected;
 };
 
 export function resolveAncestorOwners(event: NostrEvent, results: RelayEventResult[]): string[] {
@@ -140,11 +149,9 @@ export function resolveAncestorOwners(event: NostrEvent, results: RelayEventResu
 export function parentGraphRoot(problemId: string, results: RelayEventResult[]): string {
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND && tagValue(event, "d") === problemId);
   if (!candidates.length) throw new Error("Parent problem was not found.");
-  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
-    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
-  const heads = candidates.filter(({ event }) => !referenced.has(event.id));
-  if (heads.length !== 1) throw new Error("Parent has multiple current heads. Merge its revisions before adding a child.");
-  const root = tagValue(heads[0].event, "A");
+  const selected = selectCurrentHead(candidates);
+  if (!selected) throw new Error("Parent has unresolved current heads.");
+  const root = tagValue(selected.event, "A");
   if (!/^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(root ?? "")) throw new Error("Parent graph root is invalid.");
   return root!;
 }

@@ -100,7 +100,16 @@ describe("problem editor", () => {
   });
 
   it("rejects forked heads", () => {
-    expect(() => selectEditableProblem(problemId, [result(event(hex("c"))), result(event(hex("d")))], owner)).toThrow("multiple current heads");
+    expect(() => selectEditableProblem(problemId, [result(event(hex("c"))), result(event(hex("d")))], owner)).toThrow("unresolved current heads");
+  });
+
+  it("selects newest logical-maintainer head without complete ancestry", () => {
+    const parentOwner = hex("d");
+    const genesis = result(event(hex("c")));
+    const latest = result({ ...event(hex("e"), parentOwner, [
+      ["p", parentOwner], ["e", hex("f"), "", "previous", parentOwner]
+    ]), created_at: 20, content: "Latest body" });
+    expect(selectEditableProblem(problemId, [genesis, latest], owner).event.id).toBe(latest.event.id);
   });
 
   it("forces owner edits to children when current children exist", () => {
