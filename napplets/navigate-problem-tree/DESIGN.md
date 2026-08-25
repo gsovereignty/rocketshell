@@ -139,7 +139,8 @@ above the tree opens a composer for a new problem directly under the hidden root
 - **Do** reserve electric blue for current position and primary actions.
 - **Do** keep DAG relationships visible through indentation and one continuous
   thick SVG arrow path per edge. Right-angle turns are allowed; separate segment
-  elements are not. Use GSAP to draw and update the paths.
+  elements are not. Use GSAP to animate path emphasis without ever hiding part
+  of a relationship.
 - **Do** keep child rows dense while preserving keyboard-sized targets.
 - **Do** reflow panes vertically on narrow screens.
 

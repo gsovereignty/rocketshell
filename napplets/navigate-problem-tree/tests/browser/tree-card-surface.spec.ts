@@ -271,17 +271,13 @@ test("each tree edge renders one thick straight SVG arrow", async ({ page }) => 
   expect(viewportClearance).toBe(true);
   await expect(paths.first()).toHaveAttribute("marker-end", /url\(#tree-arrow-\d+\)/);
   await expect(paths.first()).toHaveCSS("stroke-width", "4px");
+  await expect(paths.first()).toHaveCSS("stroke-dasharray", "none");
   await expect(page.locator(".tree-connectors marker")).toHaveCount(3);
   await page.locator(".tree-node").nth(3).click();
   await expect(page.locator(".connector-path.is-active")).toHaveCount(3);
   await expect(page.locator(".connector-path.is-active").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
-  await expect.poll(() => page.locator(".connector-path.is-active").evaluateAll((activePaths) =>
-    activePaths.every((path) => {
-      const attribute = Number.parseFloat(path.getAttribute("stroke-dashoffset") ?? "NaN");
-      const computed = Number.parseFloat(getComputedStyle(path).strokeDashoffset);
-      return Math.abs(attribute) < 0.1 && Math.abs(computed) < 0.1;
-    })
-  )).toBe(true);
+  expect(await page.locator(".connector-path").evaluateAll((connectorPaths) =>
+    connectorPaths.every((path) => getComputedStyle(path).strokeDasharray === "none"))).toBe(true);
 
   await page.evaluate(() => {
     (window as typeof window & { connectorMutations: number }).connectorMutations = 0;
@@ -299,26 +295,14 @@ test("each tree edge renders one thick straight SVG arrow", async ({ page }) => 
   await page.locator(".tree-node").nth(2).hover();
   await page.waitForTimeout(50);
   await page.locator(".tree-node").nth(4).hover();
-  await expect.poll(() => page.locator(".connector-path").evaluateAll((connectorPaths) =>
-    connectorPaths.every((path) => {
-      const offset = Number.parseFloat(path.getAttribute("stroke-dashoffset") ?? "NaN");
-      return Math.abs(offset) < 0.1 && Math.abs(Number.parseFloat(getComputedStyle(path).strokeDashoffset)) < 0.1;
-    })
-  )).toBe(true);
+  expect(await page.locator(".connector-path").evaluateAll((connectorPaths) =>
+    connectorPaths.every((path) => getComputedStyle(path).strokeDasharray === "none"))).toBe(true);
 
   const glyph = await page.locator(".connector-path").first().evaluate((path) => {
     const card = path.closest("ul")?.querySelector(":scope > .branch > .tree-node");
     return { right: path.getBoundingClientRect().right, cardLeft: card?.getBoundingClientRect().left ?? 0 };
   });
   expect(glyph.right).toBeLessThanOrEqual(glyph.cardLeft);
-
-  await expect.poll(() => page.locator(".connector-path").evaluateAll((connectorPaths) =>
-    connectorPaths.every((connectorPath) => {
-      const attribute = Number.parseFloat(connectorPath.getAttribute("stroke-dashoffset") ?? "NaN");
-      const computed = Number.parseFloat(getComputedStyle(connectorPath).strokeDashoffset);
-      return Math.abs(attribute) < 0.1 && Math.abs(computed) < 0.1;
-    })
-  )).toBe(true);
 
   const renderedEdges = await page.locator(".connector-path.is-active").evaluateAll((activePaths, tipX) =>
     activePaths.map((activePath) => {
@@ -327,11 +311,10 @@ test("each tree edge renders one thick straight SVG arrow", async ({ page }) => 
       const card = svg?.closest("ul")?.querySelector<HTMLElement>(":scope > .branch > .tree-node");
       const matrix = svg?.getScreenCTM();
       const tip = matrix && new DOMPoint(tipX as number, 0).matrixTransform(matrix);
-      const dashLength = Number.parseFloat(getComputedStyle(path).strokeDasharray);
       return {
-        dashCoversPath: dashLength >= path.getTotalLength() - 0.1,
+        fullPathVisible: getComputedStyle(path).strokeDasharray === "none",
         tipGap: card && tip ? card.getBoundingClientRect().left - tip.x : Number.NaN
       };
     }), connectorTipX);
-  expect(renderedEdges.every(({ dashCoversPath, tipGap }) => dashCoversPath && tipGap >= 0 && tipGap <= 12)).toBe(true);
+  expect(renderedEdges.every(({ fullPathVisible, tipGap }) => fullPathVisible && tipGap >= 0 && tipGap <= 12)).toBe(true);
 });
