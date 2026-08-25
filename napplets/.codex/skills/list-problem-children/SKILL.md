@@ -1,6 +1,6 @@
 ---
 name: list-problem-children
-description: Resolve full or abbreviated NIP-1971 problem IDs and list every current direct child from Nostr author outboxes. Use when asked to examine, find, enumerate, or list children, subproblems, or immediate descendants of a kind 31971 problem, especially IDs written like `9996a3d2…d8332`.
+description: Resolve full or abbreviated NIP-1971 problem IDs and list current direct children or claimable open leaf problems from Nostr author outboxes. Use when asked to examine, find, enumerate, or list children, subproblems, immediate descendants, open problems, claimable problems, or available work in a kind 31971 DAG, especially IDs written like `9996a3d2…d8332`.
 ---
 
 # List Problem Children
@@ -11,7 +11,7 @@ Run bundled script:
 bash scripts/list-problem-children.sh '<full-or-abbreviated-problem-id>'
 ```
 
-List every current open leaf below a root instead:
+List every claimable current open leaf below a root instead:
 
 ```bash
 bash scripts/list-problem-children.sh --open-leaves '<full-or-abbreviated-root-id>'
@@ -37,9 +37,17 @@ The script:
 
 Report child count and rendered list. Call them **direct children**. Do not describe recursive descendants as included.
 
-For `--open-leaves`, report open leaf count and rendered list. A leaf is a
-reachable descendant with no current child. Closed leaves and root itself are
-excluded.
+For requests such as "show all open problems," use `--open-leaves`; do not list
+events merely because their `status` tag equals `open`. In this workflow,
+`open` means available to claim. A parent with current children is structural
+work, not claimable leaf work, even if its author has not yet revised its stale
+status from `open` to `children`.
+
+Report claimable open problem count and rendered list. Include only reachable
+descendants whose selected current revision has status `open` and which have no
+current child. Exclude root, intermediate parents, closed leaves, and unresolved
+revision forks. Never describe every raw `status=open` event as every open
+problem.
 
 If command fails, report shortest exact error. Never guess missing IDs, owners, relays, children, or revision heads.
 

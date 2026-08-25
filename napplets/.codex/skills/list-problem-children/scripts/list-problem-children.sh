@@ -135,6 +135,7 @@ else
     | map(select(.id as $id | $previous | index($id) | not))
     | map(. + {coordinate: origin, parent: first(.tags[]? | select(.[0] == "a" and .[3] == null) | .[1])})
     | map(select(.coordinate != null))
+    | group_by(.coordinate) | map(select(length == 1) | .[0])
     | . as $nodes
     | [$root] | until(
         . as $known | ([$nodes[] | select(.parent as $p | $known | index($p)) | .coordinate] + $known | unique) == $known;
@@ -145,7 +146,7 @@ else
         | select((tag("status") // "open") == "open")
         | {problemId: tag("d"), eventId: .id, title: (tag("title") // "Untitled problem"), status: (tag("status") // "open"), description: .content}]
     | unique_by(.problemId) | sort_by(.title | ascii_downcase)
-    | "Found \(length) open leaf nodes under `\($root | split(":")[2])`:\n",
+    | "Found \(length) claimable open problems under `\($root | split(":")[2])`:\n",
       (.[] | "- `[\(.status)]` \(.title)\n  `\(.problemId[0:8])…\(.problemId[-6:])`\n  Full ID: `\(.problemId)`\n  Event: `\(.eventId)`\n  \(.description | gsub("\\n+"; " "))")
   ' -r <<<"$events"
 fi
