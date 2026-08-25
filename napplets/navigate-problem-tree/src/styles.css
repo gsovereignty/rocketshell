@@ -50,7 +50,7 @@ button { color: inherit; }
 .setup-status { display: block; min-height: 1.4em; margin-top: 10px; color: #a32b2b; font-size: .8rem; }
 
 .workspace { display: grid; grid-template-columns: minmax(300px, 42%) minmax(440px, 58%); min-height: 100vh; background: var(--white); }
-.tree-pane { overflow: auto; padding: 28px 22px 42px; border-right: 1px solid var(--line); background: var(--panel); }
+.tree-pane { overflow: auto; scrollbar-gutter: stable; padding: 28px 22px 42px; border-right: 1px solid var(--line); background: var(--panel); }
 .tree-pane > header, .list-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 34px; }
 .tree-pane h1, .list-pane h2 { margin: 0; color: #545968; font-size: .75rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 #log-root-child { width: 100%; min-height: 42px; margin-top: 14px; border: 0; border-radius: 9px; padding: 0 14px; color: white; background: var(--blue); font-size: .78rem; font-weight: 700; cursor: pointer; }

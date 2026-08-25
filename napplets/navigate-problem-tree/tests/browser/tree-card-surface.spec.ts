@@ -92,3 +92,42 @@ test("tree selection changes palette without changing card footprint", async ({ 
   expect(unselected.map(({ backgroundColor }) => backgroundColor)).not.toContain("rgba(0, 0, 0, 0)");
   expect(unselected.every(({ backgroundColor }) => isOpaqueSurface(backgroundColor))).toBe(true);
 });
+
+test("tree cards keep their width when vertical overflow appears", async ({ page }) => {
+  await page.addInitScript((queryEvents) => {
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async () => ({ available: false, candidates: [] }),
+          invoke: async () => ({ ok: false, handled: false })
+        }
+      }
+    });
+  }, events);
+
+  await page.goto("/");
+  const pane = page.locator(".tree-pane");
+  const nodes = page.locator(".tree-node");
+  await expect(nodes).toHaveCount(5);
+
+  await pane.evaluate((element) => {
+    element.style.height = `${element.scrollHeight + 1}px`;
+    element.style.minHeight = "0";
+  });
+  const before = await nodeVisuals(page);
+
+  await pane.evaluate((element) => {
+    element.style.height = "240px";
+  });
+  await expect.poll(() => pane.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const after = await nodeVisuals(page);
+
+  expect(after.map(({ rect }) => ({ x: rect.x, width: rect.width }))).toEqual(
+    before.map(({ rect }) => ({ x: rect.x, width: rect.width }))
+  );
+});
