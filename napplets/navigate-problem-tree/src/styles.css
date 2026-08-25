@@ -83,10 +83,10 @@ button { color: inherit; }
 #log-child:hover:not(:disabled) { background: var(--blue-dark); }
 #log-child:active:not(:disabled) { transform: translateY(1px); }
 #log-child:disabled { border-color: transparent; color: var(--muted); background: var(--line); cursor: not-allowed; }
-.filters { display: flex; max-width: 100%; overflow-x: auto; border-radius: 12px; padding: 3px; background: #ececef; scrollbar-width: thin; }
-.filters button { flex: none; border: 0; border-radius: 9px; padding: 9px 15px; color: #4d5260; background: transparent; cursor: pointer; }
+.filters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; max-width: 100%; overflow: hidden; border-radius: 12px; padding: 3px; background: #ececef; }
+.filters button { min-width: 0; min-height: 34px; border: 0; border-radius: 9px; padding: 7px 6px; overflow: hidden; color: #4d5260; background: transparent; font-size: .72rem; font-weight: 650; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .filters button[aria-pressed="true"] { color: var(--ink); background: white; box-shadow: 0 2px 8px rgba(23, 26, 34, .13); }
-.filters span { color: var(--faint); font-variant-numeric: tabular-nums; }
+.filters span { color: var(--faint); font-size: .64rem; font-variant-numeric: tabular-nums; }
 .problem-list { margin: 0; padding: 16px 22px 70px; list-style: none; }
 .problem-row { border-bottom: 1px solid var(--line); }
 .row-main { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; width: 100%; min-height: 66px; border: 0; padding: 8px 8px; background: transparent; text-align: left; cursor: pointer; }
@@ -131,6 +131,8 @@ button { color: inherit; }
   .list-heading { flex-direction: column; gap: 12px; }
   .list-actions { width: 100%; flex-direction: column; }
   #log-child { width: 100%; min-height: 44px; }
+  .filters button { display: grid; place-content: center; gap: 2px; min-height: 40px; padding: 5px 2px; font-size: .66rem; }
+  .filters span { display: block; font-size: .58rem; }
   .problem-list { padding: 8px 10px 60px; }
   .row-main { min-height: 60px; gap: 6px; }
   .status { padding: 4px 7px; }

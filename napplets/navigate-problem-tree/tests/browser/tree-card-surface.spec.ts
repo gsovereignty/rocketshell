@@ -231,6 +231,44 @@ test("mobile page owns child-list scrolling without horizontal overflow", async 
   );
 });
 
+test("filter controls fit without horizontal scrolling", async ({ page }) => {
+  await page.addInitScript((queryEvents) => {
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async () => ({ available: false, candidates: [] }),
+          invoke: async () => ({ ok: false, handled: false })
+        }
+      }
+    });
+  }, events);
+
+  for (const width of [280, 320, 430, 760]) {
+    await page.setViewportSize({ width, height: 720 });
+    await page.goto("/");
+    const filters = page.locator("#filters");
+    await expect(filters.locator("button")).toHaveCount(5);
+    const layout = await filters.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      overflowX: getComputedStyle(element).overflowX,
+      childrenFit: Array.from(element.children).every((child) => {
+        const parent = element.getBoundingClientRect();
+        const button = child.getBoundingClientRect();
+        return button.left >= parent.left && button.right <= parent.right;
+      })
+    }));
+    expect(layout.scrollWidth).toBe(layout.clientWidth);
+    expect(layout.overflowX).toBe("hidden");
+    expect(layout.childrenFit).toBe(true);
+  }
+});
+
 test("each tree edge renders one thick straight SVG arrow", async ({ page }) => {
   await page.addInitScript((queryEvents) => {
     Object.defineProperty(window, "napplet", {
