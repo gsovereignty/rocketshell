@@ -134,6 +134,42 @@ test("tree growth scrolls inside its pane without reflowing cards", async ({ pag
   );
 });
 
+test("long child list scrolls inside its pane", async ({ page }) => {
+  const manyLeaves = Array.from({ length: 24 }, (_, index) => {
+    const value = (index + 16).toString(16).padStart(64, "0");
+    return problem(value, `31971:${owner}:${value}`, `Actionable child ${index + 1}`, root);
+  });
+  await page.setViewportSize({ width: 1100, height: 600 });
+  await page.addInitScript((queryEvents) => {
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async () => ({ available: false, candidates: [] }),
+          invoke: async () => ({ ok: false, handled: false })
+        }
+      }
+    });
+  }, [problem(hex("1"), root, "Root problem"), ...manyLeaves]);
+
+  await page.goto("/");
+  const list = page.locator(".problem-list");
+  await expect(page.locator(".problem-row")).toHaveCount(manyLeaves.length);
+  await expect.poll(() => list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  await list.hover();
+  await page.mouse.wheel(0, 700);
+  await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(page.locator(".list-header")).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientHeight)
+  );
+});
+
 test("each tree edge renders one arrow-free SVG path", async ({ page }) => {
   await page.addInitScript((queryEvents) => {
     Object.defineProperty(window, "napplet", {

@@ -75,7 +75,7 @@ button { color: inherit; }
 .node-meta small { min-width: 1.5em; text-align: right; }
 .selected .node-meta { color: #dce7ff; }
 
-.list-pane { overflow: hidden; background: var(--white); }
+.list-pane { background: var(--white); }
 .list-header { min-height: 136px; padding: 24px 28px 16px; border-bottom: 1px solid var(--line); align-items: flex-start; flex-direction: column; }
 .list-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; }
 .list-pane h2 { max-width: 70ch; }
@@ -108,6 +108,8 @@ button { color: inherit; }
 @media (min-width: 761px) {
   .workspace { height: 100vh; min-height: 0; overflow: hidden; }
   .tree-pane, .list-pane { min-height: 0; }
+  .list-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+  .problem-list { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 }
 
 @media (max-width: 760px) {
