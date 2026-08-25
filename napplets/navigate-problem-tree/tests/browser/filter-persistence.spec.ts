@@ -71,3 +71,41 @@ test("status filter remains active when navigating between parents", async ({ pa
   await expect(page.locator(".row-title")).toHaveText("Second open leaf");
   await expect(page.getByText("Second closed leaf")).toHaveCount(0);
 });
+
+test("title search filters leaf nodes and combines with status", async ({ page }) => {
+  await page.addInitScript((queryEvents) => {
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async () => ({ available: false, candidates: [] }),
+          invoke: async () => ({ ok: false, handled: false })
+        }
+      }
+    });
+  }, events);
+
+  await page.goto("/");
+  await page.locator(`.tree-node[data-select="${firstParent}"]`).click();
+
+  const search = page.getByLabel("Filter by title");
+  await search.fill("  CLOSED  ");
+  await expect(page.locator(".problem-row")).toHaveCount(1);
+  await expect(page.locator(".row-title")).toHaveText("First closed leaf");
+
+  await page.locator('[data-filter="open"]').click();
+  await expect(page.locator(".problem-row")).toHaveCount(0);
+  await expect(page.locator(".empty")).toHaveText("No leaf problems match this search and status filter.");
+
+  await page.locator('[data-filter="closed"]').click();
+  await expect(page.locator(".row-title")).toHaveText("First closed leaf");
+
+  await page.locator(`.tree-node[data-select="${secondParent}"]`).click();
+  await expect(search).toHaveValue("  CLOSED  ");
+  await expect(page.locator('[data-filter="closed"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".row-title")).toHaveText("Second closed leaf");
+});

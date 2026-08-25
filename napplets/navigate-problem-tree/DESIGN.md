@@ -119,11 +119,14 @@ deepens blue. Focus always uses visible amber three-pixel outline.
 
 Filter controls sit in one shared gray group. Selected filter lifts onto white.
 Status chips use semantic foreground/background pairs and tabular counts.
+A full-width title search sits directly above status filters. Text and status
+filters intersect; search remains visible and usable at every pane width.
 
 ### Inputs / Fields
 
 Coordinates use square white fields, one-pixel neutral stroke, and monospace only
-for protocol data. Input and action stack below 760px.
+for protocol data. Leaf search uses body type, a compact rounded field, and a
+visible label. Input and action stack below 760px.
 
 ### Navigation
 

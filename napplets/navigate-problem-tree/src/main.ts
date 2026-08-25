@@ -29,6 +29,7 @@ let dag: ProblemDag | undefined;
 let selected = "";
 let listScope = "";
 let activeFilter = "all";
+let textFilter = "";
 let noteHandlerAvailable = false;
 let problemChildHandlerAvailable = false;
 let childComposerBusy = false;
@@ -122,7 +123,11 @@ function renderList(animateRows = true) {
   const parent = dag.nodes.get(listScope);
   if (!parent) return;
   const actionable = leafDescendants(dag, listScope);
-  const visible = activeFilter === "all" ? actionable : actionable.filter((node) => node.status === activeFilter);
+  const normalizedTextFilter = textFilter.trim().toLocaleLowerCase();
+  const visible = actionable.filter((node) =>
+    (activeFilter === "all" || node.status === activeFilter)
+    && (!normalizedTextFilter || node.title.toLocaleLowerCase().includes(normalizedTextFilter))
+  );
   const list = document.querySelector<HTMLElement>("#problem-list");
   const filters = document.querySelector<HTMLElement>("#filters");
   const sectionTitle = document.querySelector<HTMLElement>("#section-title");
@@ -135,6 +140,11 @@ function renderList(animateRows = true) {
     : "No compatible problem composer available";
   filters.innerHTML = filterCounts(actionable).map(([value, label, count]) => `
     <button data-filter="${value}" aria-pressed="${activeFilter === value}">${label} <span>${count}</span></button>`).join("");
+  const emptyMessage = !actionable.length
+    ? "No leaf problems below this problem."
+    : normalizedTextFilter
+      ? "No leaf problems match this search and status filter."
+      : "No actionable problems match this status filter.";
   list.innerHTML = visible.length ? visible.map((node) => `
     <li class="problem-row${node.coordinate === selected ? " selected" : ""}">
       <button class="row-main" data-select="${node.coordinate}">
@@ -142,7 +152,7 @@ function renderList(animateRows = true) {
         ${node.forkCount ? `<span class="fork">${node.forkCount + 1} heads</span>` : ""}
         <span class="status status-${node.status}">${statusLabel(node.status)}</span>
       </button>
-    </li>`).join("") : `<li class="empty">${actionable.length ? "No actionable problems match this filter." : "No leaf problems below this problem."}</li>`;
+    </li>`).join("") : `<li class="empty">${emptyMessage}</li>`;
   const rows = list.querySelectorAll<HTMLElement>(".problem-row");
   if (animateRows && !reducedMotion.matches && rows.length > 0) {
     gsap.fromTo(rows, { x: 10, opacity: 0 }, { x: 0, opacity: 1, duration: .3, stagger: .025, ease: "expo.out" });
@@ -165,7 +175,11 @@ function renderApp(animateListRows = true) {
       <section class="list-pane" aria-labelledby="section-title">
         <header class="list-header">
           <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="log-child" type="button">Log child problem</button></div></div>
-          <div id="filters" class="filters" aria-label="Filter children"></div>
+          <div class="filter-stack">
+            <label for="problem-search">Filter by title</label>
+            <input id="problem-search" type="search" value="${escapeHtml(textFilter)}" placeholder="Search leaf problems" autocomplete="off" spellcheck="false">
+            <div id="filters" class="filters" aria-label="Filter children by status"></div>
+          </div>
         </header>
         <ol id="problem-list" class="problem-list"></ol>
         <output id="app-status" class="app-status" aria-live="polite"></output>
@@ -188,6 +202,12 @@ function updateTreeSelection() {
 }
 
 function bindWorkspace() {
+  app.oninput = (event) => {
+    const input = (event.target as Element).closest<HTMLInputElement>("#problem-search");
+    if (!input) return;
+    textFilter = input.value;
+    renderList(false);
+  };
   app.onclick = (event) => {
     const target = event.target as Element;
     const selectButton = target.closest<HTMLButtonElement>("[data-select]");
@@ -330,6 +350,7 @@ async function loadDag(value: string) {
     dag = buildProblemDag(coordinate, problemEvents);
     selected = coordinate;
     listScope = coordinate;
+    textFilter = "";
     noteHandlerAvailable = hasProblemViewer(noteAvailability);
     problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
     renderApp(true);
