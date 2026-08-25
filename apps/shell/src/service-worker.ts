@@ -1,9 +1,11 @@
 /// <reference lib="webworker" />
 import { IndexedDbPackageStore, SERVICE_WORKER_PROTOCOL_VERSION, parseVirtualNappletUrl, parseWorkerRequest, routeNappletRequest, type WorkerReply } from "@platform/napplet-gateway/worker";
-import { isBuiltInNappletRequest } from "./service-worker-cache";
+import { isBuiltInNappletRequest, isRetiredShellCache, shellCacheName } from "./service-worker-cache";
+
+declare const __SHELL_BUILD_ID__: string;
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
-const SHELL_CACHE = "platform-shell-v3";
+const SHELL_CACHE = shellCacheName(__SHELL_BUILD_ID__);
 const storePromise = IndexedDbPackageStore.open();
 
 worker.addEventListener("install", (event: ExtendableEvent) => {
@@ -15,7 +17,7 @@ worker.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(Promise.all([
     worker.clients.claim(),
     caches.keys().then((names) => Promise.all(names
-      .filter((name) => name.startsWith("platform-shell-") && name !== SHELL_CACHE)
+      .filter((name) => isRetiredShellCache(name, SHELL_CACHE))
       .map((name) => caches.delete(name))))
   ]).then(() => undefined));
 });

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { verifyEvent } from "nostr-tools/pure";
-import { builtInNapplets } from "./vite.napplets.js";
+import { builtInNappletBuildId, builtInNapplets } from "./vite.napplets.js";
 
 const devServiceWorker = (): Plugin => ({
   name: "platform-dev-service-worker",
@@ -82,9 +82,14 @@ const testResourceServer = (): Plugin => ({
 });
 
 export default defineConfig(({ mode }) => {
+  const repositoryRoot = resolve(__dirname, "../..");
+  // Built-in Napplet bytes define cache identity. Rebuilding any artifact therefore
+  // produces a new worker and retires every cache that could contain old pixels.
+  const buildId = builtInNappletBuildId(repositoryRoot);
   return {
+    define: { __SHELL_BUILD_ID__: JSON.stringify(buildId) },
     base: mode === "github" ? "/rocketshell/" : process.env.PLATFORM_BASE ?? "/",
-    plugins: [devServiceWorker(), testBlossomServer(), testResourceServer(), builtInNapplets(resolve(__dirname, "../.."))],
+    plugins: [devServiceWorker(), testBlossomServer(), testResourceServer(), builtInNapplets(repositoryRoot)],
     build: {
       sourcemap: true,
       rollupOptions: {
