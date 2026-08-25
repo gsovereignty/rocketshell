@@ -358,7 +358,6 @@ function bindWorkspace() {
       hoverIntent?.kill();
       if (selectedFromTree) {
         listScope = selected;
-        activeFilter = "all";
       }
       updateTreeSelection(selectedFromTree);
       renderList(selectedFromTree);
