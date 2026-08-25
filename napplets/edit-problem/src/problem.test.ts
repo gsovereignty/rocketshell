@@ -69,6 +69,14 @@ describe("problem editor", () => {
     expect(template.tags).toContainEqual(["child_status", "open"]);
   });
 
+  it("allows an empty problem description", () => {
+    const problem = selectEditableProblem(problemId, [result(event(hex("c")))], owner);
+    const template = buildRevisionTemplate(problem, {
+      title: "Title only", description: "  \n", status: "open"
+    }, 20);
+    expect(template.content).toBe("");
+  });
+
   it("adds owner and resolved ancestor owners as maintainers on owner edit", () => {
     const parentOwner = hex("d");
     const existingMaintainer = hex("e");

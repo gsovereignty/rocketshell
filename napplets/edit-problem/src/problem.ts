@@ -264,7 +264,6 @@ export function buildRevisionTemplate(
   const title = update.title.trim();
   const description = update.description.trim();
   if (!title) throw new Error("Title is required.");
-  if (!description) throw new Error("Problem description is required.");
   if (!STATUSES.includes(update.status)) throw new Error("Problem status is invalid.");
 
   const lineageNames = new Set(["title", "status", "child_status"]);
