@@ -103,16 +103,11 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
   const isSelected = selected === coordinate;
   const isOnSelectedPath = ancestorCoordinates(dag, selected).has(coordinate);
   return `<li class="branch" data-coordinate="${coordinate}" data-depth="${depth}" style="--depth:${depth}">
-    <span class="incoming-connector" aria-hidden="true">
-      <i class="connector-line"></i><i class="connector-arrow"></i>
-      <i class="connector-line active-connector-line" data-active-connector></i>
-      <i class="connector-arrow active-connector-arrow" data-active-connector></i>
-    </span>
     <button class="tree-node${isSelected ? " selected" : ""}${isOnSelectedPath ? " selected-path" : ""}" data-select="${coordinate}" data-tree-node aria-current="${isSelected ? "true" : "false"}">
       <span>${escapeHtml(node.title)}</span>
       <span class="node-meta">${node.forkCount ? `<b>${node.forkCount + 1} heads</b>` : ""}<small>${descendantsCount(dag, coordinate)}</small></span>
     </button>
-    ${children.length ? `<ul>${children.map((child) => outlineBranch(child, nextTrail, depth + 1)).join("")}</ul>` : ""}
+    ${children.length ? `<ul><svg class="tree-connectors" aria-hidden="true"></svg>${children.map((child) => outlineBranch(child, nextTrail, depth + 1)).join("")}</ul>` : ""}
   </li>`;
 }
 
@@ -133,68 +128,67 @@ function layoutTreeConnectors(activeCoordinate = hoveredProblem || selected) {
     branch.classList.toggle("connector-path", activePath.has(branch.dataset.coordinate ?? ""));
   });
   app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
-    const lastBranch = children.lastElementChild;
-    if (!lastBranch) return;
-    const lastLine = lastBranch.querySelector<HTMLElement>(":scope > .incoming-connector > .connector-line");
-    if (!lastLine) return;
+    const connector = children.querySelector<SVGSVGElement>(":scope > .tree-connectors");
+    const branches = Array.from(children.querySelectorAll<HTMLElement>(":scope > .branch"));
+    if (!connector || branches.length === 0) return;
     const childrenBox = children.getBoundingClientRect();
-    const lastLineBox = lastLine.getBoundingClientRect();
-    const connectorEnd = lastLineBox.top - childrenBox.top + lastLineBox.height / 2;
-    children.style.setProperty("--connector-end", `${connectorEnd}px`);
-    const activeBranch = Array.from(children.children).find((child) => child.classList.contains("connector-path"));
-    if (!activeBranch) {
-      delete children.dataset.activeConnectorEnd;
-      return;
-    }
-    const activeLine = activeBranch.querySelector<HTMLElement>(":scope > .incoming-connector > .connector-line");
-    if (!activeLine) return;
-    const activeLineBox = activeLine.getBoundingClientRect();
-    const activeConnectorEnd = activeLineBox.top - childrenBox.top + activeLineBox.height / 2;
-    children.dataset.activeConnectorEnd = String(activeConnectorEnd);
+    const points = branches.map((branch) => {
+      const nodeBox = branch.querySelector<HTMLElement>(":scope > .tree-node")?.getBoundingClientRect();
+      return {
+        branch,
+        coordinate: branch.dataset.coordinate ?? "",
+        y: nodeBox ? nodeBox.top - childrenBox.top + nodeBox.height / 2 : 0
+      };
+    });
+    const height = Math.max(1, Math.ceil(points.at(-1)?.y ?? 1));
+    connector.setAttribute("viewBox", `0 0 18 ${height}`);
+    connector.setAttribute("width", "18");
+    connector.setAttribute("height", String(height));
+    connector.replaceChildren();
+    points.forEach(({ branch, coordinate, y }) => {
+      const pathData = `M 1 0 V ${y} H 16 M 11 ${y - 4} L 16 ${y} L 11 ${y + 4}`;
+      const basePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      basePath.setAttribute("class", "connector-path-base");
+      basePath.setAttribute("d", pathData);
+      connector.append(basePath);
+      if (!branch.classList.contains("connector-path")) return;
+      const highlightedPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      highlightedPath.setAttribute("class", "active-connector-path");
+      highlightedPath.setAttribute("data-coordinate", coordinate);
+      highlightedPath.setAttribute("d", pathData);
+      connector.append(highlightedPath);
+    });
   });
 }
 
 function connectorAnimationTargets() {
-  return {
-    stems: Array.from(app.querySelectorAll<HTMLElement>(".branch > ul")),
-    lines: Array.from(app.querySelectorAll<HTMLElement>(".active-connector-line")),
-    arrows: Array.from(app.querySelectorAll<HTMLElement>(".active-connector-arrow"))
-  };
+  return Array.from(app.querySelectorAll<SVGPathElement>(".active-connector-path"));
 }
 
 function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
   connectorTimeline?.kill();
   hoverIntent?.kill();
   layoutTreeConnectors(activeCoordinate);
-  const { stems, lines, arrows } = connectorAnimationTargets();
-  gsap.killTweensOf([...stems, ...lines, ...arrows]);
-  gsap.set(stems, { "--active-connector-draw": "0px" });
-  gsap.set(lines, { scaleX: 0 });
-  gsap.set(arrows, { scale: 0 });
+  const paths = connectorAnimationTargets();
+  gsap.killTweensOf(paths);
+  paths.forEach((path) => {
+    const length = path.getTotalLength();
+    path.style.strokeDasharray = String(length);
+    path.style.strokeDashoffset = String(length);
+  });
   const pathBranches = Array.from(app.querySelectorAll<HTMLElement>(".branch.connector-path"))
     .filter((branch) => branch.parentElement?.parentElement?.classList.contains("branch"))
     .sort((left, right) => Number(left.dataset.depth) - Number(right.dataset.depth));
   if (!animate || reducedMotion.matches) {
-    pathBranches.forEach((branch) => {
-      const stem = branch.parentElement as HTMLElement;
-      const end = stem.dataset.activeConnectorEnd;
-      if (end) gsap.set(stem, { "--active-connector-draw": `${end}px` });
-      gsap.set(branch.querySelectorAll("[data-active-connector]"), { scaleX: 1, scale: 1 });
-    });
+    gsap.set(paths, { strokeDashoffset: 0 });
     return;
   }
   connectorTimeline = gsap.timeline();
   pathBranches.forEach((branch, index) => {
-    const stem = branch.parentElement as HTMLElement;
-    const end = stem.dataset.activeConnectorEnd;
-    const line = branch.querySelector<HTMLElement>(".active-connector-line");
-    const arrow = branch.querySelector<HTMLElement>(".active-connector-arrow");
-    if (!end || !line || !arrow) return;
+    const path = branch.parentElement?.querySelector<SVGPathElement>(`:scope > .tree-connectors > .active-connector-path[data-coordinate="${branch.dataset.coordinate}"]`);
+    if (!path) return;
     const start = index * 0.035;
-    connectorTimeline!
-      .to(stem, { "--active-connector-draw": `${end}px`, duration: 0.12, ease: "power2.out" }, start)
-      .to(line, { scaleX: 1, duration: 0.08, ease: "power2.out" }, start + 0.06)
-      .to(arrow, { scale: 1, duration: 0.06, ease: "power2.out" }, start + 0.11);
+    connectorTimeline!.to(path, { strokeDashoffset: 0, duration: 0.2, ease: "power2.out" }, start);
   });
 }
 
@@ -205,12 +199,10 @@ function restoreSelectedConnectorPath(previousHover: string) {
     return;
   }
   connectorTimeline?.kill();
-  const { stems, lines, arrows } = connectorAnimationTargets();
-  gsap.killTweensOf([...stems, ...lines, ...arrows]);
+  const paths = connectorAnimationTargets();
+  gsap.killTweensOf(paths);
   connectorTimeline = gsap.timeline({ onComplete: () => showTreeConnectorPath(selected, true) })
-    .to(lines, { scaleX: 0, duration: 0.08, ease: "power1.in" }, 0)
-    .to(arrows, { scale: 0, duration: 0.08, ease: "power1.in" }, 0)
-    .to(stems, { "--active-connector-draw": "0px", duration: 0.1, ease: "power1.in" }, 0);
+    .to(paths, { strokeDashoffset: (_index, path: SVGPathElement) => path.getTotalLength(), duration: 0.1, ease: "power1.in" }, 0);
 }
 
 function renderList(animateRows = true) {

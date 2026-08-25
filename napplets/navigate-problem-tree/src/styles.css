@@ -61,28 +61,10 @@ button { color: inherit; }
 .tree-root { margin-top: 16px; }
 .branch { position: relative; }
 .branch ul { position: relative; margin-left: 27px; padding-left: 12px; }
-.branch ul::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: var(--connector-end, 0);
-  border-left: 2px solid var(--connector);
-  content: "";
-}
-.branch ul::after {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: var(--active-connector-draw, 0);
-  border-left: 2px solid var(--blue);
-  content: "";
-}
-.incoming-connector { position: absolute; z-index: 1; top: 20px; left: -12px; width: 17px; height: 10px; pointer-events: none; }
-.connector-line { position: absolute; top: 5px; left: 0; width: 10px; height: 2px; background: var(--connector); transform-origin: left center; }
-.connector-arrow { position: absolute; top: 0; left: 10px; width: 7px; height: 10px; background: var(--connector); clip-path: polygon(0 0, 100% 50%, 0 100%); transform-origin: left center; }
-.active-connector-line { background: var(--blue); transform: scaleX(0); }
-.active-connector-arrow { background: var(--blue); transform: scale(0); }
-.tree-root > .branch > .incoming-connector { display: none; }
+.tree-connectors { position: absolute; z-index: 1; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.tree-connectors path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.connector-path-base { stroke: var(--connector); }
+.active-connector-path { stroke: var(--blue); }
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: var(--white); text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }

@@ -132,3 +132,33 @@ test("tree growth scrolls inside its pane without reflowing cards", async ({ pag
     await page.evaluate(() => document.documentElement.clientHeight)
   );
 });
+
+test("each tree edge renders its line and arrow in one SVG path", async ({ page }) => {
+  await page.addInitScript((queryEvents) => {
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async () => ({ available: false, candidates: [] }),
+          invoke: async () => ({ ok: false, handled: false })
+        }
+      }
+    });
+  }, events);
+
+  await page.goto("/");
+  await expect(page.locator(".tree-node")).toHaveCount(5);
+  await expect(page.locator(".incoming-connector, .connector-line, .connector-arrow")).toHaveCount(0);
+  await expect(page.locator(".tree-connectors")).toHaveCount(3);
+
+  const paths = page.locator(".connector-path-base");
+  await expect(paths).toHaveCount(4);
+  await expect(paths.first()).toHaveAttribute("d", /^M 1 0 V [\d.]+ H 16 M 11 [\d.]+ L 16 [\d.]+ L 11 [\d.]+$/);
+  await page.locator(".tree-node").nth(3).click();
+  await expect(page.locator(".active-connector-path")).toHaveCount(3);
+  await expect(page.locator(".active-connector-path").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
+});
