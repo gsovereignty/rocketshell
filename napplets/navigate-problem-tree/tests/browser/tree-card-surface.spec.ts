@@ -5,7 +5,6 @@ const rootId = "7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170
 const root = `31971:${owner}:${rootId}`;
 const hex = (character: string) => character.repeat(64);
 const coordinate = (character: string) => `31971:${owner}:${hex(character)}`;
-const connectorTipX = 24;
 
 const problem = (id: string, problemCoordinate: string, title: string, parent?: string) => ({
   event: {
@@ -269,7 +268,7 @@ test("filter controls fit without horizontal scrolling", async ({ page }) => {
   }
 });
 
-test("each tree edge renders one thick straight SVG arrow", async ({ page }) => {
+test("tree depth uses vertical indentation guides without SVG connectors", async ({ page }) => {
   await page.addInitScript((queryEvents) => {
     Object.defineProperty(window, "napplet", {
       configurable: true,
@@ -288,71 +287,16 @@ test("each tree edge renders one thick straight SVG arrow", async ({ page }) => 
 
   await page.goto("/");
   await expect(page.locator(".tree-node")).toHaveCount(5);
-  await expect(page.locator(".incoming-connector, .connector-line, .connector-arrow, .connector-path-base, .active-connector-path")).toHaveCount(0);
-  await expect(page.locator(".tree-connectors")).toHaveCount(3);
+  await expect(page.locator(".tree-root svg, .tree-connectors, .connector-path")).toHaveCount(0);
 
-  const paths = page.locator(".connector-path");
-  await expect(paths).toHaveCount(4);
-  const pathData = await paths.first().getAttribute("d");
-  expect(pathData).toMatch(/^M 1 0 V \d+(?:\.\d+)? H 24$/);
-  expect(pathData?.match(/\bM\b/g)).toHaveLength(1);
-  expect(pathData?.match(/\bV\b/g)).toHaveLength(1);
-  expect(pathData?.match(/\bH\b/g)).toHaveLength(1);
-  expect(pathData?.endsWith(`H ${connectorTipX}`)).toBe(true);
-  const viewportClearance = await page.locator(".tree-connectors").evaluateAll((connectors) =>
-    connectors.every((connector) => {
-      const svg = connector as SVGSVGElement;
-      const paths = Array.from(svg.querySelectorAll<SVGPathElement>(":scope > .connector-path"));
-      const finalY = Math.max(...paths.map((path) => path.getPointAtLength(path.getTotalLength()).y));
-      return svg.viewBox.baseVal.height - finalY >= 8;
-    }));
-  expect(viewportClearance).toBe(true);
-  await expect(paths.first()).toHaveAttribute("marker-end", /url\(#tree-arrow-\d+\)/);
-  await expect(paths.first()).toHaveCSS("stroke-width", "4px");
-  await expect(paths.first()).toHaveCSS("stroke-dasharray", "none");
-  await expect(page.locator(".tree-connectors marker")).toHaveCount(3);
-  await page.locator(".tree-node").nth(3).click();
-  await expect(page.locator(".connector-path.is-active")).toHaveCount(3);
-  await expect(page.locator(".connector-path.is-active").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
-  expect(await page.locator(".connector-path").evaluateAll((connectorPaths) =>
-    connectorPaths.every((path) => getComputedStyle(path).strokeDasharray === "none"))).toBe(true);
+  const nestedLists = page.locator(".tree-root ul");
+  await expect(nestedLists).toHaveCount(3);
+  await expect(nestedLists.first()).toHaveCSS("border-left-width", "1px");
+  await expect(nestedLists.first()).toHaveCSS("border-left-style", "solid");
 
-  await page.evaluate(() => {
-    (window as typeof window & { connectorMutations: number }).connectorMutations = 0;
-    document.querySelectorAll(".tree-connectors").forEach((connector) => {
-      new MutationObserver((records) => {
-        (window as typeof window & { connectorMutations: number }).connectorMutations += records.filter((record) => record.type === "childList").length;
-      }).observe(connector, { childList: true });
-    });
-  });
-  await page.locator(".tree-node").nth(1).hover();
-  await page.locator(".tree-node").nth(4).hover();
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { connectorMutations: number }).connectorMutations)).toBe(0);
-  await page.locator(".tree-node").nth(1).hover();
-  await page.waitForTimeout(50);
-  await page.locator(".tree-node").nth(2).hover();
-  await page.waitForTimeout(50);
-  await page.locator(".tree-node").nth(4).hover();
-  expect(await page.locator(".connector-path").evaluateAll((connectorPaths) =>
-    connectorPaths.every((path) => getComputedStyle(path).strokeDasharray === "none"))).toBe(true);
-
-  const glyph = await page.locator(".connector-path").first().evaluate((path) => {
-    const card = path.closest("ul")?.querySelector(":scope > .branch > .tree-node");
-    return { right: path.getBoundingClientRect().right, cardLeft: card?.getBoundingClientRect().left ?? 0 };
-  });
-  expect(glyph.right).toBeLessThanOrEqual(glyph.cardLeft);
-
-  const renderedEdges = await page.locator(".connector-path.is-active").evaluateAll((activePaths, tipX) =>
-    activePaths.map((activePath) => {
-      const path = activePath as SVGPathElement;
-      const svg = path.ownerSVGElement;
-      const card = svg?.closest("ul")?.querySelector<HTMLElement>(":scope > .branch > .tree-node");
-      const matrix = svg?.getScreenCTM();
-      const tip = matrix && new DOMPoint(tipX as number, 0).matrixTransform(matrix);
-      return {
-        fullPathVisible: getComputedStyle(path).strokeDasharray === "none",
-        tipGap: card && tip ? card.getBoundingClientRect().left - tip.x : Number.NaN
-      };
-    }), connectorTipX);
-  expect(renderedEdges.every(({ fullPathVisible, tipGap }) => fullPathVisible && tipGap >= 0 && tipGap <= 12)).toBe(true);
+  const offsets = await page.locator('.branch[data-depth="0"] > .tree-node, .branch[data-depth="1"] > .tree-node, .branch[data-depth="2"] > .tree-node').evaluateAll(
+    (nodes) => nodes.slice(0, 3).map((node) => node.getBoundingClientRect().left)
+  );
+  expect(offsets[1]).toBeGreaterThan(offsets[0]);
+  expect(offsets[2]).toBeGreaterThan(offsets[1]);
 });

@@ -7,7 +7,6 @@
   --muted: #6d7280;
   --faint: #9ca1ae;
   --line: #dfe1e7;
-  --connector: var(--faint);
   --panel: #f4f4f6;
   --white: #fff;
   --blue: #145cff;
@@ -60,10 +59,7 @@ button { color: inherit; }
 .tree-root, .tree-root ul { margin: 0; padding: 0; list-style: none; }
 .tree-root { margin-top: 16px; }
 .branch { position: relative; }
-.branch ul { position: relative; margin-left: 8px; padding-left: 33px; }
-.tree-connectors { position: absolute; z-index: 1; top: 0; left: 0; overflow: visible; pointer-events: none; }
-.tree-connectors > .connector-path { fill: none; stroke: var(--connector); stroke-linecap: round; stroke-linejoin: miter; stroke-width: 4; vector-effect: non-scaling-stroke; }
-.tree-connectors > .connector-path.is-active { stroke: var(--blue); }
+.branch ul { margin-left: 16px; padding-left: 16px; border-inline-start: 1px solid var(--line); }
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: var(--white); text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }

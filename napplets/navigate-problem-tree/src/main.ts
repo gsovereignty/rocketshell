@@ -18,7 +18,6 @@ import {
   hasProblemChildComposer, hasProblemViewer, openAdjacentProblemChildComposer, openProblemViewer
 } from "./problem-child-intent";
 import { mergeProblemEvents } from "./problem-events";
-import { connectorPathData, connectorWidth } from "./connector-path";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -28,7 +27,6 @@ const app = (() => {
 
 let dag: ProblemDag | undefined;
 let selected = "";
-let hoveredProblem = "";
 let listScope = "";
 let activeFilter = "all";
 let noteHandlerAvailable = false;
@@ -38,9 +36,6 @@ let problemViewerBusy = false;
 let problemEvents: RelayEventResult[] = [];
 let problemSubscription: OutboxSubscription | undefined;
 let loadGeneration = 0;
-let connectorTimeline: gsap.core.Timeline | undefined;
-let connectorConstructionTimeline: gsap.core.Timeline | undefined;
-let hoverIntent: gsap.core.Tween | undefined;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({
@@ -93,7 +88,7 @@ function receiveProblemEvents(rootCoordinate: string, incoming: RelayEventResult
   dag = buildProblemDag(rootCoordinate, problemEvents);
   if (!dag.nodes.has(selected)) selected = rootCoordinate;
   if (!dag.nodes.has(listScope)) listScope = rootCoordinate;
-  renderApp(false, false);
+  renderApp(false);
 }
 
 function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): string {
@@ -109,7 +104,7 @@ function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): strin
       <span>${escapeHtml(node.title)}</span>
       <span class="node-meta">${node.forkCount ? `<b>${node.forkCount + 1} heads</b>` : ""}<small>${descendantsCount(dag, coordinate)}</small></span>
     </button>
-    ${children.length ? `<ul><svg class="tree-connectors" aria-hidden="true"></svg>${children.map((child) => outlineBranch(child, nextTrail, depth + 1)).join("")}</ul>` : ""}
+    ${children.length ? `<ul>${children.map((child) => outlineBranch(child, nextTrail, depth + 1)).join("")}</ul>` : ""}
   </li>`;
 }
 
@@ -120,131 +115,6 @@ function filterCounts(nodes: ProblemNode[]) {
     ["claimed", "Claimed", count("claimed")], ["patched", "Patched", count("patched")],
     ["closed", "Closed", count("closed")]
   ] as const;
-}
-
-function layoutTreeConnectors() {
-  app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children, connectorIndex) => {
-    const connector = children.querySelector<SVGSVGElement>(":scope > .tree-connectors");
-    const branches = Array.from(children.querySelectorAll<HTMLElement>(":scope > .branch"));
-    if (!connector || branches.length === 0) return;
-    const childrenBox = children.getBoundingClientRect();
-    const points = branches.map((branch) => {
-      const nodeBox = branch.querySelector<HTMLElement>(":scope > .tree-node")?.getBoundingClientRect();
-      return {
-        branch,
-        coordinate: branch.dataset.coordinate ?? "",
-        y: nodeBox ? nodeBox.top - childrenBox.top + nodeBox.height / 2 : 0
-      };
-    });
-    // Keep final horizontal shaft and marker inside SVG viewport. Paths ending
-    // exactly at viewport bottom lose their horizontal stroke in some hosts.
-    const height = Math.max(1, Math.ceil((points.at(-1)?.y ?? 1) + 8));
-    connector.setAttribute("viewBox", `0 0 ${connectorWidth} ${height}`);
-    connector.setAttribute("width", String(connectorWidth));
-    connector.setAttribute("height", String(height));
-    if (connector.querySelectorAll(":scope > .connector-path").length !== points.length) {
-      connector.replaceChildren();
-      const markerId = `tree-arrow-${connectorIndex}`;
-      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-      marker.setAttribute("id", markerId);
-      marker.setAttribute("viewBox", "0 0 8 8");
-      marker.setAttribute("refX", "8");
-      marker.setAttribute("refY", "4");
-      marker.setAttribute("markerWidth", "7");
-      marker.setAttribute("markerHeight", "7");
-      marker.setAttribute("orient", "auto-start-reverse");
-      marker.setAttribute("markerUnits", "userSpaceOnUse");
-      const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      arrow.setAttribute("d", "M 0 0 L 8 4 L 0 8 Z");
-      arrow.setAttribute("fill", "context-stroke");
-      marker.append(arrow);
-      defs.append(marker);
-      connector.append(defs);
-      points.forEach(({ coordinate }) => {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("class", "connector-path");
-        path.setAttribute("data-coordinate", coordinate);
-        path.setAttribute("marker-end", `url(#${markerId})`);
-        connector.append(path);
-      });
-    }
-    points.forEach(({ coordinate, y }) => {
-      const pathData = connectorPathData(coordinate, y);
-      const path = connector.querySelector<SVGPathElement>(`.connector-path[data-coordinate="${coordinate}"]`);
-      if (!path) return;
-      path.setAttribute("d", pathData);
-    });
-  });
-}
-
-function drawTreeConnectors(animate: boolean) {
-  connectorConstructionTimeline?.kill();
-  const paths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path"));
-  gsap.killTweensOf(paths);
-  if (!animate || reducedMotion.matches) {
-    gsap.set(paths, { opacity: 1, strokeWidth: 4 });
-    return;
-  }
-  gsap.set(paths, { opacity: 0.45, strokeWidth: 5 });
-  connectorConstructionTimeline = gsap.timeline()
-    .to(paths, {
-      opacity: 1,
-      duration: 0.28,
-      stagger: { each: 0.06, from: "start" },
-      ease: "power2.out"
-    }, 0)
-    .to(paths, {
-      strokeWidth: 4,
-      duration: 0.24,
-      stagger: { each: 0.06, from: "start" },
-      ease: "power3.out"
-    }, 0.18);
-}
-
-function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
-  connectorConstructionTimeline?.kill();
-  connectorConstructionTimeline = undefined;
-  connectorTimeline?.kill();
-  hoverIntent?.kill();
-  const activeCoordinates = dag && activeCoordinate
-    ? ancestorCoordinates(dag, activeCoordinate).add(activeCoordinate)
-    : new Set<string>();
-  const paths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path"));
-  gsap.killTweensOf(paths);
-  if (!animate || reducedMotion.matches) {
-    paths.forEach((path) => {
-      const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
-      path.classList.toggle("is-active", isActive);
-      gsap.set(path, {
-        stroke: isActive ? "var(--blue)" : "var(--connector)",
-        strokeWidth: isActive ? 5 : 4,
-        opacity: 1
-      });
-    });
-    return;
-  }
-  connectorTimeline = gsap.timeline();
-  paths.forEach((path, index) => {
-    const wasActive = path.classList.contains("is-active");
-    const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
-    path.classList.toggle("is-active", isActive);
-    if (isActive && !wasActive) {
-      const at = index * 0.035;
-      gsap.set(path, { opacity: 1, stroke: "var(--blue)", strokeWidth: 5 });
-      connectorTimeline!
-        .to(path, { strokeWidth: 4, duration: 0.24, ease: "power2.out" }, at);
-    } else if (isActive) {
-      connectorTimeline!.to(path, { opacity: 1, stroke: "var(--blue)", strokeWidth: 4, duration: 0.18, ease: "power2.out" }, 0);
-    } else {
-      connectorTimeline!.to(path, { opacity: 1, stroke: "var(--connector)", strokeWidth: 4, duration: wasActive ? 0.16 : 0, ease: "power1.out" }, 0);
-    }
-  });
-}
-
-function restoreSelectedConnectorPath(previousHover: string) {
-  hoverIntent?.kill();
-  showTreeConnectorPath(selected, Boolean(previousHover && previousHover !== selected));
 }
 
 function renderList(animateRows = true) {
@@ -279,7 +149,7 @@ function renderList(animateRows = true) {
   }
 }
 
-function renderApp(animateListRows = true, animateConnectorConstruction = false) {
+function renderApp(animateListRows = true) {
   if (!dag) return;
   const currentDag = dag;
   app.innerHTML = `
@@ -303,12 +173,9 @@ function renderApp(animateListRows = true, animateConnectorConstruction = false)
     </div>`;
   bindWorkspace();
   renderList(animateListRows);
-  layoutTreeConnectors();
-  showTreeConnectorPath(selected, false);
-  drawTreeConnectors(animateConnectorConstruction);
 }
 
-function updateTreeSelection(animateConnectorPath: boolean) {
+function updateTreeSelection() {
   if (!dag) return;
   const selectedPath = ancestorCoordinates(dag, selected);
   app.querySelectorAll<HTMLButtonElement>(".tree-node[data-select]").forEach((button) => {
@@ -318,29 +185,9 @@ function updateTreeSelection(animateConnectorPath: boolean) {
     button.classList.toggle("selected-path", selectedPath.has(coordinate));
     button.setAttribute("aria-current", String(isSelected));
   });
-  showTreeConnectorPath(selected, animateConnectorPath);
 }
 
 function bindWorkspace() {
-  app.onpointerover = (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
-    if (!button?.dataset.select) return;
-    if (event.relatedTarget instanceof Node && button.contains(event.relatedTarget)) return;
-    const coordinate = button.dataset.select;
-    hoverIntent?.kill();
-    hoverIntent = gsap.delayedCall(0.04, () => {
-      hoveredProblem = coordinate;
-      showTreeConnectorPath(coordinate, true);
-    });
-  };
-  app.onpointerout = (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
-    if (!button) return;
-    if (event.relatedTarget instanceof Node && button.contains(event.relatedTarget)) return;
-    const previousHover = hoveredProblem;
-    hoveredProblem = "";
-    restoreSelectedConnectorPath(previousHover);
-  };
   app.onclick = (event) => {
     const target = event.target as Element;
     const selectButton = target.closest<HTMLButtonElement>("[data-select]");
@@ -348,12 +195,10 @@ function bindWorkspace() {
     if (selectButton?.dataset.select) {
       selected = selectButton.dataset.select;
       const selectedFromTree = selectButton.hasAttribute("data-tree-node");
-      hoveredProblem = "";
-      hoverIntent?.kill();
       if (selectedFromTree) {
         listScope = selected;
       }
-      updateTreeSelection(selectedFromTree);
+      updateTreeSelection();
       renderList(selectedFromTree);
       void openProblem(selected);
     } else if (filterButton?.dataset.filter) {
@@ -487,7 +332,7 @@ async function loadDag(value: string) {
     listScope = coordinate;
     noteHandlerAvailable = hasProblemViewer(noteAvailability);
     problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
-    renderApp(true, true);
+    renderApp(true);
   } catch (error) {
     if (generation !== loadGeneration) return;
     stopProblemSubscription();
@@ -498,8 +343,3 @@ async function loadDag(value: string) {
 
 if (ROOT_A_TAG) void loadDag(ROOT_A_TAG);
 else showSetup();
-
-window.addEventListener("resize", () => {
-  layoutTreeConnectors();
-  showTreeConnectorPath(hoveredProblem || selected, false);
-});
