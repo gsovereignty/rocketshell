@@ -99,6 +99,8 @@
 
 ## Commits
 
+- Before committing, run every test suite and check defined by CI and require all
+  of them to pass. Never create a commit with a known CI test or check failure.
 - Commit every completed change before handing work back to user.
 - Keep each commit focused on one logical change.
 - Write every commit message as a problem statement using this subject format:
