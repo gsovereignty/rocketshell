@@ -82,11 +82,82 @@ describe("NAP-IDENTITY providers", () => {
     const request = vi.spyOn(engine.relayPool, "request").mockReturnValue(
       throwError(() => new Error("relay unavailable")) as ReturnType<typeof engine.relayPool.request>
     );
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const identity = adapters.createIdentityProviders(["wss://relay.example"]);
 
     await identity.getZaps(user.pubkey);
     expect(request).toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledWith(
+      "NAP-IDENTITY query relay refresh failed",
+      expect.objectContaining({ error: expect.any(Error), kinds: [9735], authorCount: 0, relayCount: 1 })
+    );
     expect(engine.eventStore.getEvent(cached.id)?.id).toBe(cached.id);
+    engine.shutdownNostrServices();
+  });
+
+  it("revalidates cached model-backed profile data before returning", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const secret = generateSecretKey();
+    const cached = finalizeEvent({
+      kind: 0, created_at: 1, tags: [], content: JSON.stringify({ name: "Old name" })
+    }, secret);
+    const current = finalizeEvent({
+      kind: 0, created_at: 2, tags: [], content: JSON.stringify({ name: "Current name" })
+    }, secret);
+    engine.ingress.admit(cached, "cache:indexeddb");
+    const request = vi.spyOn(engine.relayPool, "request").mockImplementation(() => {
+      engine.ingress.admit(current, "wss://relay.example");
+      return of(current) as ReturnType<typeof engine.relayPool.request>;
+    });
+    const identity = adapters.createIdentityProviders(["wss://relay.example"]);
+
+    await expect(identity.getProfile(cached.pubkey)).resolves.toEqual({
+      name: "Current name", displayName: "Current name"
+    });
+    expect(request).toHaveBeenCalledWith(
+      ["wss://relay.example/"],
+      { kinds: [0], authors: [cached.pubkey] },
+      expect.objectContaining({ eventStore: engine.eventStore })
+    );
+    engine.shutdownNostrServices();
+  });
+
+  it("uses cached replaceable data offline without clearing it", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const secret = generateSecretKey();
+    const cached = finalizeEvent({
+      kind: 3, created_at: 1, tags: [["p", "aa".repeat(32)]], content: ""
+    }, secret);
+    engine.ingress.admit(cached, "cache:indexeddb");
+    const request = vi.spyOn(engine.relayPool, "request");
+    const identity = adapters.createIdentityProviders([]);
+
+    await expect(identity.lookupReplaceable(3, cached.pubkey)).resolves.toMatchObject({
+      status: "found", event: { id: cached.id }
+    });
+    expect(request).not.toHaveBeenCalled();
+    engine.shutdownNostrServices();
+  });
+
+  it("keeps cached replaceable data when relay hints violate policy", async () => {
+    const { engine, adapters } = await freshAdapters();
+    const secret = generateSecretKey();
+    const cached = finalizeEvent({
+      kind: 3, created_at: 1, tags: [["p", "aa".repeat(32)]], content: ""
+    }, secret);
+    engine.ingress.admit(cached, "cache:indexeddb");
+    const request = vi.spyOn(engine.relayPool, "request");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const identity = adapters.createIdentityProviders(["wss://relay.example"]);
+
+    await expect(identity.lookupReplaceable(3, cached.pubkey, {
+      hints: ["https://not-a-relay.example"]
+    })).resolves.toMatchObject({ status: "found", event: { id: cached.id } });
+    expect(request).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledWith(
+      "NAP-IDENTITY replaceable lookup relay refresh failed",
+      expect.objectContaining({ error: expect.any(Error), kinds: [3], authorCount: 1, relayCount: 0 })
+    );
     engine.shutdownNostrServices();
   });
 

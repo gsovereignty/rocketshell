@@ -4,9 +4,9 @@ import {
   getZapAmount, getZapRequest, getZapSender
 } from "applesauce-common/helpers";
 import { castUser, type Profile } from "applesauce-common/casts";
-import { EMPTY, catchError, defaultIfEmpty, firstValueFrom, lastValueFrom, timeout } from "rxjs";
+import { defaultIfEmpty, lastValueFrom } from "rxjs";
 import type { ReplaceableLookup } from "@platform/nostr-engine";
-import { eventLoader, eventStore, relayPolicy, relayPool } from "@platform/nostr-engine";
+import { eventStore, relayPolicy, relayPool } from "@platform/nostr-engine";
 import type { Badge, ProfileData, RelayPermission, ZapReceipt } from "@napplet/nap/identity";
 
 const LOAD_TIMEOUT_MS = 16_000;
@@ -39,7 +39,7 @@ export interface IdentityProviders {
 }
 
 export interface LookupOptions {
-  /** Skip the local event store and always ask the network for the newest version. */
+  /** @deprecated Online identity reads now always revalidate. Retained for API compatibility. */
   readonly refresh?: boolean;
   readonly hints?: readonly string[];
 }
@@ -70,49 +70,60 @@ const listEntries = (event: NostrEvent | undefined): string[] => event
  * `relayUrls` is read on every request rather than copied, so passing the live tier arrays from
  * {@link createRelayConfiguration} keeps the direct queries current as settings change.
  *
- * Replaceable lookups go through the shared {@link eventLoader}, whose relays are observables and
- * therefore already follow both the account's own lists and the settings panel.
+ * Relay results always enter the single shared EventStore before providers read their final value.
  */
 export function createIdentityProviders(relayUrls: string[]): IdentityProviders {
-
-
+  const refresh = async (
+    filter: Parameters<typeof eventStore.getByFilters>[0],
+    hints: readonly string[],
+    operation: string
+  ): Promise<boolean> => {
+    let relayCount = 0;
+    try {
+      const selected = relayPolicy.select([...relayUrls, ...hints], "read");
+      relayCount = selected.length;
+      if (relayCount === 0) return false;
+      // Request completes on EOSE and admits every result through the shared EventStore.
+      await lastValueFrom(relayPool.request(selected, filter, {
+        eventStore, timeout: LOAD_TIMEOUT_MS
+      }).pipe(defaultIfEmpty(undefined)));
+      return true;
+    } catch (error) {
+      const filters = Array.isArray(filter) ? filter : [filter];
+      console.warn(`NAP-IDENTITY ${operation} relay refresh failed`, {
+        error,
+        kinds: filters.flatMap((entry) => entry.kinds ?? []),
+        authorCount: new Set(filters.flatMap((entry) => entry.authors ?? [])).size,
+        relayCount
+      });
+      return false;
+    }
+  };
   const lookupReplaceable = async (kind: number, pubkey: string, lookup: LookupOptions = {}): Promise<ReplaceableLookup> => {
     const stored = (): NostrEvent | undefined => eventStore.getReplaceable(kind, pubkey);
     if (!pubkey) return { status: "unavailable", reason: "signed-out" };
-    const cached = stored();
-    if (cached && !lookup.refresh) return { status: "found", event: cached };
-    if (relayUrls.length === 0) return { status: "unavailable", reason: "no-relays-configured" };
-    try {
-      const event = await firstValueFrom(eventLoader({ kind, pubkey, relays: [...(lookup.hints ?? [])] }).pipe(
-        timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
-      ));
-      const resolved = event ?? stored();
-      // Completing without an event means the relays answered EOSE with nothing: genuinely unpublished.
-      return resolved ? { status: "found", event: resolved } : { status: "absent" };
-    } catch {
-      const fallback = stored();
-      return fallback ? { status: "found", event: fallback } : { status: "unavailable", reason: "relay-lookup-failed" };
+    if (relayUrls.length === 0) {
+      const cached = stored();
+      return cached ? { status: "found", event: cached } : { status: "unavailable", reason: "no-relays-configured" };
     }
+    const answered = await refresh({ kinds: [kind], authors: [pubkey] }, lookup.hints ?? [], "replaceable lookup");
+    const resolved = stored();
+    if (resolved) return { status: "found", event: resolved };
+    // Successful EOSE without an event means genuinely unpublished. Failure remains unknown.
+    return answered ? { status: "absent" } : { status: "unavailable", reason: "relay-lookup-failed" };
   };
   const resolve = async (kind: number, pubkey: string, identifier?: string, hints: readonly string[] = []): Promise<NostrEvent | undefined> => {
     const cached = eventStore.getReplaceable(kind, pubkey, identifier);
-    if (cached || !pubkey || relayUrls.length === 0) return cached;
-    try {
-      const event = await firstValueFrom(eventLoader({ kind, pubkey, ...(identifier ? { identifier } : {}), relays: [...hints] }).pipe(
-        timeout({ first: LOAD_TIMEOUT_MS }), defaultIfEmpty(undefined)
-      ));
-      return event ?? eventStore.getReplaceable(kind, pubkey, identifier);
-    } catch {
-      return eventStore.getReplaceable(kind, pubkey, identifier);
-    }
+    if (!pubkey || relayUrls.length === 0) return cached;
+    await refresh({
+      kinds: [kind],
+      authors: [pubkey],
+      ...(identifier ? { "#d": [identifier] } : {})
+    }, hints, `kind ${kind} lookup`);
+    return eventStore.getReplaceable(kind, pubkey, identifier);
   };
   const query = async (filter: Parameters<typeof eventStore.getByFilters>[0]): Promise<NostrEvent[]> => {
-    const cached = eventStore.getByFilters(filter);
-    if (cached.length > 0 || relayUrls.length === 0) return cached;
-    // The request completes on EOSE and writes through the store's verifier on the way.
-    await lastValueFrom(relayPool.request(relayPolicy.select(relayUrls, "read"), filter, {
-      eventStore, timeout: LOAD_TIMEOUT_MS
-    }).pipe(catchError(() => EMPTY), defaultIfEmpty(undefined)));
+    if (relayUrls.length > 0) await refresh(filter, [], "query");
     return eventStore.getByFilters(filter);
   };
 
@@ -122,6 +133,7 @@ export function createIdentityProviders(relayUrls: string[]): IdentityProviders 
     lookupReplaceable: (kind, pubkey, lookup) => lookupReplaceable(kind, pubkey, lookup ?? {}),
     getRelays: async (pubkey) => {
       if (!pubkey) return {};
+      await resolve(10_002, pubkey);
       const mailboxes = await user(pubkey).mailboxes$.$first(LOAD_TIMEOUT_MS, undefined);
       if (!mailboxes) return {};
       const inboxes = new Set(mailboxes.inboxes);
@@ -130,9 +142,14 @@ export function createIdentityProviders(relayUrls: string[]): IdentityProviders 
         read: inboxes.has(url), write: outboxes.has(url)
       }]));
     },
-    getProfile: async (pubkey) => pubkey ? toProfile(await user(pubkey).profile$.$first(LOAD_TIMEOUT_MS, undefined)) : null,
+    getProfile: async (pubkey) => {
+      if (!pubkey) return null;
+      await resolve(0, pubkey);
+      return toProfile(await user(pubkey).profile$.$first(LOAD_TIMEOUT_MS, undefined));
+    },
     getFollows: async (pubkey) => {
       if (!pubkey) return [];
+      await resolve(3, pubkey);
       const contacts = await user(pubkey).contacts$.$first(LOAD_TIMEOUT_MS, []);
       return [...new Set(contacts.map((contact) => contact.pubkey))];
     },
@@ -157,6 +174,7 @@ export function createIdentityProviders(relayUrls: string[]): IdentityProviders 
     },
     getMutes: async (pubkey) => {
       if (!pubkey) return [];
+      await resolve(10_000, pubkey);
       const mutes = await user(pubkey).mutes$.$first(LOAD_TIMEOUT_MS, undefined);
       return mutes ? [...mutes.pubkeys] : [];
     },
