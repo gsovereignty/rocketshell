@@ -1,4 +1,4 @@
-const COORDINATE = /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/;
+import type { ParentOption } from "./problem";
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
 
@@ -6,52 +6,75 @@ export const parentCoordinatesFromEditor = (scope: ParentNode = document): strin
   [...scope.querySelectorAll<HTMLElement>("[data-parent-coordinate]")]
     .map((node) => node.dataset.parentCoordinate ?? "");
 
-export function renderParentRows(coordinates: string[], canChange: boolean): string {
+const shortId = (coordinate: string) => {
+  const id = coordinate.split(":")[2] ?? "";
+  return `${id.slice(0, 8)}…${id.slice(-5)}`;
+};
+
+const optionByCoordinate = (options: ParentOption[]) => new Map(options.map((option) => [option.coordinate, option]));
+
+export function renderParentRows(coordinates: string[], canChange: boolean, options: ParentOption[] = []): string {
   if (!coordinates.length) return '<p class="parent-empty">No direct parents in this draft.</p>';
-  return coordinates.map((coordinate) => `<div class="parent-row" data-parent-coordinate="${coordinate}">
-    <code title="${coordinate}">${escapeHtml(coordinate)}</code>
-    ${canChange ? `<button type="button" class="remove-parent" aria-label="Remove parent ${coordinate}">Remove</button>` : ""}
-  </div>`).join("");
+  const labels = optionByCoordinate(options);
+  return coordinates.map((coordinate) => {
+    const title = labels.get(coordinate)?.title ?? "Unavailable problem";
+    return `<div class="parent-row" data-parent-coordinate="${coordinate}">
+    <span><strong>${escapeHtml(title)}</strong><code title="${coordinate}">${shortId(coordinate)}</code></span>
+    ${canChange ? `<button type="button" class="remove-parent" aria-label="Remove ${escapeHtml(title)} as parent">Remove</button>` : ""}
+  </div>`;
+  }).join("");
+}
+
+export function renderParentOptions(options: ParentOption[], selected: string[]): string {
+  const available = options.filter((option) => !selected.includes(option.coordinate));
+  return `<option value="">${available.length ? "Choose a problem…" : "No other valid problems available"}</option>${available
+    .map((option) => `<option value="${option.coordinate}">${escapeHtml(option.title)} · ${shortId(option.coordinate)}</option>`)
+    .join("")}`;
 }
 
 export function bindParentEditor(
   canChange: boolean,
+  options: ParentOption[],
   onStatus: (message: string, error?: boolean) => void,
   scope: ParentNode = document
 ): void {
   const list = scope.querySelector<HTMLElement>("#parent-list");
-  const input = scope.querySelector<HTMLInputElement>("#parent-coordinate");
+  const select = scope.querySelector<HTMLSelectElement>("#parent-choice");
   const add = scope.querySelector<HTMLButtonElement>("#add-parent");
-  if (!list || !input || !add || !canChange) return;
+  if (!list || !select || !add || !canChange) return;
   const repaint = (coordinates: string[]) => {
-    list.innerHTML = renderParentRows(coordinates, true);
+    list.innerHTML = renderParentRows(coordinates, true, options);
+    select.innerHTML = renderParentOptions(options, coordinates);
+    select.disabled = options.every((option) => coordinates.includes(option.coordinate));
+    add.disabled = select.disabled;
     list.querySelectorAll<HTMLButtonElement>(".remove-parent").forEach((button) => button.addEventListener("click", () => {
       const coordinate = button.closest<HTMLElement>("[data-parent-coordinate]")?.dataset.parentCoordinate;
       if (!coordinate) return;
       repaint(parentCoordinatesFromEditor(scope).filter((value) => value !== coordinate));
-      input.focus();
+      select.focus();
     }));
   };
   const addParent = () => {
-    const coordinate = input.value.trim();
-    if (!COORDINATE.test(coordinate)) {
-      onStatus("Parent must use exact 31971:<owner>:<problem-id> coordinate.", true);
-      input.focus();
+    const coordinate = select.value;
+    if (!coordinate) {
+      onStatus("Choose a problem to add as parent.", true);
+      select.focus();
       return;
     }
     const existing = parentCoordinatesFromEditor(scope);
     if (existing.includes(coordinate)) {
       onStatus("That direct parent is already listed.", true);
-      input.focus();
+      select.focus();
       return;
     }
     repaint([...existing, coordinate]);
-    input.value = "";
+    select.value = "";
     onStatus("Parent draft updated. Publish revision to apply it.");
-    input.focus();
+    select.focus();
   };
+  repaint(parentCoordinatesFromEditor(scope));
   add.addEventListener("click", addParent);
-  input.addEventListener("keydown", (event) => {
+  select.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     addParent();

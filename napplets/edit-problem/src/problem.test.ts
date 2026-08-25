@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { EDIT_CONVENTION, buildRevisionTemplate, hasProblemChildren, isEditPayload, resolveParentChange, selectEditableProblem } from "./problem";
+import { EDIT_CONVENTION, buildRevisionTemplate, hasProblemChildren, isEditPayload, resolveParentChange, selectableParentOptions, selectEditableProblem } from "./problem";
 
 const hex = (char: string) => char.repeat(64);
 const owner = hex("a");
@@ -160,6 +160,29 @@ describe("problem editor", () => {
       graphEvent(hex("7"), rootOwner, rootId),
       graphEvent(hex("8"), parentOwner, parentId, [rootCoordinate])
     ];
+
+    it("offers named parents while excluding self, descendants, and forks", () => {
+      const problem = editableChild();
+      const siblingOwner = hex("9");
+      const siblingId = hex("a");
+      const siblingCoordinate = `31971:${siblingOwner}:${siblingId}`;
+      const descendantOwner = hex("b");
+      const descendantId = hex("c");
+      const forkOwner = hex("d");
+      const forkId = hex("e");
+      const options = selectableParentOptions(problem, [
+        ...graph(),
+        graphEvent(hex("9"), siblingOwner, siblingId, [rootCoordinate]),
+        graphEvent(hex("a"), descendantOwner, descendantId, [`31971:${owner}:${problemId}`]),
+        graphEvent(hex("b"), forkOwner, forkId, [rootCoordinate]),
+        graphEvent(hex("c"), forkOwner, forkId, [rootCoordinate]),
+        result(problem.event)
+      ]);
+      expect(options).toContainEqual({ coordinate: siblingCoordinate, title: "Graph problem" });
+      expect(options.map((option) => option.coordinate)).not.toContain(`31971:${owner}:${problemId}`);
+      expect(options.map((option) => option.coordinate)).not.toContain(`31971:${descendantOwner}:${descendantId}`);
+      expect(options.map((option) => option.coordinate)).not.toContain(`31971:${forkOwner}:${forkId}`);
+    });
 
     it("resolves multiple parents and rebuilds direct parent tag groups", () => {
       const secondOwner = hex("9");

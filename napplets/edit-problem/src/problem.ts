@@ -33,6 +33,11 @@ export interface ResolvedParentChange {
   ancestorOwners: string[];
 }
 
+export interface ParentOption {
+  coordinate: string;
+  title: string;
+}
+
 const PROBLEM_COORDINATE = /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/;
 
 const tag = (event: NostrEvent, name: string, marker?: string) =>
@@ -68,6 +73,40 @@ const rootCoordinate = (event: NostrEvent): string => {
   if (!PROBLEM_COORDINATE.test(root)) throw new Error("Problem graph root is invalid.");
   return root;
 };
+
+export function selectableParentOptions(problem: EditableProblem, results: RelayEventResult[]): ParentOption[] {
+  const ownCoordinate = `31971:${problem.owner}:${problem.problemId}`;
+  const graphRoot = rootCoordinate(problem.event);
+  const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
+    PROBLEM_COORDINATE.test(tagValue(event, "a", "origin") ?? "") &&
+    tagValue(event, "A") === graphRoot);
+  const referenced = new Set(candidates.flatMap(({ event }) => event.tags
+    .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
+  const headsByCoordinate = new Map<string, RelayEventResult[]>();
+  for (const result of candidates.filter(({ event }) => !referenced.has(event.id))) {
+    const coordinate = tagValue(result.event, "a", "origin")!;
+    headsByCoordinate.set(coordinate, [...(headsByCoordinate.get(coordinate) ?? []), result]);
+  }
+  const uniqueHeads = new Map([...headsByCoordinate]
+    .filter(([, heads]) => heads.length === 1)
+    .map(([coordinate, heads]) => [coordinate, heads[0].event]));
+
+  const descendants = new Set([ownCoordinate]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [coordinate, event] of uniqueHeads) {
+      if (descendants.has(coordinate) || !directParentCoordinates(event).some((parent) => descendants.has(parent))) continue;
+      descendants.add(coordinate);
+      changed = true;
+    }
+  }
+
+  return [...uniqueHeads]
+    .filter(([coordinate]) => !descendants.has(coordinate))
+    .map(([coordinate, event]) => ({ coordinate, title: tagValue(event, "title")?.trim() || "Untitled problem" }))
+    .sort((left, right) => left.title.localeCompare(right.title) || left.coordinate.localeCompare(right.coordinate));
+}
 
 export function resolveAncestorOwners(event: NostrEvent, results: RelayEventResult[]): string[] {
   const owners = new Set<string>();

@@ -46,14 +46,17 @@ code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:.78rem; }
 .parent-heading > span { flex:none; border-radius:99px; padding:5px 9px; background:var(--surface); color:var(--muted); font-size:.72rem; font-weight:700; }
 .parent-list { display:grid; gap:8px; }
 .parent-row { display:flex; align-items:center; gap:12px; min-width:0; border:1px solid var(--line); border-radius:10px; background:var(--surface); padding:10px 11px 10px 13px; }
-.parent-row code { min-width:0; flex:1; color:var(--fg); overflow-wrap:anywhere; }
+.parent-row > span { min-width:0; flex:1; display:grid; gap:3px; }
+.parent-row strong { overflow:hidden; color:var(--fg); font-size:.9rem; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; }
+.parent-row code { color:var(--muted); }
 .parent-row button,.parent-add button { min-height:38px; border:1px solid var(--line); border-radius:9px; background:var(--bg); padding:0 13px; font-size:.78rem; font-weight:720; cursor:pointer; }
 .parent-row button:hover:not(:disabled) { border-color:var(--error); color:var(--error); }
 .parent-add { display:grid; gap:8px; margin-top:16px; }
 .parent-add > label { font-size:.76rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
 .parent-add > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
-.parent-add input { min-width:0; border:1px solid color-mix(in srgb,var(--fg) 24%,transparent); border-radius:10px; background:var(--surface); color:var(--fg); padding:12px 14px; font:500 .82rem/1.3 ui-monospace,SFMono-Regular,monospace; caret-color:var(--accent); }
-.parent-add input:focus { border-color:var(--accent); }
+.parent-add select { min-width:0; width:100%; border:1px solid color-mix(in srgb,var(--fg) 24%,transparent); border-radius:10px; background:var(--surface); color:var(--fg); padding:12px 40px 12px 14px; font-size:.9rem; }
+.parent-add select:hover:not(:disabled) { border-color:color-mix(in srgb,var(--fg) 42%,transparent); }
+.parent-add select:focus { border-color:var(--accent); }
 .parent-add button { min-height:44px; border-color:var(--accent); color:var(--accent); }
 .parent-add button:hover:not(:disabled) { color:#fff; background:var(--accent); }
 .parent-add .hint { margin:0; }

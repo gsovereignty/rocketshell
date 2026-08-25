@@ -3,11 +3,11 @@ import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type Pr
 import "@platform/napplet-markdown-editor/styles.css";
 import gsap from "gsap";
 import "./styles.css";
-import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, resolveParentChange, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
+import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, resolveParentChange, selectableParentOptions, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
 import { attachmentMarkdown } from "./attachment";
 import { applyEditorAccessState } from "./editor-access";
-import { bindParentEditor, parentCoordinatesFromEditor, renderParentRows } from "./parent-editor";
+import { bindParentEditor, parentCoordinatesFromEditor, renderParentOptions, renderParentRows } from "./parent-editor";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("App root is missing.");
@@ -104,6 +104,7 @@ function renderEditor(problem: EditableProblem): void {
   const graphRoot = problem.event.tags.find((item) => item[0] === "A")?.[1] ?? "";
   const isRoot = ownCoordinate === graphRoot;
   const canChangeParents = problem.isOwner && !busy;
+  const parentOptions = selectableParentOptions(problem, problemEvents);
   app.innerHTML = `<article class="editor-shell">
     <header class="masthead">
       <div><strong>Edit problem</strong><code title="${problem.problemId}">${shortKey(problem.problemId)}</code></div>
@@ -124,8 +125,8 @@ function renderEditor(problem: EditableProblem): void {
         </div>
         <section class="parent-editor" aria-labelledby="parents-title">
           <div class="parent-heading"><div><h2 id="parents-title">Direct parents</h2><p>${problem.isOwner ? "Changes apply with this complete revision." : "Only problem owner can change ancestry."}</p></div><span>${problem.parentCoordinates.length} current</span></div>
-          <div id="parent-list" class="parent-list">${renderParentRows(problem.parentCoordinates, canChangeParents)}</div>
-          ${problem.isOwner && !isRoot ? `<div class="parent-add"><label for="parent-coordinate">Parent coordinate</label><div><input id="parent-coordinate" inputmode="text" autocomplete="off" spellcheck="false" placeholder="31971:owner:problem-id" ${busy ? "disabled" : ""}><button id="add-parent" type="button" ${busy ? "disabled" : ""}>Add parent</button></div><p class="hint">Exact lowercase owner and problem IDs required.</p></div>` : ""}
+          <div id="parent-list" class="parent-list">${renderParentRows(problem.parentCoordinates, canChangeParents, parentOptions)}</div>
+          ${problem.isOwner && !isRoot ? `<div class="parent-add"><label for="parent-choice">Add another parent</label><div><select id="parent-choice" ${busy ? "disabled" : ""}>${renderParentOptions(parentOptions, problem.parentCoordinates)}</select><button id="add-parent" type="button" ${busy ? "disabled" : ""}>Add parent</button></div><p class="hint">Only valid problems from this DAG are shown.</p></div>` : ""}
         </section>
         <footer><p id="status-message" class="status" role="status" aria-live="polite">${problem.mayEdit ? "Ready to publish." : "Connected identity is not the owner, a current maintainer, or an ancestor owner."}</p><button id="publish" type="button" ${disabled ? "disabled" : ""}>${busy ? "Publishing…" : "Publish revision"}</button></footer>
       </section>
@@ -134,7 +135,7 @@ function renderEditor(problem: EditableProblem): void {
   document.querySelector("#publish")?.addEventListener("click", () => void publishRevision());
   const attachmentInput = document.querySelector<HTMLInputElement>("#attachment");
   attachmentInput?.addEventListener("change", () => void uploadAttachment(attachmentInput));
-  bindParentEditor(problem.isOwner, status);
+  bindParentEditor(problem.isOwner, parentOptions, status);
   try {
     markdownEditor = createProblemMarkdownEditor({
       parent: document.querySelector<HTMLElement>("#description-editor")!,
@@ -277,7 +278,7 @@ async function publishRevision(): Promise<void> {
     busy = true;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = true; publishButton.textContent = "Publishing…"; }
-    document.querySelectorAll<HTMLInputElement | HTMLButtonElement>("#parent-coordinate, #add-parent, .remove-parent")
+    document.querySelectorAll<HTMLSelectElement | HTMLButtonElement>("#parent-choice, #add-parent, .remove-parent")
       .forEach((control) => { control.disabled = true; });
     status("Validating problem ancestry…");
     const parentChange = publishingProblem.isOwner
@@ -313,7 +314,7 @@ async function publishRevision(): Promise<void> {
     busy = false;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = false; publishButton.textContent = "Publish revision"; }
-    document.querySelectorAll<HTMLInputElement | HTMLButtonElement>("#parent-coordinate, #add-parent, .remove-parent")
+    document.querySelectorAll<HTMLSelectElement | HTMLButtonElement>("#parent-choice, #add-parent, .remove-parent")
       .forEach((control) => { control.disabled = !publishingProblem.isOwner; });
     status(error instanceof Error ? error.message : "Revision could not be published.", true);
   } finally {
@@ -358,7 +359,7 @@ async function start(): Promise<void> {
         current.isOwner = next === current.owner;
         current.mayEdit = canEditProblem(current, next);
         status(applyEditorAccessState(current.mayEdit, busy, markdownEditor), !current.mayEdit);
-        document.querySelectorAll<HTMLInputElement | HTMLButtonElement>("#parent-coordinate, #add-parent, .remove-parent")
+        document.querySelectorAll<HTMLSelectElement | HTMLButtonElement>("#parent-choice, #add-parent, .remove-parent")
           .forEach((control) => { control.disabled = !current?.isOwner || busy; });
       }
     });

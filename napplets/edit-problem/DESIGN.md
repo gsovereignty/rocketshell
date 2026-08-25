@@ -12,8 +12,8 @@ Purpose: receive one problem by archetype intent and publish its next revision.
   before rebuilding unmarked lowercase `a/e/k/p` groups.
 - Layout: full-width, single-column editing workspace at every size; controls
   stack when narrow and remain functional down to 320 CSS pixels. Direct parents
-  remain visible as an inline list with exact-coordinate add/remove controls; no
-  modal.
+  remain visible as a named inline list. A dropdown offers valid named problems
+  from the loaded DAG while keeping exact coordinates internal; no modal.
 - Sandbox: scripted buttons only; Ctrl/Cmd+Enter is explicitly handled; no form
   submission or ambient browser authority.
 - Relay escape hatch: none.
