@@ -257,6 +257,112 @@ test("restores intent-created problem window with its tree caller", async ({ pag
   });
 });
 
+test("keeps problem-tree geometry stable while reusing the visible viewer", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __intentRequests: unknown[] }).__intentRequests = [];
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "intent.invoke") {
+        (window as unknown as { __intentRequests: unknown[] }).__intentRequests.push(event.data.request);
+      }
+    }, { capture: true });
+  });
+  await page.goto("./");
+  await expect(page.getByRole("button", { name: "Open Navigate Problem Tree" })).toBeVisible();
+  await page.getByRole("button", { name: "Open Navigate Problem Tree" }).click();
+  const tree = page.frameLocator('iframe[title="navigate-problem-tree"]');
+  await expect(tree.getByRole("button", { name: /Bitcoin is not fixing/ })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.map((window: { dTag: string }) => window.dTag);
+  })).toEqual(["navigate-problem-tree"]);
+  await tree.getByRole("button", { name: /Nostrocket is not currently applicable/ }).click();
+  await expect(page.locator('iframe[title="view-problem"]')).toHaveCount(1);
+  await expect(page.locator('iframe[title="navigate-problem-tree"]').locator("..")).toBeVisible();
+  await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.map((window: { dTag: string }) => window.dTag);
+  })).toEqual(["navigate-problem-tree", "view-problem"]);
+  const readGridPlacements = () => page.locator('iframe[title="navigate-problem-tree"], iframe[title="view-problem"]').evaluateAll((iframes) =>
+    Object.fromEntries(iframes.map((iframe) => {
+      const style = getComputedStyle(iframe.parentElement!);
+      return [iframe.getAttribute("title"), { gridColumn: style.gridColumn, gridRow: style.gridRow }];
+    }))
+  );
+  const placementBeforeRefresh = await readGridPlacements();
+  await page.reload();
+  await expect(page.locator('iframe[title="navigate-problem-tree"]').locator("..")).toBeVisible();
+  await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+  await expect(tree.getByRole("button", { name: /Nostrocket napplets are missing/ })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.map((window: { dTag: string }) => window.dTag);
+  })).toEqual(["navigate-problem-tree", "view-problem"]);
+  expect(await readGridPlacements()).toEqual(placementBeforeRefresh);
+  await tree.locator(".tree-pane").evaluate((pane) => { pane.scrollTop = 100; });
+  await page.waitForTimeout(500);
+
+  const shellSamplesPromise = page.locator('iframe[title="navigate-problem-tree"]').evaluate((iframe) => new Promise<unknown[]>((resolve) => {
+    const samples: unknown[] = [];
+    const start = performance.now();
+    const sample = () => {
+      const rect = iframe.getBoundingClientRect();
+      const host = iframe.parentElement;
+      const styles = host ? getComputedStyle(host) : undefined;
+      samples.push({ time: performance.now() - start, rect: [rect.x, rect.y, rect.width, rect.height], gridColumn: styles?.gridColumn, gridRow: styles?.gridRow, hidden: host?.hidden });
+      if (performance.now() - start < 800) requestAnimationFrame(sample);
+      else resolve(samples);
+    };
+    requestAnimationFrame(sample);
+  }));
+  const frameSamplesPromise = tree.locator("html").evaluate(() => new Promise<unknown[]>((resolve) => {
+    const samples: unknown[] = [];
+    const start = performance.now();
+    const sample = () => {
+      const pane = document.querySelector<HTMLElement>(".tree-pane")!;
+      const paneStyle = getComputedStyle(pane);
+      samples.push({
+        time: performance.now() - start,
+        viewport: [innerWidth, innerHeight, document.documentElement.clientWidth, document.documentElement.clientHeight],
+        document: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+        pane: [pane.clientWidth, pane.clientHeight, pane.scrollWidth, pane.scrollHeight, pane.scrollTop],
+        scrollbar: [pane.scrollHeight > pane.clientHeight, pane.scrollWidth > pane.clientWidth],
+        fontStatus: document.fonts.status,
+        paneStyle: [paneStyle.padding, paneStyle.font, paneStyle.fontWeight, paneStyle.lineHeight, paneStyle.transform],
+        gridColumns: getComputedStyle(document.querySelector<HTMLElement>(".workspace")!).gridTemplateColumns,
+        nodes: Array.from(document.querySelectorAll<HTMLElement>(".tree-node")).map((node) => {
+          const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+          return [node.textContent?.trim(), rect.x, rect.y, rect.width, rect.height, style.padding, style.font, style.fontWeight, style.lineHeight, style.transform];
+        }),
+        connectors: Array.from(document.querySelectorAll<HTMLElement>(".incoming-connector, .connector-line, .connector-arrow, .branch > ul")).map((node) => {
+          const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+          return [node.className, rect.x, rect.y, rect.width, rect.height, style.transform];
+        })
+      });
+      if (performance.now() - start < 800) requestAnimationFrame(sample);
+      else resolve(samples);
+    };
+    requestAnimationFrame(sample);
+  }));
+  await tree.getByRole("button", { name: /Can't submit patches on problems/ }).click();
+  const [shellSamples, frameSamples] = await Promise.all([shellSamplesPromise, frameSamplesPromise]);
+  const unique = (values: unknown[]) => Array.from(new Set(values.map((value) => JSON.stringify(value)))).map((value) => JSON.parse(value));
+  const typedFrame = frameSamples as Array<Record<string, unknown>>;
+  expect(unique((shellSamples as Array<Record<string, unknown>>).map(({ rect, gridColumn, gridRow, hidden }) => ({ rect, gridColumn, gridRow, hidden })))).toHaveLength(1);
+  expect(unique(typedFrame.map((sample) => sample.viewport))).toHaveLength(1);
+  expect(unique(typedFrame.map((sample) => sample.pane))).toHaveLength(1);
+  expect(unique(typedFrame.map((sample) => sample.scrollbar))).toHaveLength(1);
+  expect(unique(typedFrame.map((sample) => sample.fontStatus))).toEqual(["loaded"]);
+  expect(unique(typedFrame.map((sample) => sample.paneStyle))).toHaveLength(1);
+  expect(unique(typedFrame.map((sample) => sample.gridColumns))).toHaveLength(1);
+  expect(unique(typedFrame.map((sample) => sample.nodes))).toHaveLength(1);
+  await expect(tree.locator('.tree-node[aria-current="true"]')).toContainText("Can't submit patches on problems");
+  expect(await page.evaluate(() => (window as unknown as { __intentRequests: Array<{ behavior?: unknown }> }).__intentRequests.at(-1)?.behavior))
+    .toEqual({ focus: false, reuse: true });
+  await expect(page.locator('iframe[title="navigate-problem-tree"]').locator("..")).toBeVisible();
+  await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+});
+
 test("never exposes an empty white Napplet frame during startup", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");

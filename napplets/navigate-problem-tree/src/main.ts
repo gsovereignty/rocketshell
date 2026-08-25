@@ -272,6 +272,19 @@ function renderApp(animateListRows = true, animateConnectorPath = false) {
   showTreeConnectorPath(selected, animateConnectorPath);
 }
 
+function updateTreeSelection(animateConnectorPath: boolean) {
+  if (!dag) return;
+  const selectedPath = ancestorCoordinates(dag, selected);
+  app.querySelectorAll<HTMLButtonElement>(".tree-node[data-select]").forEach((button) => {
+    const coordinate = button.dataset.select ?? "";
+    const isSelected = coordinate === selected;
+    button.classList.toggle("selected", isSelected);
+    button.classList.toggle("selected-path", selectedPath.has(coordinate));
+    button.setAttribute("aria-current", String(isSelected));
+  });
+  showTreeConnectorPath(selected, animateConnectorPath);
+}
+
 function bindWorkspace() {
   app.onpointerover = (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("[data-select]");
@@ -305,7 +318,8 @@ function bindWorkspace() {
         listScope = selected;
         activeFilter = "all";
       }
-      renderApp(selectedFromTree, selectedFromTree);
+      updateTreeSelection(selectedFromTree);
+      renderList(selectedFromTree);
       void openProblem(selected);
     } else if (filterButton?.dataset.filter) {
       activeFilter = filterButton.dataset.filter;
