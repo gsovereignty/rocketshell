@@ -15,10 +15,25 @@ export interface EditableProblem {
   description: string;
   status: ProblemStatus;
   childStatus?: "rfm" | "open";
+  parentCoordinates: string[];
   ancestorOwners: string[];
   mayEdit: boolean;
   isOwner: boolean;
 }
+
+export interface ResolvedParent {
+  coordinate: string;
+  owner: string;
+  genesisId: string;
+  relay: string;
+}
+
+export interface ResolvedParentChange {
+  parents: ResolvedParent[];
+  ancestorOwners: string[];
+}
+
+const PROBLEM_COORDINATE = /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/;
 
 const tag = (event: NostrEvent, name: string, marker?: string) =>
   event.tags.find((item) => item[0] === name && (marker === undefined || item[3] === marker));
@@ -44,6 +59,16 @@ const currentHead = (coordinate: string, results: RelayEventResult[]): RelayEven
   return heads[0];
 };
 
+const directParentCoordinates = (event: NostrEvent): string[] => event.tags
+  .filter((item) => item[0] === "a" && item[3] === undefined && PROBLEM_COORDINATE.test(item[1] ?? ""))
+  .map((item) => item[1]);
+
+const rootCoordinate = (event: NostrEvent): string => {
+  const root = tagValue(event, "A") ?? "";
+  if (!PROBLEM_COORDINATE.test(root)) throw new Error("Problem graph root is invalid.");
+  return root;
+};
+
 export function resolveAncestorOwners(event: NostrEvent, results: RelayEventResult[]): string[] {
   const owners = new Set<string>();
   const visited = new Set<string>();
@@ -56,16 +81,66 @@ export function resolveAncestorOwners(event: NostrEvent, results: RelayEventResu
     if (!HEX_64.test(owner)) throw new Error("Ancestor problem owner is invalid.");
     const head = currentHead(coordinate, results).event;
     owners.add(owner);
-    for (const parent of head.tags
-      .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
-      .map((item) => item[1])) visit(parent);
+    for (const parent of directParentCoordinates(head)) visit(parent);
     visiting.delete(coordinate);
     visited.add(coordinate);
   };
-  for (const parent of event.tags
-    .filter((item) => item[0] === "a" && item[3] === undefined && /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(item[1] ?? ""))
-    .map((item) => item[1])) visit(parent);
+  for (const parent of directParentCoordinates(event)) visit(parent);
   return [...owners].sort();
+}
+
+export function resolveParentChange(
+  problem: EditableProblem,
+  proposedCoordinates: string[],
+  results: RelayEventResult[]
+): ResolvedParentChange {
+  if (!problem.isOwner) throw new Error("Only problem owner can change direct parents.");
+  const ownCoordinate = `31971:${problem.owner}:${problem.problemId}`;
+  const graphRoot = rootCoordinate(problem.event);
+  const isRoot = ownCoordinate === graphRoot;
+  if (isRoot && proposedCoordinates.length) throw new Error("Graph root cannot have direct parents.");
+  if (!isRoot && !proposedCoordinates.length) throw new Error("Non-root problem must have at least one direct parent.");
+
+  const seen = new Set<string>();
+  for (const coordinate of proposedCoordinates) {
+    if (!PROBLEM_COORDINATE.test(coordinate)) throw new Error(`Parent coordinate is invalid: ${coordinate || "empty value"}.`);
+    if (coordinate === ownCoordinate) throw new Error("Problem cannot be its own parent.");
+    if (seen.has(coordinate)) throw new Error(`Direct parent is duplicated: ${coordinate}.`);
+    seen.add(coordinate);
+  }
+
+  const parents: ResolvedParent[] = [];
+  const ancestorOwners = new Set<string>();
+  const visited = new Set<string>();
+  const visiting = new Set<string>([ownCoordinate]);
+  const visit = (coordinate: string): RelayEventResult => {
+    if (visiting.has(coordinate)) throw new Error("Proposed direct parents create a cycle.");
+    const selected = currentHead(coordinate, results);
+    if (rootCoordinate(selected.event) !== graphRoot) throw new Error(`Parent ${coordinate} belongs to a different problem graph.`);
+    if (visited.has(coordinate)) return selected;
+    visiting.add(coordinate);
+    const owner = coordinate.split(":")[1] ?? "";
+    if (!HEX_64.test(owner)) throw new Error(`Parent ${coordinate} has invalid owner.`);
+    ancestorOwners.add(owner);
+    for (const parent of directParentCoordinates(selected.event)) visit(parent);
+    visiting.delete(coordinate);
+    visited.add(coordinate);
+    return selected;
+  };
+
+  for (const coordinate of proposedCoordinates) {
+    const selected = visit(coordinate);
+    const owner = coordinate.split(":")[1]!;
+    const genesisId = tagValue(selected.event, "e", "genesis") ?? selected.event.id;
+    if (!HEX_64.test(genesisId)) throw new Error(`Parent ${coordinate} has invalid genesis revision.`);
+    parents.push({
+      coordinate,
+      owner,
+      genesisId,
+      relay: selected.sidecar?.relayHints?.[0] ?? tag(selected.event, "a", "origin")?.[2] ?? ""
+    });
+  }
+  return { parents, ancestorOwners: [...ancestorOwners].sort() };
 }
 
 export function problemGraphRoot(problemId: string, results: RelayEventResult[]): string {
@@ -76,7 +151,7 @@ export function problemGraphRoot(problemId: string, results: RelayEventResult[])
   const heads = candidates.filter(({ event }) => !referenced.has(event.id));
   if (heads.length !== 1) throw new Error("Problem has multiple current heads. Merge revisions before editing.");
   const root = tagValue(heads[0].event, "A");
-  if (!/^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(root ?? "")) throw new Error("Problem graph root is invalid.");
+  if (!PROBLEM_COORDINATE.test(root ?? "")) throw new Error("Problem graph root is invalid.");
   return root!;
 }
 
@@ -92,7 +167,7 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
   if (!HEX_64.test(problemId)) throw new Error("Problem ID is invalid.");
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND &&
     event.id && HEX_64.test(event.id) && tagValue(event, "d") === problemId &&
-    /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(tagValue(event, "a", "origin") ?? ""));
+    PROBLEM_COORDINATE.test(tagValue(event, "a", "origin") ?? ""));
   if (!candidates.length) throw new Error("Problem was not found.");
   const referenced = new Set(candidates.flatMap(({ event }) => event.tags
     .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
@@ -113,6 +188,7 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
     description: selected.event.content,
     status: status as ProblemStatus,
     childStatus: childStatus === "rfm" || childStatus === "open" ? childStatus : undefined,
+    parentCoordinates: directParentCoordinates(selected.event),
     ancestorOwners: resolveAncestorOwners(selected.event, results),
     mayEdit: false,
     isOwner: pubkey === owner
@@ -123,7 +199,7 @@ export function selectEditableProblem(problemId: string, results: RelayEventResu
 
 export function hasProblemChildren(coordinate: string, results: RelayEventResult[]): boolean {
   const candidates = results.filter(({ event }) => event.kind === PROBLEM_KIND && HEX_64.test(event.id) &&
-    /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/.test(tagValue(event, "a", "origin") ?? ""));
+    PROBLEM_COORDINATE.test(tagValue(event, "a", "origin") ?? ""));
   const referenced = new Set(candidates.flatMap(({ event }) => event.tags
     .filter((item) => item[0] === "e" && item[3] === "previous").map((item) => item[1])));
   return candidates.some(({ event }) => !referenced.has(event.id) &&
@@ -134,7 +210,8 @@ export function buildRevisionTemplate(
   problem: EditableProblem,
   update: { title: string; description: string; status: ProblemStatus; childStatus?: "rfm" | "open" },
   createdAt: number,
-  hasChildren = false
+  hasChildren = false,
+  parentChange?: ResolvedParentChange
 ): EventTemplate {
   const title = update.title.trim();
   const description = update.description.trim();
@@ -144,9 +221,23 @@ export function buildRevisionTemplate(
 
   const lineageNames = new Set(["title", "status", "child_status"]);
   const tags = problem.event.tags.filter((item) =>
-    !lineageNames.has(item[0]) && !(item[0] === "e" && (item[3] === "genesis" || item[3] === "previous")));
+    !lineageNames.has(item[0]) &&
+    !(item[0] === "e" && (item[3] === "genesis" || item[3] === "previous")) &&
+    !(parentChange && (
+      ((item[0] === "a" || item[0] === "p") && item[3] === undefined) ||
+      (item[0] === "e" && item[3] !== "genesis" && item[3] !== "previous") ||
+      item[0] === "k"
+    )));
+  if (parentChange) {
+    for (const parent of parentChange.parents) {
+      tags.push(["a", parent.coordinate, parent.relay], ["e", parent.genesisId, parent.relay, parent.owner]);
+    }
+    if (parentChange.parents.length) tags.push(["k", "31971"]);
+    const parentOwners = new Map(parentChange.parents.map((parent) => [parent.owner, parent.relay]));
+    for (const [owner, relay] of parentOwners) tags.push(["p", owner, relay]);
+  }
   if (problem.isOwner) {
-    const requiredMaintainers = new Set([problem.owner, ...problem.ancestorOwners]);
+    const requiredMaintainers = new Set([problem.owner, ...(parentChange?.ancestorOwners ?? problem.ancestorOwners)]);
     const listedMaintainers = new Set(tags
       .filter((item) => item[0] === "p" && item[3] === "maintainer")
       .map((item) => item[1]));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NostrEvent, RelayEventResult } from "@napplet/sdk";
-import { EDIT_CONVENTION, buildRevisionTemplate, hasProblemChildren, isEditPayload, selectEditableProblem } from "./problem";
+import { EDIT_CONVENTION, buildRevisionTemplate, hasProblemChildren, isEditPayload, resolveParentChange, selectEditableProblem } from "./problem";
 
 const hex = (char: string) => char.repeat(64);
 const owner = hex("a");
@@ -127,5 +127,91 @@ describe("problem editor", () => {
     const genesis = child(hex("1"));
     expect(hasProblemChildren(`31971:${owner}:${problemId}`, [genesis])).toBe(true);
     expect(hasProblemChildren(`31971:${owner}:${problemId}`, [genesis, child(hex("2"), hex("1"), `31971:${owner}:${hex("0")}`)])).toBe(false);
+  });
+
+  describe("direct parent changes", () => {
+    const rootOwner = hex("1");
+    const rootId = hex("2");
+    const parentOwner = hex("3");
+    const parentId = hex("4");
+    const rootCoordinate = `31971:${rootOwner}:${rootId}`;
+    const parentCoordinate = `31971:${parentOwner}:${parentId}`;
+    const graphEvent = (id: string, eventOwner: string, eventProblemId: string, parents: string[] = [], previous?: string) => result({
+      ...event(id, eventOwner),
+      tags: [
+        ["d", eventProblemId], ["title", "Graph problem"], ["status", "open"],
+        ["a", `31971:${eventOwner}:${eventProblemId}`, "wss://graph.example", "origin"],
+        ["A", rootCoordinate, "wss://root.example"], ["K", "31971"], ["P", rootOwner, "wss://root.example"],
+        ...parents.flatMap((coordinate) => [["a", coordinate, "wss://parent.example"], ["k", "31971"]]),
+        ...(previous ? [["e", previous, "", "previous", eventOwner]] : [])
+      ]
+    });
+    const editableChild = (parents = [parentCoordinate]) => selectEditableProblem(problemId, [
+      result({ ...event(hex("5")), tags: [
+        ["d", problemId], ["title", "Child"], ["status", "open"],
+        ["a", `31971:${owner}:${problemId}`, "wss://child.example", "origin"],
+        ["A", rootCoordinate, "wss://root.example"], ["E", hex("6"), "wss://root.example", rootOwner], ["K", "31971"], ["P", rootOwner, "wss://root.example"],
+        ...parents.map((coordinate) => ["a", coordinate, "wss://parent.example"])
+      ] }),
+      graphEvent(hex("7"), rootOwner, rootId),
+      graphEvent(hex("8"), parentOwner, parentId, [rootCoordinate])
+    ], owner);
+    const graph = () => [
+      graphEvent(hex("7"), rootOwner, rootId),
+      graphEvent(hex("8"), parentOwner, parentId, [rootCoordinate])
+    ];
+
+    it("resolves multiple parents and rebuilds direct parent tag groups", () => {
+      const secondOwner = hex("9");
+      const secondId = hex("a");
+      const secondCoordinate = `31971:${secondOwner}:${secondId}`;
+      const problem = editableChild();
+      const change = resolveParentChange(problem, [parentCoordinate, secondCoordinate], [
+        ...graph(), graphEvent(hex("b"), secondOwner, secondId, [rootCoordinate])
+      ]);
+      const template = buildRevisionTemplate(problem, { title: "Moved", description: "Body", status: "open" }, 20, false, change);
+      expect(change.ancestorOwners).toEqual([rootOwner, parentOwner, secondOwner].sort());
+      expect(template.tags.filter((tag) => tag[0] === "a" && tag[3] === undefined).map((tag) => tag[1])).toEqual([parentCoordinate, secondCoordinate]);
+      expect(template.tags.filter((tag) => tag[0] === "e" && tag[3] !== "genesis" && tag[3] !== "previous")).toHaveLength(2);
+      expect(template.tags.filter((tag) => tag[0] === "p" && tag[3] === undefined)).toHaveLength(2);
+      expect(template.tags.filter((tag) => tag[0] === "k")).toEqual([["k", "31971"]]);
+      expect(template.tags).toContainEqual(["p", secondOwner, "", "maintainer"]);
+    });
+
+    it("rejects invalid, duplicate, self, and missing parents", () => {
+      const problem = editableChild();
+      expect(() => resolveParentChange(problem, ["bad"], graph())).toThrow("coordinate is invalid");
+      expect(() => resolveParentChange(problem, [parentCoordinate, parentCoordinate], graph())).toThrow("duplicated");
+      expect(() => resolveParentChange(problem, [`31971:${owner}:${problemId}`], graph())).toThrow("own parent");
+      expect(() => resolveParentChange(problem, [`31971:${hex("c")}:${hex("d")}`], graph())).toThrow("was not found");
+      expect(() => resolveParentChange(problem, [], graph())).toThrow("at least one");
+    });
+
+    it("rejects another graph, cycles, and unresolved parent forks", () => {
+      const problem = editableChild();
+      const other = result({ ...event(hex("c"), hex("9")), tags: [
+        ["d", hex("a")], ["a", `31971:${hex("9")}:${hex("a")}`, "", "origin"],
+        ["A", `31971:${hex("9")}:${hex("a")}`]
+      ] });
+      expect(() => resolveParentChange(problem, [`31971:${hex("9")}:${hex("a")}`], [...graph(), other])).toThrow("different problem graph");
+      const cycleParent = graphEvent(hex("d"), hex("9"), hex("a"), [`31971:${owner}:${problemId}`]);
+      expect(() => resolveParentChange(problem, [`31971:${hex("9")}:${hex("a")}`], [...graph(), cycleParent])).toThrow("cycle");
+      const forkCoordinate = `31971:${hex("9")}:${hex("a")}`;
+      expect(() => resolveParentChange(problem, [forkCoordinate], [
+        ...graph(), graphEvent(hex("d"), hex("9"), hex("a")), graphEvent(hex("e"), hex("9"), hex("a"))
+      ])).toThrow("unresolved revision forks");
+    });
+
+    it("allows root to stay parentless but rejects adding a parent", () => {
+      const root = selectEditableProblem(rootId, graph(), rootOwner);
+      expect(resolveParentChange(root, [], graph()).parents).toEqual([]);
+      expect(() => resolveParentChange(root, [parentCoordinate], graph())).toThrow("Graph root");
+    });
+
+    it("rejects parent changes by non-owner editors", () => {
+      const problem = editableChild();
+      problem.isOwner = false;
+      expect(() => resolveParentChange(problem, [parentCoordinate], graph())).toThrow("Only problem owner");
+    });
   });
 });

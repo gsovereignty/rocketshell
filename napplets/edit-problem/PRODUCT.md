@@ -23,9 +23,15 @@ rendered typography and formatting tools. Markdown markers remain visible on
 every line. Unfinished Markdown survives a newer live head; publication still
 derives from newest confirmed revision.
 
-Editor preserves current snapshot metadata and graph structure. It replaces
-title, description, status, optional child default, and revision lineage. Owner,
+Editor preserves current snapshot metadata and graph identity. It replaces
+title, description, status, optional child default, and revision lineage. Problem
+owner may also replace direct-parent groups with one or more exact problem
+coordinates. Editor resolves every proposed parent head and ancestor through
+current OUTBOX-loaded graph data, rejecting missing or forked ancestry,
+cross-graph edges, duplicates, self-reference, cycles, and invalid root shape.
+Owner,
 listed maintainers, and resolved ancestor owners may publish. Owner revisions
-add every resolved ancestor owner to maintainers; other editors preserve list.
+add every newly resolved ancestor owner to maintainers; other editors preserve
+list and cannot change parents.
 Before an owner publishes, editor resolves current direct child heads and forces
 status to `children` when any exist. Maintainer-selected status remains unchanged.

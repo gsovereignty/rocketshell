@@ -3,10 +3,11 @@ import { createPlainMarkdownEditorFallback, createProblemMarkdownEditor, type Pr
 import "@platform/napplet-markdown-editor/styles.css";
 import gsap from "gsap";
 import "./styles.css";
-import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
+import { EDIT_CONVENTION, STATUSES, buildRevisionTemplate, canEditProblem, hasProblemChildren, isEditPayload, problemGraphRoot, resolveParentChange, selectEditableProblem, type EditableProblem, type ProblemStatus } from "./problem";
 import { revisionPublishMessage } from "./publish-result";
 import { attachmentMarkdown } from "./attachment";
 import { applyEditorAccessState } from "./editor-access";
+import { bindParentEditor, parentCoordinatesFromEditor, renderParentRows } from "./parent-editor";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("App root is missing.");
@@ -27,6 +28,7 @@ const uploadAvailable = Boolean((window as Window & { napplet?: { upload?: unkno
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
 const shortKey = (value: string) => `${value.slice(0, 8)}…${value.slice(-5)}`;
+const sameCoordinates = (left: string[], right: string[]) => left.length === right.length && left.every((value, index) => value === right[index]);
 
 function status(message: string, error = false): void {
   const node = document.querySelector<HTMLElement>("#status-message");
@@ -62,7 +64,8 @@ function editorIsDirty(problem: EditableProblem): boolean {
   const problemStatus = document.querySelector<HTMLSelectElement>("#problem-status");
   const childStatus = document.querySelector<HTMLSelectElement>("#child-status");
   return Boolean(title && (title.value !== problem.title || markdownEditor?.isDirtyComparedWith(problem.description) ||
-    problemStatus?.value !== problem.status || childStatus?.value !== (problem.childStatus ?? "")));
+    problemStatus?.value !== problem.status || childStatus?.value !== (problem.childStatus ?? "") ||
+    !sameCoordinates(parentCoordinatesFromEditor(), problem.parentCoordinates)));
 }
 
 function receiveProblemRevision(problemId: string, result: RelayEventResult): void {
@@ -97,6 +100,10 @@ function renderEditor(problem: EditableProblem): void {
   markdownEditor?.destroy();
   markdownEditor = undefined;
   const disabled = !problem.mayEdit || busy;
+  const ownCoordinate = `31971:${problem.owner}:${problem.problemId}`;
+  const graphRoot = problem.event.tags.find((item) => item[0] === "A")?.[1] ?? "";
+  const isRoot = ownCoordinate === graphRoot;
+  const canChangeParents = problem.isOwner && !busy;
   app.innerHTML = `<article class="editor-shell">
     <header class="masthead">
       <div><strong>Edit problem</strong><code title="${problem.problemId}">${shortKey(problem.problemId)}</code></div>
@@ -115,6 +122,11 @@ function renderEditor(problem: EditableProblem): void {
           <div class="field"><label for="problem-status">Status</label><select id="problem-status" ${disabled ? "disabled" : ""}>${STATUSES.map((value) => `<option value="${value}"${value === problem.status ? " selected" : ""}>${value}</option>`).join("")}</select></div>
           <div class="field"><label for="child-status">New child default</label><select id="child-status" ${disabled ? "disabled" : ""}><option value="">Not set</option><option value="open"${problem.childStatus === "open" ? " selected" : ""}>open</option><option value="rfm"${problem.childStatus === "rfm" ? " selected" : ""}>rfm</option></select></div>
         </div>
+        <section class="parent-editor" aria-labelledby="parents-title">
+          <div class="parent-heading"><div><h2 id="parents-title">Direct parents</h2><p>${problem.isOwner ? "Changes apply with this complete revision." : "Only problem owner can change ancestry."}</p></div><span>${problem.parentCoordinates.length} current</span></div>
+          <div id="parent-list" class="parent-list">${renderParentRows(problem.parentCoordinates, canChangeParents)}</div>
+          ${problem.isOwner && !isRoot ? `<div class="parent-add"><label for="parent-coordinate">Parent coordinate</label><div><input id="parent-coordinate" inputmode="text" autocomplete="off" spellcheck="false" placeholder="31971:owner:problem-id" ${busy ? "disabled" : ""}><button id="add-parent" type="button" ${busy ? "disabled" : ""}>Add parent</button></div><p class="hint">Exact lowercase owner and problem IDs required.</p></div>` : ""}
+        </section>
         <footer><p id="status-message" class="status" role="status" aria-live="polite">${problem.mayEdit ? "Ready to publish." : "Connected identity is not the owner, a current maintainer, or an ancestor owner."}</p><button id="publish" type="button" ${disabled ? "disabled" : ""}>${busy ? "Publishing…" : "Publish revision"}</button></footer>
       </section>
     </div>
@@ -122,6 +134,7 @@ function renderEditor(problem: EditableProblem): void {
   document.querySelector("#publish")?.addEventListener("click", () => void publishRevision());
   const attachmentInput = document.querySelector<HTMLInputElement>("#attachment");
   attachmentInput?.addEventListener("change", () => void uploadAttachment(attachmentInput));
+  bindParentEditor(problem.isOwner, status);
   try {
     markdownEditor = createProblemMarkdownEditor({
       parent: document.querySelector<HTMLElement>("#description-editor")!,
@@ -258,11 +271,18 @@ async function publishRevision(): Promise<void> {
   const description = markdownEditor?.getValue() ?? "";
   const selectedStatus = document.querySelector<HTMLSelectElement>("#problem-status")?.value as ProblemStatus;
   const childValue = document.querySelector<HTMLSelectElement>("#child-status")?.value;
+  const proposedParents = parentCoordinatesFromEditor();
   let relayOutcomes: Readonly<Record<string, boolean>> | undefined;
   try {
     busy = true;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = true; publishButton.textContent = "Publishing…"; }
+    document.querySelectorAll<HTMLInputElement | HTMLButtonElement>("#parent-coordinate, #add-parent, .remove-parent")
+      .forEach((control) => { control.disabled = true; });
+    status("Validating problem ancestry…");
+    const parentChange = publishingProblem.isOwner
+      ? resolveParentChange(publishingProblem, proposedParents, problemEvents)
+      : undefined;
     status("Checking child problems…");
     const coordinate = `31971:${publishingProblem.owner}:${publishingProblem.problemId}`;
     const childResponse = await outbox.query({ kinds: [31971], "#a": [coordinate], limit: 300 }, { limit: 300, timeoutMs: 8000 });
@@ -274,7 +294,7 @@ async function publishRevision(): Promise<void> {
       : [];
     const hasChildren = hasProblemChildren(coordinate, [...childResponse.events, ...childRevisions]);
     status("Publishing complete revision…");
-    const template = buildRevisionTemplate(publishingProblem, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000), hasChildren);
+    const template = buildRevisionTemplate(publishingProblem, { title, description, status: selectedStatus, childStatus: childValue === "open" || childValue === "rfm" ? childValue : undefined }, Math.floor(Date.now() / 1000), hasChildren, parentChange);
     const result = await outbox.publish(template, publishingProblem.relay ? { relays: [publishingProblem.relay] } : undefined);
     relayOutcomes = result.relays;
     const publishedMessage = revisionPublishMessage(result);
@@ -293,6 +313,8 @@ async function publishRevision(): Promise<void> {
     busy = false;
     const publishButton = document.querySelector<HTMLButtonElement>("#publish");
     if (publishButton) { publishButton.disabled = false; publishButton.textContent = "Publish revision"; }
+    document.querySelectorAll<HTMLInputElement | HTMLButtonElement>("#parent-coordinate, #add-parent, .remove-parent")
+      .forEach((control) => { control.disabled = !publishingProblem.isOwner; });
     status(error instanceof Error ? error.message : "Revision could not be published.", true);
   } finally {
     busy = false;
@@ -336,6 +358,8 @@ async function start(): Promise<void> {
         current.isOwner = next === current.owner;
         current.mayEdit = canEditProblem(current, next);
         status(applyEditorAccessState(current.mayEdit, busy, markdownEditor), !current.mayEdit);
+        document.querySelectorAll<HTMLInputElement | HTMLButtonElement>("#parent-coordinate, #add-parent, .remove-parent")
+          .forEach((control) => { control.disabled = !current?.isOwner || busy; });
       }
     });
   } catch (error) {
