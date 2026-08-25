@@ -125,8 +125,9 @@ filters intersect; search remains visible and usable at every pane width.
 ### Inputs / Fields
 
 Coordinates use square white fields, one-pixel neutral stroke, and monospace only
-for protocol data. Leaf search uses body type, a compact rounded field, and a
-visible label. Input and action stack below 760px.
+for protocol data. Leaf search uses body type, a compact rounded field, placeholder
+copy, and an accessible name without a visible heading. Input and action stack
+below 760px.
 
 ### Navigation
 

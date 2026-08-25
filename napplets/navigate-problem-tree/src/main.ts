@@ -176,8 +176,7 @@ function renderApp(animateListRows = true) {
         <header class="list-header">
           <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="log-child" type="button">Log child problem</button></div></div>
           <div class="filter-stack">
-            <label for="problem-search">Filter by title</label>
-            <input id="problem-search" type="search" value="${escapeHtml(textFilter)}" placeholder="Search leaf problems" autocomplete="off" spellcheck="false">
+            <input id="problem-search" type="search" value="${escapeHtml(textFilter)}" placeholder="Search leaf problems" aria-label="Filter by title" autocomplete="off" spellcheck="false">
             <div id="filters" class="filters" aria-label="Filter children by status"></div>
           </div>
         </header>
