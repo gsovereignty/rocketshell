@@ -5,6 +5,7 @@ const rootId = "7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170
 const root = `31971:${owner}:${rootId}`;
 const hex = (character: string) => character.repeat(64);
 const coordinate = (character: string) => `31971:${owner}:${hex(character)}`;
+const connectorTipX = 14.4;
 
 const problem = (id: string, problemCoordinate: string, title: string, parent?: string) => ({
   event: {
@@ -158,8 +159,10 @@ test("each tree edge renders its line and arrow in one SVG path", async ({ page 
   const paths = page.locator(".connector-path-base");
   await expect(paths).toHaveCount(4);
   const pathData = await paths.first().getAttribute("d");
-  expect(pathData).toMatch(/^M 1 0 C .* L .* L 16 .* L .*$/);
+  expect(pathData).toMatch(/^M 1 0(?: C [^A-Z]+)+$/);
   expect(pathData?.match(/\bM\b/g)).toHaveLength(1);
+  expect(pathData).not.toMatch(/[LHVlhv]/);
+  expect(pathData?.match(/\bC\b/g)).toHaveLength(5);
   await page.locator(".tree-node").nth(3).click();
   await expect(page.locator(".active-connector-path")).toHaveCount(4);
   await expect(page.locator(".active-connector-path.is-active")).toHaveCount(3);
@@ -168,10 +171,13 @@ test("each tree edge renders its line and arrow in one SVG path", async ({ page 
     Number.parseFloat(getComputedStyle(path).strokeDashoffset)
   );
   expect(drawingOffset).toBeGreaterThan(0);
-  await expect.poll(async () => {
-    const style = await page.locator(".active-connector-path.is-active").last().getAttribute("style");
-    return Number.parseFloat(style?.match(/stroke-dashoffset:\s*([\d.]+)/)?.[1] ?? "0");
-  }).toBeLessThan(0.1);
+  await expect.poll(() => page.locator(".active-connector-path.is-active").evaluateAll((activePaths) =>
+    activePaths.every((path) => {
+      const attribute = Number.parseFloat(path.getAttribute("stroke-dashoffset") ?? "NaN");
+      const computed = Number.parseFloat(getComputedStyle(path).strokeDashoffset);
+      return Math.abs(attribute) < 0.1 && Math.abs(computed) < 0.1;
+    })
+  )).toBe(true);
   const drawnCoordinate = await page.locator(".active-connector-path.is-active").last().getAttribute("data-coordinate");
   await expect(page.locator(`.connector-path-base[data-coordinate="${drawnCoordinate}"]`)).toHaveCSS("opacity", "0");
 
@@ -186,4 +192,47 @@ test("each tree edge renders its line and arrow in one SVG path", async ({ page 
   await page.locator(".tree-node").nth(1).hover();
   await page.locator(".tree-node").nth(4).hover();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { connectorMutations: number }).connectorMutations)).toBe(0);
+  await page.locator(".tree-node").nth(1).hover();
+  await page.waitForTimeout(50);
+  await page.locator(".tree-node").nth(2).hover();
+  await page.waitForTimeout(50);
+  await page.locator(".tree-node").nth(4).hover();
+  await expect.poll(() => page.locator(".active-connector-path").evaluateAll((overlayPaths) =>
+    overlayPaths.every((path) => {
+      const style = getComputedStyle(path);
+      const offset = Number.parseFloat(path.getAttribute("stroke-dashoffset") ?? "NaN");
+      return path.classList.contains("is-active")
+        ? Math.abs(offset) < 0.1 && Math.abs(Number.parseFloat(style.strokeDashoffset)) < 0.1
+        : Number.parseFloat(style.opacity) === 0 && Math.abs(offset - (path as SVGPathElement).getTotalLength()) < 0.1;
+    })
+  )).toBe(true);
+
+  const glyph = await page.locator(".connector-path-base").first().evaluate((path) => {
+    const card = path.closest("ul")?.querySelector(":scope > .branch > .tree-node");
+    return { right: path.getBoundingClientRect().right, cardLeft: card?.getBoundingClientRect().left ?? 0 };
+  });
+  expect(glyph.right).toBeLessThanOrEqual(glyph.cardLeft);
+
+  await expect.poll(() => page.locator(".connector-path-base").evaluateAll((basePaths) =>
+    basePaths.every((basePath) => {
+      const attribute = Number.parseFloat(basePath.getAttribute("stroke-dashoffset") ?? "NaN");
+      const computed = Number.parseFloat(getComputedStyle(basePath).strokeDashoffset);
+      return Math.abs(attribute) < 0.1 && Math.abs(computed) < 0.1;
+    })
+  )).toBe(true);
+
+  const renderedEdges = await page.locator(".active-connector-path.is-active").evaluateAll((activePaths, tipX) =>
+    activePaths.map((activePath) => {
+      const path = activePath as SVGPathElement;
+      const svg = path.ownerSVGElement;
+      const card = svg?.closest("ul")?.querySelector<HTMLElement>(":scope > .branch > .tree-node");
+      const matrix = svg?.getScreenCTM();
+      const tip = matrix && new DOMPoint(tipX as number, 0).matrixTransform(matrix);
+      const dashLength = Number.parseFloat(getComputedStyle(path).strokeDasharray);
+      return {
+        dashCoversPath: dashLength >= path.getTotalLength() - 0.1,
+        tipGap: card && tip ? card.getBoundingClientRect().left - tip.x : Number.NaN
+      };
+    }), connectorTipX);
+  expect(renderedEdges.every(({ dashCoversPath, tipGap }) => dashCoversPath && tipGap >= 0 && tipGap <= 4)).toBe(true);
 });
