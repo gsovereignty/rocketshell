@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBuiltInNappletRequest } from "./service-worker-cache";
+import { isBuiltInNappletRequest, isShellNavigationRequest } from "./service-worker-cache";
 
 describe("service worker cache policy", () => {
   it("bypasses cache for built-in registry and artifacts at root scope", () => {
@@ -12,5 +12,19 @@ describe("service worker cache policy", () => {
     expect(isBuiltInNappletRequest("/rocketshell/napplets/view-problem/index.html", "/rocketshell/")).toBe(true);
     expect(isBuiltInNappletRequest("/napplets/view-problem/index.html", "/rocketshell/")).toBe(false);
     expect(isBuiltInNappletRequest("/rocketshell/assets/shell.js", "/rocketshell/")).toBe(false);
+  });
+});
+
+describe("shell navigation cache policy", () => {
+  it("recognizes root and index navigation under the worker scope", () => {
+    expect(isShellNavigationRequest("/", "/")).toBe(true);
+    expect(isShellNavigationRequest("/index.html", "/")).toBe(true);
+    expect(isShellNavigationRequest("/rocketshell/", "/rocketshell/")).toBe(true);
+    expect(isShellNavigationRequest("/rocketshell/index.html", "/rocketshell/")).toBe(true);
+  });
+
+  it("does not classify assets or paths outside the scope as shell navigation", () => {
+    expect(isShellNavigationRequest("/assets/shell.js", "/")).toBe(false);
+    expect(isShellNavigationRequest("/", "/rocketshell/")).toBe(false);
   });
 });

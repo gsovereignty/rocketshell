@@ -239,7 +239,11 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
   }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
-  const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, { scope: import.meta.env.BASE_URL, type: "module" });
+  const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, {
+    scope: import.meta.env.BASE_URL,
+    type: "module",
+    updateViaCache: "none"
+  });
   const onWorkerMessage = (event: MessageEvent): void => { recordWorkerProtocolFailure(event.data, telemetry); };
   navigator.serviceWorker.addEventListener("message", onWorkerMessage);
   await navigator.serviceWorker.ready;

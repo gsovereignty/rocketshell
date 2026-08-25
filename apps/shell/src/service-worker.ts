@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { IndexedDbPackageStore, SERVICE_WORKER_PROTOCOL_VERSION, parseVirtualNappletUrl, parseWorkerRequest, routeNappletRequest, type WorkerReply } from "@platform/napplet-gateway/worker";
-import { isBuiltInNappletRequest, isRetiredShellCache, shellCacheName } from "./service-worker-cache";
+import { isBuiltInNappletRequest, isRetiredShellCache, isShellNavigationRequest, shellCacheName } from "./service-worker-cache";
 
 declare const __SHELL_BUILD_ID__: string;
 
@@ -53,6 +53,22 @@ worker.addEventListener("fetch", (event: FetchEvent) => {
   }
   if (import.meta.env.DEV) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+  if (isShellNavigationRequest(requestUrl.pathname, scopePath)) {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request, { cache: "no-store" });
+        if (response.ok) {
+          const cache = await caches.open(SHELL_CACHE);
+          await cache.put(event.request, response.clone());
+        }
+        return response;
+      } catch (error) {
+        console.warn("Shell navigation network request failed; using cached shell", { pathname: requestUrl.pathname, error });
+        return await caches.match(event.request) ?? new Response("Shell unavailable", { status: 503 });
+      }
+    })());
     return;
   }
   event.respondWith(caches.match(event.request).then(async (cached) => {

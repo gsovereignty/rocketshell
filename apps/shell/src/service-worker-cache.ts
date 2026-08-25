@@ -11,3 +11,8 @@ export function isBuiltInNappletRequest(pathname: string, scopePath: string): bo
   const base = scopePath.endsWith("/") ? scopePath : `${scopePath}/`;
   return pathname === `${base}napplets.json` || pathname.startsWith(`${base}napplets/`);
 }
+
+export function isShellNavigationRequest(pathname: string, scopePath: string): boolean {
+  const base = scopePath.endsWith("/") ? scopePath : `${scopePath}/`;
+  return pathname === base || pathname === `${base}index.html`;
+}
