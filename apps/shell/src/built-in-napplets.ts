@@ -12,15 +12,21 @@ interface RegistryNapplet {
   readonly files: readonly RegistryArtifact[];
 }
 interface NappletRegistry { readonly version: 1; readonly napplets: readonly RegistryNapplet[] }
+export type BuiltInRegistryName = "napplets.json" | "napplets.dev.json";
 
-const readRegistry = async (base: string): Promise<NappletRegistry> => {
-  for (const name of ["napplets.json", "napplets.dev.json"]) {
-    try {
-      const response = await fetch(`${base}${name}`, { cache: "no-store" });
-      if (!response.ok) continue;
-      const value = await response.json() as NappletRegistry;
-      if (value.version === 1 && Array.isArray(value.napplets)) return value;
-    } catch { /* Try next deterministic registry location. */ }
+const readRegistry = async (base: string, name: BuiltInRegistryName): Promise<NappletRegistry> => {
+  const registryUrl = `${base}${name}`;
+  try {
+    const response = await fetch(registryUrl, { cache: "no-store" });
+    if (!response.ok) {
+      console.warn("Built-in Napplet registry request failed", { registryUrl, status: response.status });
+      return { version: 1, napplets: [] };
+    }
+    const value = await response.json() as NappletRegistry;
+    if (value.version === 1 && Array.isArray(value.napplets)) return value;
+    console.warn("Built-in Napplet registry has invalid shape", { registryUrl });
+  } catch (error) {
+    console.warn("Built-in Napplet registry is unavailable", { registryUrl, error });
   }
   return { version: 1, napplets: [] };
 };
@@ -29,8 +35,8 @@ const artifactUrl = (napplet: RegistryNapplet, path: string): string => path ===
   ? napplet.url
   : `${napplet.url.slice(0, napplet.url.lastIndexOf("/") + 1)}${path.split("/").map(encodeURIComponent).join("/")}`;
 
-export async function installBuiltInNapplets(store: PackageStore, applicationBase: string): Promise<readonly string[]> {
-  const registry = await readRegistry(applicationBase);
+export async function installBuiltInNapplets(store: PackageStore, applicationBase: string, registryName: BuiltInRegistryName = "napplets.json"): Promise<readonly string[]> {
+  const registry = await readRegistry(applicationBase, registryName);
   const installed: string[] = [];
   for (const napplet of registry.napplets) {
     const aggregate = await aggregateHash(napplet.files);
@@ -39,6 +45,8 @@ export async function installBuiltInNapplets(store: PackageStore, applicationBas
     const committed = await store.get(napplet.dTag, aggregate);
     if (committed) {
       await store.activate(napplet.dTag, aggregate);
+      const active = await store.getActive(napplet.dTag);
+      if (active?.aggregateHash !== aggregate) throw new Error(`Built-in Napplet activation failed: ${napplet.dTag}`);
       installed.push(napplet.dTag);
       continue;
     }
@@ -62,6 +70,8 @@ export async function installBuiltInNapplets(store: PackageStore, applicationBas
     ];
     const event = { id: "0".repeat(64), pubkey: "0".repeat(64), created_at: 0, kind: 35129, tags, content: JSON.stringify(manifest), sig: "0".repeat(128) } as SignedManifest;
     await new PackageInstaller(store, () => true).install(event, inputs, { randomId: () => `built-in-${napplet.dTag}-${aggregate}` });
+    const active = await store.getActive(napplet.dTag);
+    if (active?.aggregateHash !== aggregate) throw new Error(`Built-in Napplet activation failed: ${napplet.dTag}`);
     installed.push(napplet.dTag);
   }
   return installed;

@@ -10,6 +10,36 @@ afterEach(() => {
 });
 
 describe("built-in Napplet installation", () => {
+  it("selects the live dev registry without consulting a packaged production snapshot", async () => {
+    const bytes = new TextEncoder().encode("<!doctype html><title>Live dev</title>");
+    const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };
+    const requested: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      requested.push(url);
+      if (url === "/napplets.dev.json") return new Response(JSON.stringify({
+        version: 1,
+        napplets: [{ name: "viewer", dTag: "viewer", url: "/napplets.dev/viewer/index.html", requires: [], files: [artifact] }]
+      }));
+      if (url === "/napplets.dev/viewer/index.html") return new Response(bytes);
+      return new Response("stale production snapshot", { status: 200 });
+    }) as typeof fetch;
+
+    const store = new MemoryPackageStore();
+    await installBuiltInNapplets(store, "/", "napplets.dev.json");
+    expect(requested).toEqual(["/napplets.dev.json", "/napplets.dev/viewer/index.html"]);
+  });
+
+  it("selects only the packaged production registry in production mode", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      requested.push(String(input));
+      return new Response(JSON.stringify({ version: 1, napplets: [] }));
+    }) as typeof fetch;
+    await installBuiltInNapplets(new MemoryPackageStore(), "/", "napplets.json");
+    expect(requested).toEqual(["/napplets.json"]);
+  });
+
   it("installs packaged artifacts through the verified package store", async () => {
     const bytes = new TextEncoder().encode("<!doctype html><title>Built in</title>");
     const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };
@@ -73,6 +103,17 @@ describe("built-in Napplet installation", () => {
 
     expect((await store.getActive("viewer"))?.aggregateHash).toBe(versions[0]!.aggregateHash);
     expect(artifactFetches).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a successful activation call that leaves the old version active", async () => {
+    const bytes = new TextEncoder().encode("<!doctype html><title>Expected</title>");
+    const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => String(input).endsWith("napplets.json")
+      ? new Response(JSON.stringify({ version: 1, napplets: [{ name: "viewer", dTag: "viewer", url: "/napplets/viewer/index.html", requires: [], files: [artifact] }] }))
+      : new Response(bytes)) as typeof fetch;
+    const store = new MemoryPackageStore();
+    store.activate = vi.fn(async () => undefined);
+    await expect(installBuiltInNapplets(store, "/")).rejects.toThrow("activation failed: viewer");
   });
 
   it("keeps shell startup available when registry is offline", async () => {

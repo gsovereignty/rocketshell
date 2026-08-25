@@ -9,7 +9,8 @@ export const isRetiredShellCache = (name: string, current: string): boolean =>
 
 export function isBuiltInNappletRequest(pathname: string, scopePath: string): boolean {
   const base = scopePath.endsWith("/") ? scopePath : `${scopePath}/`;
-  return pathname === `${base}napplets.json` || pathname.startsWith(`${base}napplets/`);
+  return pathname === `${base}napplets.json` || pathname.startsWith(`${base}napplets/`) ||
+    pathname === `${base}napplets.dev.json` || pathname.startsWith(`${base}napplets.dev/`);
 }
 
 export function isShellNavigationRequest(pathname: string, scopePath: string): boolean {

@@ -25,6 +25,111 @@ test("starts under repository subpath and gains service-worker control", async (
   expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/rocketshell/service-worker.js"))).toBe(true);
 });
 
+test("replaces persisted stale built-in bytes without clearing browser data", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+  await page.getByRole("button", { name: "Open View Problem" }).click();
+  const iframe = page.locator('iframe[title="view-problem"]');
+  await expect(iframe).toBeVisible();
+  const currentVirtualUrl = await iframe.getAttribute("data-virtual-url");
+  const currentAggregate = currentVirtualUrl?.match(/\/([a-f0-9]{64})\/index\.html$/)?.[1];
+  expect(currentAggregate).toBeTruthy();
+
+  const staleAggregate = await page.evaluate(async ({ currentAggregate }) => {
+    const hex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hash = async (bytes: Uint8Array): Promise<string> => hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("napplet-packages");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const currentPackage = await new Promise<Record<string, any>>((resolve, reject) => {
+      const transaction = database.transaction("packages", "readonly");
+      const get = transaction.objectStore("packages").get(`view-problem\0${currentAggregate}`);
+      get.onerror = () => reject(get.error); get.onsuccess = () => resolve(get.result);
+    });
+    const stale = structuredClone(currentPackage);
+    const staleBytes = new TextEncoder().encode("<!doctype html><div id=\"stale-version\">Version A</div>");
+    const staleHash = await hash(staleBytes);
+    const declarations = stale.manifest.artifacts.map((artifact: { path: string; sha256: string; mediaType: string }) => artifact.path === "index.html"
+      ? { ...artifact, sha256: staleHash }
+      : artifact);
+    const aggregateInput = declarations
+      .sort((left: { path: string }, right: { path: string }) => left.path.localeCompare(right.path))
+      .map((artifact: { path: string; sha256: string }) => `${artifact.sha256} /${artifact.path.replace(/^\/+/, "")}\n`)
+      .join("");
+    const staleAggregate = await hash(new TextEncoder().encode(aggregateInput));
+    stale.packageKey = `view-problem\0${staleAggregate}`;
+    stale.aggregateHash = staleAggregate;
+    stale.manifest.aggregateHash = staleAggregate;
+    stale.manifest.artifacts = declarations;
+    stale.artifacts = stale.artifacts.map((artifact: { path: string; bytes: Uint8Array; mediaType: string }) => artifact.path === "index.html"
+      ? { ...artifact, sha256: staleHash, bytes: staleBytes }
+      : artifact);
+    stale.manifestEvent.content = JSON.stringify(stale.manifest);
+    stale.manifestEvent.tags = stale.manifestEvent.tags.map((tag: string[]) => tag[0] === "x" && tag[2] === "aggregate"
+      ? ["x", staleAggregate, "aggregate"]
+      : tag[0] === "path" && tag[1] === "/index.html"
+        ? ["path", "/index.html", staleHash]
+        : tag);
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(["packages", "active"], "readwrite");
+      transaction.objectStore("packages").put(stale);
+      transaction.objectStore("active").put({ dTag: "view-problem", aggregateHash: staleAggregate });
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    database.close();
+    const currentRegistry = await (await fetch("/rocketshell/napplets.json", { cache: "no-store" })).json();
+    const staleRegistry = {
+      ...currentRegistry,
+      napplets: currentRegistry.napplets.map((napplet: { dTag: string; files: unknown[] }) => napplet.dTag === "view-problem"
+        ? { ...napplet, files: declarations }
+        : napplet)
+    };
+    const cache = await caches.open("platform-shell-legacy-test");
+    await cache.put("/rocketshell/napplets.json", new Response(JSON.stringify(staleRegistry), {
+      headers: { "Content-Type": "application/json" }
+    }));
+    return staleAggregate;
+  }, { currentAggregate: currentAggregate! });
+  expect(staleAggregate).not.toBe(currentAggregate);
+
+  await page.evaluate(async () => {
+    const controllerChanged = new Promise<void>((resolve) => navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true }));
+    await navigator.serviceWorker.register("/rocketshell/legacy-service-worker.js", { scope: "/rocketshell/", updateViaCache: "none" });
+    if (!navigator.serviceWorker.controller?.scriptURL.endsWith("/legacy-service-worker.js")) await controllerChanged;
+  });
+  expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/legacy-service-worker.js"))).toBe(true);
+
+  await page.reload();
+  await expect(page.locator("#status")).toBeHidden();
+  expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/service-worker.js"))).toBe(true);
+  expect(await page.evaluate(async () => Boolean(await caches.match("/legacy-registry-read")))).toBe(false);
+  const restored = page.locator('iframe[title="view-problem"]');
+  await expect(restored).toBeVisible();
+  await expect(restored).toHaveAttribute("data-virtual-url", new RegExp(`/${currentAggregate}/index\\.html$`));
+  await expect(page.frameLocator('iframe[title="view-problem"]').locator("#stale-version")).toHaveCount(0);
+  await expect(page.frameLocator('iframe[title="view-problem"]').locator("#app")).toBeVisible();
+  const activeAggregate = await page.evaluate(async () => new Promise<string | undefined>((resolve, reject) => {
+    const request = indexedDB.open("napplet-packages");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction("active", "readonly");
+      const get = transaction.objectStore("active").get("view-problem");
+      get.onerror = () => reject(get.error);
+      get.onsuccess = () => { database.close(); resolve(get.result?.aggregateHash); };
+    };
+  }));
+  expect(activeAggregate).toBe(currentAggregate);
+
+  await page.reload();
+  await expect(page.locator('iframe[title="view-problem"]')).toBeVisible();
+  await expect(page.locator('iframe[title="view-problem"]')).toHaveAttribute("data-virtual-url", new RegExp(`/${currentAggregate}/index\\.html$`));
+});
+
 test("build contains no root-relative project asset URLs", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");

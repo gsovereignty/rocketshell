@@ -17,6 +17,7 @@ import { requireWiredDomains } from "./domain-environment.js";
 import { dockLauncherFromManifest, type DockLauncher } from "./dock-launchers.js";
 import { installBuiltInNapplets } from "./built-in-napplets.js";
 import { createNappletConsoleStore, parseNappletConsoleMessage, type NappletConsoleStore } from "./napplet-console-store.js";
+import { settleServiceWorkerStartup } from "./service-worker-startup.js";
 
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
@@ -85,7 +86,6 @@ export interface BrowserPlatform {
 }
 
 export async function createBrowserPlatform(container: HTMLElement): Promise<BrowserPlatform> {
-  const controlledAtStartup = navigator.serviceWorker.controller !== null;
   const allowLocalPlaintext = import.meta.env.DEV || location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "[::1]";
   const settings = createShellSettingsStore(localStorage, DEFAULT_SHELL_SETTINGS);
   const metadataStore = await PlatformMetadataStore.open();
@@ -230,14 +230,6 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     }
   };
   window.addEventListener("message", onMessage);
-  const fixtureResourceUrl = new URL(`${import.meta.env.BASE_URL}fixture-resource.txt`, location.href).href;
-  const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true"
-    ? await installFixture(packageStore, fixtureResourceUrl)
-    : undefined;
-  const builtInDTags = await installBuiltInNapplets(packageStore, import.meta.env.BASE_URL);
-  for (const installation of await packageStore.listActive()) {
-    for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
-  }
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
   const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, {
     scope: import.meta.env.BASE_URL,
@@ -246,10 +238,17 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   });
   const onWorkerMessage = (event: MessageEvent): void => { recordWorkerProtocolFailure(event.data, telemetry); };
   navigator.serviceWorker.addEventListener("message", onWorkerMessage);
-  await navigator.serviceWorker.ready;
-  if (!controlledAtStartup) {
+  if (await settleServiceWorkerStartup(registration, navigator.serviceWorker) === "reload") {
     location.reload();
     return new Promise<BrowserPlatform>(() => {});
+  }
+  const fixtureResourceUrl = new URL(`${import.meta.env.BASE_URL}fixture-resource.txt`, location.href).href;
+  const fixtureDTag = import.meta.env.VITE_INSTALL_FIXTURE === "true"
+    ? await installFixture(packageStore, fixtureResourceUrl)
+    : undefined;
+  const builtInDTags = await installBuiltInNapplets(packageStore, import.meta.env.BASE_URL, import.meta.env.DEV ? "napplets.dev.json" : "napplets.json");
+  for (const installation of await packageStore.listActive()) {
+    for (const archetype of installation.manifest.archetypes ?? []) intentResolver.notifyChanged(archetype.slug);
   }
   let fixturePending = fixtureDTag !== undefined;
   const updates = coordinateServiceWorkerUpdates(registration, navigator.serviceWorker, {

@@ -81,6 +81,38 @@ const testResourceServer = (): Plugin => ({
   }
 });
 
+const testLegacyServiceWorker = (): Plugin => ({
+  name: "platform-test-legacy-service-worker",
+  apply: "serve",
+  configurePreviewServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const pathname = new URL(request.url ?? "/", "http://vite.local").pathname;
+      const workerPath = `${server.config.base}legacy-service-worker.js`.replace(/\/+/g, "/");
+      if (pathname !== workerPath) { next(); return; }
+      response.statusCode = 200;
+      response.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      response.setHeader("Cache-Control", "no-store");
+      response.setHeader("Service-Worker-Allowed", server.config.base);
+      response.end(`
+        const CACHE = "platform-shell-legacy-test";
+        self.addEventListener("install", event => event.waitUntil(self.skipWaiting()));
+        self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
+        self.addEventListener("fetch", event => {
+          if (event.request.method !== "GET" || new URL(event.request.url).origin !== location.origin) return;
+          if (new URL(event.request.url).pathname.endsWith("/napplets.json")) {
+            event.waitUntil(caches.open("legacy-worker-observations").then(cache =>
+              cache.put("/legacy-registry-read", new Response("read"))));
+          }
+          event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(async response => {
+            if (response.ok) await (await caches.open(CACHE)).put(event.request, response.clone());
+            return response;
+          })));
+        });
+      `);
+    });
+  }
+});
+
 export default defineConfig(({ mode }) => {
   const repositoryRoot = resolve(__dirname, "../..");
   // Built-in Napplet bytes define cache identity. Rebuilding any artifact therefore
@@ -89,7 +121,7 @@ export default defineConfig(({ mode }) => {
   return {
     define: { __SHELL_BUILD_ID__: JSON.stringify(buildId) },
     base: mode === "github" ? "/rocketshell/" : process.env.PLATFORM_BASE ?? "/",
-    plugins: [devServiceWorker(), testBlossomServer(), testResourceServer(), builtInNapplets(repositoryRoot)],
+    plugins: [devServiceWorker(), testBlossomServer(), testResourceServer(), testLegacyServiceWorker(), builtInNapplets(repositoryRoot)],
     build: {
       sourcemap: true,
       rollupOptions: {
