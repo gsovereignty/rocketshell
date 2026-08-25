@@ -10,6 +10,16 @@ afterEach(() => {
 });
 
 describe("built-in Napplet installation", () => {
+  it("rejects a blocked development registry instead of retaining stale installs silently", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ error: "stale-napplet-artifacts", napplets: ["viewer"] }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    )));
+
+    await expect(installBuiltInNapplets(new MemoryPackageStore(), "/", "napplets.dev.json"))
+      .rejects.toThrow("development registry unavailable: HTTP 503");
+  });
+
   it("selects the live dev registry without consulting a packaged production snapshot", async () => {
     const bytes = new TextEncoder().encode("<!doctype html><title>Live dev</title>");
     const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };

@@ -157,7 +157,15 @@ export function builtInNapplets(repositoryRoot: string): Plugin {
       if (pathname === registryPath) {
         const stale = staleNapplets(repositoryRoot);
         if (stale.length > 0) {
-          server.config.logger.warn(`Napplet dist is older than src: ${stale.join(", ")} — run pnpm dev in the napplet or pnpm build`);
+          const message = `Napplet dist is older than src: ${stale.join(", ")}. Rebuild stale Napplet artifacts before loading the shell.`;
+          server.config.logger.error(message);
+          response.statusCode = 503;
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.setHeader("Cache-Control", "no-store");
+          response.setHeader("Retry-After", "1");
+          response.setHeader("X-Napplet-Stale", stale.join(","));
+          response.end(JSON.stringify({ error: "stale-napplet-artifacts", message, napplets: stale }));
+          return;
         }
         response.setHeader("Content-Type", "application/json; charset=utf-8");
         response.setHeader("Cache-Control", "no-store");
@@ -169,6 +177,15 @@ export function builtInNapplets(repositoryRoot: string): Plugin {
       const [encodedName, ...segments] = pathname.slice(artifactBase.length).split("/");
       if (!encodedName) { response.statusCode = 404; response.end("Napplet name missing"); return; }
       const napplet = napplets.find((item) => item.dTag === decodeURIComponent(encodedName));
+      if (napplet && staleNapplets(repositoryRoot).includes(napplet.dTag)) {
+        response.statusCode = 503;
+        response.setHeader("Content-Type", "text/plain; charset=utf-8");
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Retry-After", "1");
+        response.setHeader("X-Napplet-Stale", napplet.dTag);
+        response.end(`Napplet dist is older than src: ${napplet.dTag}. Rebuild stale Napplet artifacts before loading it.`);
+        return;
+      }
       const artifact = napplet && safeArtifact(napplet, segments.map(decodeURIComponent).join("/"));
       if (!artifact) { response.statusCode = 404; response.end("Napplet dist file is not built yet"); return; }
       const declaration = napplet.files.find((file) => artifact.endsWith(file.path.split("/").join(sep)));

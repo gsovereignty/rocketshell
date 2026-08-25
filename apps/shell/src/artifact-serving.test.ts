@@ -77,7 +77,7 @@ it("republishes hashes in the registry whenever an artifact changes", async () =
   expect(hash(after.body)).not.toBe(hash(before.body));
 });
 
-it("reports staleness on the registry response so a stale artifact cannot pass unnoticed", async () => {
+it("refuses stale registry and artifact bytes until the napplet rebuilds", async () => {
   const root = mkdtempSync(join(tmpdir(), "artifact-serving-"));
   napplet(root, "alpha", "<html>first</html>");
   const { origin } = await start(root);
@@ -89,7 +89,23 @@ it("reports staleness on the registry response so a stale artifact cannot pass u
   utimesSync(join(root, "napplets", "alpha", "src", "main.ts"), 4_000_000, 4_000_000);
   utimesSync(join(root, "napplets", "alpha", "dist", "index.html"), 1_000_000, 1_000_000);
   const stale = await get(origin, "/napplets.dev.json");
+  expect(stale.status).toBe(503);
   expect(stale.header("x-napplet-stale")).toBe("alpha");
+  expect(stale.body).toContain("stale-napplet-artifacts");
+
+  const blockedArtifact = await get(origin, "/napplets.dev/alpha/index.html");
+  expect(blockedArtifact.status).toBe(503);
+  expect(blockedArtifact.body).not.toContain("<html>first</html>");
+
+  writeFileSync(join(root, "napplets", "alpha", "dist", "index.html"), "<html>rebuilt</html>");
+  utimesSync(join(root, "napplets", "alpha", "dist", "index.html"), 5_000_000, 5_000_000);
+
+  const recoveredRegistry = await get(origin, "/napplets.dev.json");
+  expect(recoveredRegistry.status).toBe(200);
+  expect(recoveredRegistry.header("x-napplet-stale")).toBe("none");
+  const recoveredArtifact = await get(origin, "/napplets.dev/alpha/index.html");
+  expect(recoveredArtifact.status).toBe(200);
+  expect(recoveredArtifact.body).toBe("<html>rebuilt</html>");
 });
 
 it("watches every napplet dist directory", async () => {

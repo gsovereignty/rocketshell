@@ -20,6 +20,9 @@ const readRegistry = async (base: string, name: BuiltInRegistryName): Promise<Na
     const response = await fetch(registryUrl, { cache: "no-store" });
     if (!response.ok) {
       console.warn("Built-in Napplet registry request failed", { registryUrl, status: response.status });
+      if (name === "napplets.dev.json") {
+        throw new Error(`Built-in Napplet development registry unavailable: HTTP ${response.status}`);
+      }
       return { version: 1, napplets: [] };
     }
     const value = await response.json() as NappletRegistry;
@@ -27,6 +30,7 @@ const readRegistry = async (base: string, name: BuiltInRegistryName): Promise<Na
     console.warn("Built-in Napplet registry has invalid shape", { registryUrl });
   } catch (error) {
     console.warn("Built-in Napplet registry is unavailable", { registryUrl, error });
+    if (name === "napplets.dev.json") throw error;
   }
   return { version: 1, napplets: [] };
 };
