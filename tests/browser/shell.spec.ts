@@ -755,6 +755,16 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null")?.windows?.[0]?.dTag)).toBe("log-new-problem");
 });
 
+test("DAG viewer replaces dock as first menu control", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+  const dagViewer = page.getByRole("button", { name: "Open DAG viewer" });
+  await expect(page.locator("#menu-bar .menu-cluster > button").first()).toHaveAttribute("id", "dag-viewer-trigger");
+  await expect(page.locator("#dock-shell")).toHaveCount(0);
+  await dagViewer.click();
+  await expect(page.locator('iframe[title="navigate-problem-tree"]')).toHaveCount(1);
+});
+
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");
@@ -833,39 +843,6 @@ test("preferences panel themes the shell and edits the local relay list", async 
   await expect(page.getByText("wss://added.example.com/", { exact: true })).toBeVisible();
 });
 
-test("dock introduces itself then returns at bottom edge", async ({ page }) => {
-  await page.goto("./");
-  const dock = page.locator("#dock-shell");
-  await expect(dock).toHaveAttribute("data-visible", "true");
-  await expect(dock).toHaveCSS("opacity", "1");
-  await expect(dock).toHaveAttribute("data-visible", "false", { timeout: 5_000 });
-  await page.evaluate(() => document.dispatchEvent(new MouseEvent("mousemove", {
-    bubbles: true, clientX: innerWidth / 2, clientY: innerHeight - 30
-  })));
-  await expect(dock).toHaveAttribute("data-visible", "true");
-  await expect(dock).toHaveCSS("opacity", "1");
-});
-
-test("dock opens an active Napplet without relay discovery", async ({ page }) => {
-  await page.goto("./");
-  const launcher = page.getByRole("button", { name: "Open Platform Fixture" });
-  await expect(launcher).toBeVisible();
-  await launcher.click();
-  await expect(page.locator('iframe[title="platform-fixture"]')).toHaveCount(2);
-  await expect(page.locator("#loader-status")).toHaveText("Opened Platform Fixture.");
-});
-
-test("dock always includes built-in Napplets", async ({ page }) => {
-  await page.goto("./");
-  const launcher = page.getByRole("button", { name: "Open Log New Problem" });
-  await expect(launcher).toBeVisible();
-  await expect(launcher.locator("img")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Navigate Problem Tree" }).locator("img")).toBeVisible();
-  await expect(page.locator('iframe[title="log-new-problem"]')).toHaveCount(0);
-  await launcher.click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Log New Problem is built in to Rocketshell" })).toBeDisabled();
-});
-
 test("edits new-problem Markdown inside packaged sandbox", async ({ page }) => {
   const browserErrors: string[] = [];
   page.on("console", (message) => {
@@ -924,44 +901,4 @@ test("edits new-problem Markdown inside packaged sandbox", async ({ page }) => {
 
   await page.setViewportSize({ width: 320, height: 720 });
   await expect.poll(() => frame.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-});
-
-test("dock icon override persists and can be reset", async ({ page }) => {
-  await page.goto("./");
-  let launcher = page.getByRole("button", { name: "Open Log New Problem" });
-  await launcher.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Change Log New Problem icon" }).click();
-
-  const editor = page.getByRole("dialog", { name: "Change Log New Problem icon" });
-  await editor.getByRole("textbox", { name: "Icon letters" }).fill("rs");
-  await editor.getByRole("button", { name: "Use Letters" }).click();
-  await expect(launcher.locator(".dock-initial")).toHaveText("RS");
-
-  await page.reload();
-  launcher = page.getByRole("button", { name: "Open Log New Problem" });
-  await expect(launcher.locator(".dock-initial")).toHaveText("RS");
-  await launcher.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Reset Log New Problem to Napplet icon" }).click();
-  await expect(launcher.locator("img")).toBeVisible();
-});
-
-test("dock context menu pins an open Napplet and removes it after close", async ({ page }) => {
-  await page.goto("./");
-  const launcher = page.getByRole("button", { name: "Open Platform Fixture" });
-  await expect(launcher.locator(".dock-initial")).toHaveText("P");
-
-  await launcher.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Keep Platform Fixture in Dock" }).click();
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.pinned-napplets") ?? "[]").length)).toBe(1);
-
-  await page.locator(".napplet-window-close").click();
-  await expect(launcher).toBeVisible();
-  await expect(launcher.locator(".dock-running-indicator")).toBeHidden();
-
-  await page.evaluate(() => document.dispatchEvent(new MouseEvent("mousemove", {
-    bubbles: true, clientX: innerWidth / 2, clientY: innerHeight - 20
-  })));
-  await launcher.dispatchEvent("contextmenu", { clientX: 200, clientY: 700 });
-  await page.getByRole("menuitem", { name: "Remove Platform Fixture from Dock" }).click();
-  await expect(launcher).toBeHidden();
 });

@@ -4,6 +4,9 @@
   <body>
     <nav id="menu-bar" aria-label="Shell menu">
       <div class="menu-cluster">
+        <button id="dag-viewer-trigger" class="menu-button icon-button" type="button" aria-label="Open DAG viewer" title="Open DAG viewer">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="5" r="2"></circle><circle cx="19" cy="9" r="2"></circle><circle cx="17" cy="18" r="2"></circle><path d="m6.5 10.7 4-4.2M13.8 5.9l3.4 2.2M18.7 11l-1.2 5M7 12.8l8.2 4.3"></path></svg>
+        </button>
         <button id="profile-menu-trigger" class="menu-button profile-trigger" type="button" aria-expanded="false" aria-controls="account-popover" aria-haspopup="true">
           <span class="profile-avatar" aria-hidden="true">
             <img id="profile-avatar-image" alt="" hidden>
@@ -131,12 +134,6 @@
     <main id="app">
       <section id="windows" aria-label="Napplet windows"></section>
     </main>
-    <aside id="dock-shell" aria-label="Napplet launcher">
-      <p id="dock-status" role="status" aria-live="polite">Loading napplets…</p>
-      <nav id="napplet-dock" aria-label="Installed napplets" hidden>
-        <ul id="dock-items"></ul>
-      </nav>
-    </aside>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
