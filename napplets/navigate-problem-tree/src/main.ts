@@ -120,13 +120,7 @@ function filterCounts(nodes: ProblemNode[]) {
   ] as const;
 }
 
-function layoutTreeConnectors(activeCoordinate = hoveredProblem || selected) {
-  const activePath = dag && activeCoordinate
-    ? ancestorCoordinates(dag, activeCoordinate).add(activeCoordinate)
-    : new Set<string>();
-  app.querySelectorAll<HTMLElement>(".branch[data-coordinate]").forEach((branch) => {
-    branch.classList.toggle("connector-path", activePath.has(branch.dataset.coordinate ?? ""));
-  });
+function layoutTreeConnectors() {
   app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
     const connector = children.querySelector<SVGSVGElement>(":scope > .tree-connectors");
     const branches = Array.from(children.querySelectorAll<HTMLElement>(":scope > .branch"));
@@ -144,19 +138,22 @@ function layoutTreeConnectors(activeCoordinate = hoveredProblem || selected) {
     connector.setAttribute("viewBox", `0 0 18 ${height}`);
     connector.setAttribute("width", "18");
     connector.setAttribute("height", String(height));
-    connector.replaceChildren();
-    points.forEach(({ branch, coordinate, y }) => {
+    if (connector.childElementCount !== points.length * 2) {
+      connector.replaceChildren();
+      points.forEach(({ coordinate }) => {
+        const basePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        basePath.setAttribute("class", "connector-path-base");
+        basePath.setAttribute("data-coordinate", coordinate);
+        connector.append(basePath);
+        const highlightedPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        highlightedPath.setAttribute("class", "active-connector-path");
+        highlightedPath.setAttribute("data-coordinate", coordinate);
+        connector.append(highlightedPath);
+      });
+    }
+    points.forEach(({ coordinate, y }) => {
       const pathData = `M 1 0 V ${y} H 16 M 11 ${y - 4} L 16 ${y} L 11 ${y + 4}`;
-      const basePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      basePath.setAttribute("class", "connector-path-base");
-      basePath.setAttribute("d", pathData);
-      connector.append(basePath);
-      if (!branch.classList.contains("connector-path")) return;
-      const highlightedPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      highlightedPath.setAttribute("class", "active-connector-path");
-      highlightedPath.setAttribute("data-coordinate", coordinate);
-      highlightedPath.setAttribute("d", pathData);
-      connector.append(highlightedPath);
+      connector.querySelectorAll<SVGPathElement>(`[data-coordinate="${coordinate}"]`).forEach((path) => path.setAttribute("d", pathData));
     });
   });
 }
@@ -168,41 +165,26 @@ function connectorAnimationTargets() {
 function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
   connectorTimeline?.kill();
   hoverIntent?.kill();
-  layoutTreeConnectors(activeCoordinate);
+  const activeCoordinates = dag && activeCoordinate
+    ? ancestorCoordinates(dag, activeCoordinate).add(activeCoordinate)
+    : new Set<string>();
   const paths = connectorAnimationTargets();
   gsap.killTweensOf(paths);
-  paths.forEach((path) => {
-    const length = path.getTotalLength();
-    path.style.strokeDasharray = String(length);
-    path.style.strokeDashoffset = String(length);
-  });
-  const pathBranches = Array.from(app.querySelectorAll<HTMLElement>(".branch.connector-path"))
-    .filter((branch) => branch.parentElement?.parentElement?.classList.contains("branch"))
-    .sort((left, right) => Number(left.dataset.depth) - Number(right.dataset.depth));
+  paths.forEach((path) => path.classList.toggle("is-active", activeCoordinates.has(path.dataset.coordinate ?? "")));
   if (!animate || reducedMotion.matches) {
-    gsap.set(paths, { strokeDashoffset: 0 });
+    gsap.set(paths, { opacity: (_index, path: SVGPathElement) => path.classList.contains("is-active") ? 1 : 0 });
     return;
   }
-  connectorTimeline = gsap.timeline();
-  pathBranches.forEach((branch, index) => {
-    const path = branch.parentElement?.querySelector<SVGPathElement>(`:scope > .tree-connectors > .active-connector-path[data-coordinate="${branch.dataset.coordinate}"]`);
-    if (!path) return;
-    const start = index * 0.035;
-    connectorTimeline!.to(path, { strokeDashoffset: 0, duration: 0.2, ease: "power2.out" }, start);
+  connectorTimeline = gsap.timeline().to(paths, {
+    opacity: (_index, path: SVGPathElement) => path.classList.contains("is-active") ? 1 : 0,
+    duration: 0.12,
+    ease: "power1.out"
   });
 }
 
 function restoreSelectedConnectorPath(previousHover: string) {
   hoverIntent?.kill();
-  if (!previousHover || previousHover === selected || reducedMotion.matches) {
-    showTreeConnectorPath(selected, false);
-    return;
-  }
-  connectorTimeline?.kill();
-  const paths = connectorAnimationTargets();
-  gsap.killTweensOf(paths);
-  connectorTimeline = gsap.timeline({ onComplete: () => showTreeConnectorPath(selected, true) })
-    .to(paths, { strokeDashoffset: (_index, path: SVGPathElement) => path.getTotalLength(), duration: 0.1, ease: "power1.in" }, 0);
+  showTreeConnectorPath(selected, Boolean(previousHover && previousHover !== selected));
 }
 
 function renderList(animateRows = true) {
@@ -261,6 +243,7 @@ function renderApp(animateListRows = true, animateConnectorPath = false) {
     </div>`;
   bindWorkspace();
   renderList(animateListRows);
+  layoutTreeConnectors();
   showTreeConnectorPath(selected, animateConnectorPath);
 }
 
@@ -456,4 +439,7 @@ async function loadDag(value: string) {
 if (ROOT_A_TAG) void loadDag(ROOT_A_TAG);
 else showSetup();
 
-window.addEventListener("resize", () => showTreeConnectorPath(hoveredProblem || selected, false));
+window.addEventListener("resize", () => {
+  layoutTreeConnectors();
+  showTreeConnectorPath(hoveredProblem || selected, false);
+});

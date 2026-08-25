@@ -159,6 +159,19 @@ test("each tree edge renders its line and arrow in one SVG path", async ({ page 
   await expect(paths).toHaveCount(4);
   await expect(paths.first()).toHaveAttribute("d", /^M 1 0 V [\d.]+ H 16 M 11 [\d.]+ L 16 [\d.]+ L 11 [\d.]+$/);
   await page.locator(".tree-node").nth(3).click();
-  await expect(page.locator(".active-connector-path")).toHaveCount(3);
-  await expect(page.locator(".active-connector-path").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
+  await expect(page.locator(".active-connector-path")).toHaveCount(4);
+  await expect(page.locator(".active-connector-path.is-active")).toHaveCount(3);
+  await expect(page.locator(".active-connector-path.is-active").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
+
+  await page.evaluate(() => {
+    (window as typeof window & { connectorMutations: number }).connectorMutations = 0;
+    document.querySelectorAll(".tree-connectors").forEach((connector) => {
+      new MutationObserver((records) => {
+        (window as typeof window & { connectorMutations: number }).connectorMutations += records.filter((record) => record.type === "childList").length;
+      }).observe(connector, { childList: true });
+    });
+  });
+  await page.locator(".tree-node").nth(1).hover();
+  await page.locator(".tree-node").nth(4).hover();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { connectorMutations: number }).connectorMutations)).toBe(0);
 });

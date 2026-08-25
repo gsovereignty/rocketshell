@@ -64,7 +64,7 @@ button { color: inherit; }
 .tree-connectors { position: absolute; z-index: 1; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .tree-connectors path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .connector-path-base { stroke: var(--connector); }
-.active-connector-path { stroke: var(--blue); }
+.active-connector-path { opacity: 0; stroke: var(--blue); }
 .tree-node { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 46px; margin: 2px 0; border: 0; border-radius: 9px; padding: 9px 12px; color: #343843; background: var(--white); text-align: left; cursor: pointer; }
 .tree-node:hover { background: #e8e8ec; }
 .tree-node.selected-path { color: var(--blue-dark); background: #dce7ff; }
