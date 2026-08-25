@@ -13,6 +13,7 @@ import type { DockLauncher } from "./dock-launchers.js";
 import { openDockIconStore, type DockIconOverride } from "./dock-icon-store.js";
 import { createSignedEventsView } from "./signed-events-view.js";
 import { createNappletConsoleView } from "./napplet-console-view.js";
+import { cacheBustedShellUrl, resetShellRuntime } from "./hard-reset.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -77,6 +78,7 @@ const consoleClear = document.querySelector<HTMLButtonElement>("#napplet-console
 const consoleTabs = document.querySelector<HTMLElement>("#napplet-console-tabs");
 const consoleOutput = document.querySelector<HTMLElement>("#napplet-console-output");
 const consoleEmpty = document.querySelector<HTMLElement>("#napplet-console-empty");
+const hardResetTrigger = document.querySelector<HTMLButtonElement>("#hard-reset-trigger");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(hover: none)");
 const platformLoader = status?.querySelector<HTMLElement>(".platform-loader");
@@ -88,6 +90,24 @@ const syncPlatformLoader = (): void => {
   else platformLoadingTween?.resume();
 };
 document.addEventListener("visibilitychange", syncPlatformLoader);
+
+hardResetTrigger?.addEventListener("click", () => {
+  const confirmed = window.confirm("Hard reset shell cache and reload? Open Napplet work may be interrupted.");
+  if (!confirmed) return;
+  hardResetTrigger.disabled = true;
+  hardResetTrigger.setAttribute("aria-busy", "true");
+  hardResetTrigger.setAttribute("aria-label", "Resetting shell cache");
+  const scopeUrl = new URL(import.meta.env.BASE_URL, window.location.href).href;
+  void resetShellRuntime(navigator.serviceWorker, window.caches, scopeUrl).then(() => {
+    window.location.replace(cacheBustedShellUrl(window.location.href, crypto.randomUUID()));
+  }).catch((error: unknown) => {
+    console.error("Hard reset of shell worker and caches failed", { scopeUrl, error });
+    hardResetTrigger.disabled = false;
+    hardResetTrigger.removeAttribute("aria-busy");
+    hardResetTrigger.setAttribute("aria-label", "Hard reset shell cache");
+    window.alert("Shell reset failed. Open browser site settings and clear this site's data, then reload.");
+  });
+});
 const widgetGrid = windowsContainer
   ? createWidgetGrid(windowsContainer, reducedMotion, window.localStorage, screenNavigation ?? undefined)
   : null;
