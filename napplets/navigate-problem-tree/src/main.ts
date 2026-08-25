@@ -123,7 +123,7 @@ function filterCounts(nodes: ProblemNode[]) {
 }
 
 function layoutTreeConnectors() {
-  app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
+  app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children, connectorIndex) => {
     const connector = children.querySelector<SVGSVGElement>(":scope > .tree-connectors");
     const branches = Array.from(children.querySelectorAll<HTMLElement>(":scope > .branch"));
     if (!connector || branches.length === 0) return;
@@ -140,63 +140,66 @@ function layoutTreeConnectors() {
     connector.setAttribute("viewBox", `0 0 ${connectorWidth} ${height}`);
     connector.setAttribute("width", String(connectorWidth));
     connector.setAttribute("height", String(height));
-    if (connector.childElementCount !== points.length * 2) {
+    if (connector.querySelectorAll(":scope > .connector-path").length !== points.length) {
       connector.replaceChildren();
+      const markerId = `tree-arrow-${connectorIndex}`;
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      marker.setAttribute("id", markerId);
+      marker.setAttribute("viewBox", "0 0 8 8");
+      marker.setAttribute("refX", "8");
+      marker.setAttribute("refY", "4");
+      marker.setAttribute("markerWidth", "7");
+      marker.setAttribute("markerHeight", "7");
+      marker.setAttribute("orient", "auto-start-reverse");
+      marker.setAttribute("markerUnits", "userSpaceOnUse");
+      const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      arrow.setAttribute("d", "M 0 0 L 8 4 L 0 8 Z");
+      arrow.setAttribute("fill", "context-stroke");
+      marker.append(arrow);
+      defs.append(marker);
+      connector.append(defs);
       points.forEach(({ coordinate }) => {
-        const basePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        basePath.setAttribute("class", "connector-path-base");
-        basePath.setAttribute("data-coordinate", coordinate);
-        connector.append(basePath);
-        const highlightedPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        highlightedPath.setAttribute("class", "active-connector-path");
-        highlightedPath.setAttribute("data-coordinate", coordinate);
-        connector.append(highlightedPath);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("class", "connector-path");
+        path.setAttribute("data-coordinate", coordinate);
+        path.setAttribute("marker-end", `url(#${markerId})`);
+        connector.append(path);
       });
     }
     points.forEach(({ coordinate, y }) => {
       const pathData = connectorPathData(coordinate, y);
-      connector.querySelectorAll<SVGPathElement>(`[data-coordinate="${coordinate}"]`).forEach((path) => {
-        path.setAttribute("d", pathData);
-        const length = path.getTotalLength();
-        path.setAttribute("stroke-dasharray", `${length} ${length}`);
-        if (path.classList.contains("active-connector-path") && !path.classList.contains("is-active")) {
-          path.setAttribute("stroke-dashoffset", String(length));
-        }
-      });
+      const path = connector.querySelector<SVGPathElement>(`.connector-path[data-coordinate="${coordinate}"]`);
+      if (!path) return;
+      path.setAttribute("d", pathData);
+      const length = path.getTotalLength();
+      path.setAttribute("stroke-dasharray", `${length} ${length}`);
     });
   });
 }
 
 function drawTreeConnectors(animate: boolean) {
   connectorConstructionTimeline?.kill();
-  const paths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path-base"));
+  const paths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path"));
   gsap.killTweensOf(paths);
   if (!animate || reducedMotion.matches) {
-    gsap.set(paths, { attr: { "stroke-dashoffset": 0 }, strokeWidth: 2 });
+    gsap.set(paths, { attr: { "stroke-dashoffset": 0 }, strokeWidth: 4 });
     return;
   }
-  paths.forEach((path) => gsap.set(path, { attr: { "stroke-dashoffset": path.getTotalLength() }, strokeWidth: 3.1 }));
+  paths.forEach((path) => gsap.set(path, { attr: { "stroke-dashoffset": path.getTotalLength() }, strokeWidth: 5 }));
   connectorConstructionTimeline = gsap.timeline()
     .to(paths, {
       attr: { "stroke-dashoffset": 0 },
-      duration: 0.62,
+      duration: 0.52,
       stagger: { each: 0.06, from: "start" },
       ease: "power2.inOut"
     }, 0)
     .to(paths, {
-      strokeWidth: 2,
-      duration: 0.66,
+      strokeWidth: 4,
+      duration: 0.24,
       stagger: { each: 0.06, from: "start" },
-      ease: "elastic.out(1, 0.55)"
-    }, 0.14);
-}
-
-function connectorAnimationTargets() {
-  return Array.from(app.querySelectorAll<SVGPathElement>(".active-connector-path"));
-}
-
-function connectorTwin(path: SVGPathElement) {
-  return path.parentElement?.querySelector<SVGPathElement>(`.connector-path-base[data-coordinate="${path.dataset.coordinate}"]`);
+      ease: "power3.out"
+    }, 0.18);
 }
 
 function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
@@ -205,74 +208,38 @@ function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
   const activeCoordinates = dag && activeCoordinate
     ? ancestorCoordinates(dag, activeCoordinate).add(activeCoordinate)
     : new Set<string>();
-  const paths = connectorAnimationTargets();
-  const basePaths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path-base"));
+  const paths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path"));
   gsap.killTweensOf(paths);
-  gsap.killTweensOf(basePaths, "opacity");
   if (!animate || reducedMotion.matches) {
-    basePaths.forEach((path) => gsap.set(path, { opacity: activeCoordinates.has(path.dataset.coordinate ?? "") ? 0 : 1 }));
     paths.forEach((path) => {
       const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
       path.classList.toggle("is-active", isActive);
       gsap.set(path, {
-        opacity: isActive ? 1 : 0,
-        strokeWidth: 2,
-        "--connector-glow": "0px",
-        attr: { "stroke-dashoffset": isActive ? 0 : path.getTotalLength() }
+        stroke: isActive ? "var(--blue)" : "var(--connector)",
+        strokeWidth: isActive ? 5 : 4,
+        attr: { "stroke-dashoffset": 0 }
       });
     });
     return;
   }
   connectorTimeline = gsap.timeline();
-  const drawn: SVGPathElement[] = [];
   paths.forEach((path, index) => {
     const wasActive = path.classList.contains("is-active");
     const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
     path.classList.toggle("is-active", isActive);
-    const twin = connectorTwin(path);
     if (isActive && !wasActive) {
       const length = path.getTotalLength();
       const at = index * 0.035;
-      if (twin) gsap.set(twin, { opacity: 0 });
-      gsap.set(path, { opacity: 1, attr: { "stroke-dashoffset": length }, strokeWidth: 3.4, "--connector-glow": "9px" });
+      gsap.set(path, { attr: { "stroke-dashoffset": length }, stroke: "var(--blue)", strokeWidth: 5 });
       connectorTimeline!
-        .to(path, { attr: { "stroke-dashoffset": 0 }, duration: 0.44, ease: "power3.out" }, at)
-        .to(path, { strokeWidth: 2, duration: 0.62, ease: "elastic.out(1, 0.5)" }, at + 0.14)
-        .to(path, { "--connector-glow": "2.5px", duration: 0.6, ease: "power2.out" }, at + 0.12);
-      drawn.push(path);
+        .to(path, { attr: { "stroke-dashoffset": 0 }, duration: 0.38, ease: "power3.out" }, at)
+        .to(path, { strokeWidth: 4, duration: 0.2, ease: "power2.out" }, at + 0.2);
     } else if (isActive) {
-      gsap.set(path, { opacity: 1, attr: { "stroke-dashoffset": 0 }, strokeWidth: 2 });
-      connectorTimeline!.to(path, { "--connector-glow": "2.5px", duration: 0.4, ease: "power2.out" }, 0);
-      drawn.push(path);
+      connectorTimeline!.to(path, { attr: { "stroke-dashoffset": 0 }, stroke: "var(--blue)", strokeWidth: 4, duration: 0.18, ease: "power2.out" }, 0);
     } else {
-      if (twin) gsap.set(twin, { opacity: 1 });
-      const hiddenState = {
-        opacity: 0,
-        attr: { "stroke-dashoffset": path.getTotalLength() },
-        strokeWidth: 2,
-        "--connector-glow": "0px"
-      };
-      if (wasActive) {
-        connectorTimeline!.to(path, {
-          opacity: 0,
-          duration: 0.14,
-          ease: "power1.in",
-          onComplete: () => gsap.set(path, hiddenState)
-        }, 0);
-      } else {
-        gsap.set(path, hiddenState);
-      }
+      connectorTimeline!.to(path, { attr: { "stroke-dashoffset": 0 }, stroke: "var(--connector)", strokeWidth: 4, duration: wasActive ? 0.16 : 0, ease: "power1.out" }, 0);
     }
   });
-  if (drawn.length > 0) {
-    connectorTimeline.to(drawn, {
-      "--connector-glow": "5.5px",
-      duration: 1.5,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut"
-    }, 0.75);
-  }
 }
 
 function restoreSelectedConnectorPath(previousHover: string) {

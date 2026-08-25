@@ -60,8 +60,8 @@ components:
 **Creative North Star: "The Operations Index"**
 
 Dense, calm navigation borrows from working indexes and issue browsers. Structure
-does most visual work: a pale outline surface, a white action surface, hairline
-relationships, and one electric-blue current position. Setup uses same geometry
+does most visual work: a pale outline surface, a white action surface, thick
+orthogonal arrow relationships, and one electric-blue current position. Setup uses same geometry
 at larger scale so missing configuration feels like first step, not dead end.
 
 **Key Characteristics:**
@@ -137,7 +137,9 @@ above the tree opens a composer for a new problem directly under the hidden root
 ### Do:
 
 - **Do** reserve electric blue for current position and primary actions.
-- **Do** keep DAG relationships visible through indentation and hairline rules.
+- **Do** keep DAG relationships visible through indentation and one continuous
+  thick SVG arrow path per edge. Right-angle turns are allowed; separate segment
+  elements are not. Use GSAP to draw and update the paths.
 - **Do** keep child rows dense while preserving keyboard-sized targets.
 - **Do** reflow panes vertically on narrow screens.
 

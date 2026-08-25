@@ -5,7 +5,7 @@ const rootId = "7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170
 const root = `31971:${owner}:${rootId}`;
 const hex = (character: string) => character.repeat(64);
 const coordinate = (character: string) => `31971:${owner}:${hex(character)}`;
-const connectorTipX = 14.4;
+const connectorTipX = 8.4;
 
 const problem = (id: string, problemCoordinate: string, title: string, parent?: string) => ({
   event: {
@@ -158,19 +158,76 @@ test("long child list scrolls inside its pane", async ({ page }) => {
 
   await page.goto("/");
   const list = page.locator(".problem-list");
-  await expect(page.locator(".problem-row")).toHaveCount(manyLeaves.length);
+  const rows = page.locator(".problem-row");
+  const firstRow = rows.first();
+  const lastRow = rows.last();
+  await expect(rows).toHaveCount(manyLeaves.length);
   await expect.poll(() => list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const documentScrollBefore = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
 
   await list.hover();
-  await page.mouse.wheel(0, 700);
-  await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  for (let tick = 0; tick < 20; tick += 1) await page.mouse.wheel(0, 500);
+  await expect.poll(() => list.evaluate((element) => element.scrollTop + element.clientHeight >= element.scrollHeight - 1)).toBe(true);
+  await expect(lastRow).toBeInViewport();
+  await expect(firstRow).not.toBeInViewport();
   await expect(page.locator(".list-header")).toBeInViewport();
+  expect(await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }))).toEqual(documentScrollBefore);
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
     await page.evaluate(() => document.documentElement.clientHeight)
   );
+
+  for (let tick = 0; tick < 20; tick += 1) await page.mouse.wheel(0, -500);
+  await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBe(0);
+  await expect(firstRow).toBeInViewport();
+  await expect(lastRow).not.toBeInViewport();
+  await expect(page.locator(".list-header")).toBeInViewport();
+  expect(await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }))).toEqual(documentScrollBefore);
 });
 
-test("each tree edge renders one arrow-free SVG path", async ({ page }) => {
+test("mobile page owns child-list scrolling without horizontal overflow", async ({ page }) => {
+  const manyLeaves = Array.from({ length: 24 }, (_, index) => {
+    const value = (index + 16).toString(16).padStart(64, "0");
+    return problem(value, `31971:${owner}:${value}`, `Actionable child ${index + 1}`, root);
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript((queryEvents) => {
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async () => ({ available: false, candidates: [] }),
+          invoke: async () => ({ ok: false, handled: false })
+        }
+      }
+    });
+  }, [problem(hex("1"), root, "Root problem"), ...manyLeaves]);
+
+  await page.goto("/");
+  const list = page.locator(".problem-list");
+  const rows = page.locator(".problem-row");
+  const lastRow = rows.last();
+  await expect(rows).toHaveCount(manyLeaves.length);
+  await expect.poll(() => list.evaluate((element) => element.scrollHeight === element.clientHeight)).toBe(true);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth)
+  );
+
+  await page.mouse.move(380, 800);
+  for (let tick = 0; tick < 20; tick += 1) await page.mouse.wheel(0, 500);
+  await expect.poll(() => page.evaluate(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1)).toBe(true);
+  await expect(lastRow).toBeInViewport();
+  expect(await list.evaluate((element) => element.scrollTop)).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth)
+  );
+});
+
+test("each tree edge renders one thick straight SVG arrow", async ({ page }) => {
   await page.addInitScript((queryEvents) => {
     Object.defineProperty(window, "napplet", {
       configurable: true,
@@ -189,34 +246,30 @@ test("each tree edge renders one arrow-free SVG path", async ({ page }) => {
 
   await page.goto("/");
   await expect(page.locator(".tree-node")).toHaveCount(5);
-  await expect(page.locator(".incoming-connector, .connector-line, .connector-arrow")).toHaveCount(0);
+  await expect(page.locator(".incoming-connector, .connector-line, .connector-arrow, .connector-path-base, .active-connector-path")).toHaveCount(0);
   await expect(page.locator(".tree-connectors")).toHaveCount(3);
 
-  const paths = page.locator(".connector-path-base");
+  const paths = page.locator(".connector-path");
   await expect(paths).toHaveCount(4);
   const pathData = await paths.first().getAttribute("d");
-  expect(pathData).toMatch(/^M 1 0(?: C [^A-Z]+)+$/);
+  expect(pathData).toMatch(/^M 1 0 V \d+(?:\.\d+)? H 8\.4$/);
   expect(pathData?.match(/\bM\b/g)).toHaveLength(1);
-  expect(pathData).not.toMatch(/[LHVlhv]/);
-  expect(pathData?.match(/\bC\b/g)).toHaveLength(2);
-  expect((pathData?.match(new RegExp(`${connectorTipX} \\d+(?:\\.\\d+)?`, "g")) ?? [])).toHaveLength(1);
+  expect(pathData?.match(/\bV\b/g)).toHaveLength(1);
+  expect(pathData?.match(/\bH\b/g)).toHaveLength(1);
+  expect(pathData?.endsWith(`H ${connectorTipX}`)).toBe(true);
+  await expect(paths.first()).toHaveAttribute("marker-end", /url\(#tree-arrow-\d+\)/);
+  await expect(paths.first()).toHaveCSS("stroke-width", "4px");
+  await expect(page.locator(".tree-connectors marker")).toHaveCount(3);
   await page.locator(".tree-node").nth(3).click();
-  await expect(page.locator(".active-connector-path")).toHaveCount(4);
-  await expect(page.locator(".active-connector-path.is-active")).toHaveCount(3);
-  await expect(page.locator(".active-connector-path.is-active").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
-  const drawingOffset = await page.locator(".active-connector-path.is-active").last().evaluate((path) =>
-    Number.parseFloat(getComputedStyle(path).strokeDashoffset)
-  );
-  expect(drawingOffset).toBeGreaterThan(0);
-  await expect.poll(() => page.locator(".active-connector-path.is-active").evaluateAll((activePaths) =>
+  await expect(page.locator(".connector-path.is-active")).toHaveCount(3);
+  await expect(page.locator(".connector-path.is-active").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
+  await expect.poll(() => page.locator(".connector-path.is-active").evaluateAll((activePaths) =>
     activePaths.every((path) => {
       const attribute = Number.parseFloat(path.getAttribute("stroke-dashoffset") ?? "NaN");
       const computed = Number.parseFloat(getComputedStyle(path).strokeDashoffset);
       return Math.abs(attribute) < 0.1 && Math.abs(computed) < 0.1;
     })
   )).toBe(true);
-  const drawnCoordinate = await page.locator(".active-connector-path.is-active").last().getAttribute("data-coordinate");
-  await expect(page.locator(`.connector-path-base[data-coordinate="${drawnCoordinate}"]`)).toHaveCSS("opacity", "0");
 
   await page.evaluate(() => {
     (window as typeof window & { connectorMutations: number }).connectorMutations = 0;
@@ -234,31 +287,28 @@ test("each tree edge renders one arrow-free SVG path", async ({ page }) => {
   await page.locator(".tree-node").nth(2).hover();
   await page.waitForTimeout(50);
   await page.locator(".tree-node").nth(4).hover();
-  await expect.poll(() => page.locator(".active-connector-path").evaluateAll((overlayPaths) =>
-    overlayPaths.every((path) => {
-      const style = getComputedStyle(path);
+  await expect.poll(() => page.locator(".connector-path").evaluateAll((connectorPaths) =>
+    connectorPaths.every((path) => {
       const offset = Number.parseFloat(path.getAttribute("stroke-dashoffset") ?? "NaN");
-      return path.classList.contains("is-active")
-        ? Math.abs(offset) < 0.1 && Math.abs(Number.parseFloat(style.strokeDashoffset)) < 0.1
-        : Number.parseFloat(style.opacity) === 0 && Math.abs(offset - (path as SVGPathElement).getTotalLength()) < 0.1;
+      return Math.abs(offset) < 0.1 && Math.abs(Number.parseFloat(getComputedStyle(path).strokeDashoffset)) < 0.1;
     })
   )).toBe(true);
 
-  const glyph = await page.locator(".connector-path-base").first().evaluate((path) => {
+  const glyph = await page.locator(".connector-path").first().evaluate((path) => {
     const card = path.closest("ul")?.querySelector(":scope > .branch > .tree-node");
     return { right: path.getBoundingClientRect().right, cardLeft: card?.getBoundingClientRect().left ?? 0 };
   });
   expect(glyph.right).toBeLessThanOrEqual(glyph.cardLeft);
 
-  await expect.poll(() => page.locator(".connector-path-base").evaluateAll((basePaths) =>
-    basePaths.every((basePath) => {
-      const attribute = Number.parseFloat(basePath.getAttribute("stroke-dashoffset") ?? "NaN");
-      const computed = Number.parseFloat(getComputedStyle(basePath).strokeDashoffset);
+  await expect.poll(() => page.locator(".connector-path").evaluateAll((connectorPaths) =>
+    connectorPaths.every((connectorPath) => {
+      const attribute = Number.parseFloat(connectorPath.getAttribute("stroke-dashoffset") ?? "NaN");
+      const computed = Number.parseFloat(getComputedStyle(connectorPath).strokeDashoffset);
       return Math.abs(attribute) < 0.1 && Math.abs(computed) < 0.1;
     })
   )).toBe(true);
 
-  const renderedEdges = await page.locator(".active-connector-path.is-active").evaluateAll((activePaths, tipX) =>
+  const renderedEdges = await page.locator(".connector-path.is-active").evaluateAll((activePaths, tipX) =>
     activePaths.map((activePath) => {
       const path = activePath as SVGPathElement;
       const svg = path.ownerSVGElement;
@@ -271,5 +321,5 @@ test("each tree edge renders one arrow-free SVG path", async ({ page }) => {
         tipGap: card && tip ? card.getBoundingClientRect().left - tip.x : Number.NaN
       };
     }), connectorTipX);
-  expect(renderedEdges.every(({ dashCoversPath, tipGap }) => dashCoversPath && tipGap >= 0 && tipGap <= 4)).toBe(true);
+  expect(renderedEdges.every(({ dashCoversPath, tipGap }) => dashCoversPath && tipGap >= 0 && tipGap <= 12)).toBe(true);
 });
