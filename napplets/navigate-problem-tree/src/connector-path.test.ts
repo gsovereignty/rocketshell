@@ -12,11 +12,17 @@ describe("connector geometry", () => {
     for (const { d } of samples) expect(d).not.toMatch(/[LlHhVvSsTtQqAaZz]/);
   });
 
-  it("is one continuous path with a single move and five curves", () => {
+  it("is one continuous path with a single move and two curves", () => {
     for (const { d } of samples) {
       expect(d.match(/M/g)).toHaveLength(1);
-      expect(d.match(/C/g)).toHaveLength(5);
+      expect(d.match(/C/g)).toHaveLength(2);
       expect(d.startsWith("M 1 0")).toBe(true);
+    }
+  });
+
+  it("has no arrowhead returning from the branch endpoint", () => {
+    for (const { d } of samples) {
+      expect(points(d).filter(({ x }) => x === connectorTipX)).toHaveLength(1);
     }
   });
 
@@ -30,7 +36,7 @@ describe("connector geometry", () => {
     expect(connectorTipX).toBeLessThan(connectorWidth);
   });
 
-  it("terminates the branch at the arrow tip", () => {
+  it("terminates the branch at the gutter edge", () => {
     for (const { y, d } of samples) expect(d).toContain(`${connectorTipX} ${y}`);
   });
 

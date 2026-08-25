@@ -11,14 +11,9 @@ export function connectorPathData(coordinate: string, y: number): string {
   const tipX = connectorTipX;
   const bow = Math.min(5.4, 2.2 + y * 0.07) + variation(0);
   const sag = 3.4 + variation(4) * 0.9;
-  const barb = 5.2 + variation(8) * 0.7;
-  const sweep = 6.2 + variation(12) * 0.6;
   return [
     `M 1 0`,
     `C ${point(1 + bow, y * 0.32)}, ${point(1 + bow * 0.1, y * 0.84)}, ${point(1, y)}`,
-    `C ${point(2.1, y + sag)}, ${point(tipX * 0.58, y + sag * 0.7)}, ${point(tipX, y)}`,
-    `C ${point(tipX - 1.8, y - 1.4)}, ${point(tipX - 4, y - barb * 0.5)}, ${point(tipX - sweep, y - barb)}`,
-    `C ${point(tipX - 3.8, y - barb * 0.44)}, ${point(tipX - 1.6, y - 1.1)}, ${point(tipX, y)}`,
-    `C ${point(tipX - 1.6, y + 1.1)}, ${point(tipX - 3.8, y + barb * 0.44)}, ${point(tipX - sweep, y + barb)}`
+    `C ${point(2.1, y + sag)}, ${point(tipX * 0.58, y + sag * 0.7)}, ${point(tipX, y)}`
   ].join(" ");
 }

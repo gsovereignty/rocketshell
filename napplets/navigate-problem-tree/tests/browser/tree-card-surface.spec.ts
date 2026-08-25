@@ -134,7 +134,7 @@ test("tree growth scrolls inside its pane without reflowing cards", async ({ pag
   );
 });
 
-test("each tree edge renders its line and arrow in one SVG path", async ({ page }) => {
+test("each tree edge renders one arrow-free SVG path", async ({ page }) => {
   await page.addInitScript((queryEvents) => {
     Object.defineProperty(window, "napplet", {
       configurable: true,
@@ -162,7 +162,8 @@ test("each tree edge renders its line and arrow in one SVG path", async ({ page 
   expect(pathData).toMatch(/^M 1 0(?: C [^A-Z]+)+$/);
   expect(pathData?.match(/\bM\b/g)).toHaveLength(1);
   expect(pathData).not.toMatch(/[LHVlhv]/);
-  expect(pathData?.match(/\bC\b/g)).toHaveLength(5);
+  expect(pathData?.match(/\bC\b/g)).toHaveLength(2);
+  expect((pathData?.match(new RegExp(`${connectorTipX} \\d+(?:\\.\\d+)?`, "g")) ?? [])).toHaveLength(1);
   await page.locator(".tree-node").nth(3).click();
   await expect(page.locator(".active-connector-path")).toHaveCount(4);
   await expect(page.locator(".active-connector-path.is-active")).toHaveCount(3);
