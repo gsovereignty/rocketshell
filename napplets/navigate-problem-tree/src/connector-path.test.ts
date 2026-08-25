@@ -7,7 +7,7 @@ const samples = coordinates.flatMap((coordinate) => heights.map((y) => ({ coordi
 
 describe("connector geometry", () => {
   it("uses straight SVG commands joined at one right angle", () => {
-    for (const { d } of samples) expect(d).toMatch(/^M 1 0 V \d+(?:\.\d+)? H 8\.4$/);
+    for (const { d } of samples) expect(d).toMatch(/^M 1 0 V \d+(?:\.\d+)? H 24$/);
   });
 
   it("is one continuous path without separate segments", () => {
@@ -21,6 +21,7 @@ describe("connector geometry", () => {
 
   it("keeps line endpoint inside gutter", () => {
     expect(connectorTipX).toBeLessThan(connectorWidth);
+    expect(connectorTipX - 1).toBeGreaterThanOrEqual(20);
   });
 
   it("terminates the branch at the gutter edge", () => {

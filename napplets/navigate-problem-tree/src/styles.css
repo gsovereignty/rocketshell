@@ -60,7 +60,7 @@ button { color: inherit; }
 .tree-root, .tree-root ul { margin: 0; padding: 0; list-style: none; }
 .tree-root { margin-top: 16px; }
 .branch { position: relative; }
-.branch ul { position: relative; margin-left: 24px; padding-left: 17px; }
+.branch ul { position: relative; margin-left: 8px; padding-left: 33px; }
 .tree-connectors { position: absolute; z-index: 1; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .tree-connectors > .connector-path { fill: none; stroke: var(--connector); stroke-linecap: round; stroke-linejoin: miter; stroke-width: 4; vector-effect: non-scaling-stroke; }
 .tree-connectors > .connector-path.is-active { stroke: var(--blue); }

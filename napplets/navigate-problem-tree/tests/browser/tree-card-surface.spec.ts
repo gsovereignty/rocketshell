@@ -5,7 +5,7 @@ const rootId = "7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170
 const root = `31971:${owner}:${rootId}`;
 const hex = (character: string) => character.repeat(64);
 const coordinate = (character: string) => `31971:${owner}:${hex(character)}`;
-const connectorTipX = 8.4;
+const connectorTipX = 24;
 
 const problem = (id: string, problemCoordinate: string, title: string, parent?: string) => ({
   event: {
@@ -256,7 +256,7 @@ test("each tree edge renders one thick straight SVG arrow", async ({ page }) => 
   const paths = page.locator(".connector-path");
   await expect(paths).toHaveCount(4);
   const pathData = await paths.first().getAttribute("d");
-  expect(pathData).toMatch(/^M 1 0 V \d+(?:\.\d+)? H 8\.4$/);
+  expect(pathData).toMatch(/^M 1 0 V \d+(?:\.\d+)? H 24$/);
   expect(pathData?.match(/\bM\b/g)).toHaveLength(1);
   expect(pathData?.match(/\bV\b/g)).toHaveLength(1);
   expect(pathData?.match(/\bH\b/g)).toHaveLength(1);
