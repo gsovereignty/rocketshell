@@ -28,17 +28,21 @@ worker.addEventListener("activate", (event: ExtendableEvent) => {
 worker.addEventListener("message", (event: ExtendableMessageEvent) => {
   const requestId = event.data && typeof event.data === "object" && typeof event.data.requestId === "string" ? event.data.requestId : "unknown";
   const request = parseWorkerRequest(event.data);
-  const reply = (value: WorkerReply): void => { if (event.source && "postMessage" in event.source) event.source.postMessage(value); };
+  const reply = (value: WorkerReply): void => {
+    const port = event.ports[0];
+    if (port) port.postMessage(value);
+    else if (event.source && "postMessage" in event.source) event.source.postMessage(value);
+  };
   if (!request) {
     const unsupported = event.data?.protocolVersion !== SERVICE_WORKER_PROTOCOL_VERSION;
-    reply({ protocolVersion: SERVICE_WORKER_PROTOCOL_VERSION, requestId, ok: false, error: unsupported ? "unsupported-protocol" : "invalid-request" });
+    reply({ protocolVersion: SERVICE_WORKER_PROTOCOL_VERSION, buildId: __SHELL_BUILD_ID__, requestId, ok: false, error: unsupported ? "unsupported-protocol" : "invalid-request" });
     return;
   }
   if (request.type === "ACTIVATE_UPDATE") {
-    event.waitUntil(worker.skipWaiting().then(() => reply({ protocolVersion: SERVICE_WORKER_PROTOCOL_VERSION, requestId, ok: true })));
+    event.waitUntil(worker.skipWaiting().then(() => reply({ protocolVersion: SERVICE_WORKER_PROTOCOL_VERSION, buildId: __SHELL_BUILD_ID__, requestId, ok: true })));
     return;
   }
-  reply({ protocolVersion: SERVICE_WORKER_PROTOCOL_VERSION, requestId, ok: true });
+  reply({ protocolVersion: SERVICE_WORKER_PROTOCOL_VERSION, buildId: __SHELL_BUILD_ID__, requestId, ok: true });
 });
 
 worker.addEventListener("fetch", (event: FetchEvent) => {

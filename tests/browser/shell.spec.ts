@@ -18,11 +18,20 @@ declare global {
 test("starts under repository subpath and gains service-worker control", async ({ page }) => {
   await page.goto("./");
   await expect(page).toHaveTitle("Rocketshell");
-  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await expect(page.locator("#status")).toBeHidden();
   expect(await page.evaluate(async () => Boolean(await navigator.serviceWorker.getRegistration("/rocketshell/")))).toBe(true);
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("Platform ready");
-  expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/rocketshell/service-worker.js"))).toBe(true);
+  await expect(page.locator("#status")).toBeHidden();
+  expect(await page.evaluate(() => new URL(navigator.serviceWorker.controller!.scriptURL).pathname.endsWith("/rocketshell/service-worker.js"))).toBe(true);
+  expect(await page.evaluate(async () => {
+    const controller = navigator.serviceWorker.controller;
+    if (!controller) return false;
+    const expected = new URL(controller.scriptURL).searchParams.get("build");
+    const channel = new MessageChannel();
+    const reply = new Promise<any>((resolve) => { channel.port1.onmessage = (event) => resolve(event.data); });
+    controller.postMessage({ protocolVersion: 1, requestId: "browser-build-check", type: "PING" }, [channel.port2]);
+    return (await reply).buildId === expected;
+  })).toBe(true);
 });
 
 test("replaces persisted stale built-in bytes without clearing browser data", async ({ page }) => {
@@ -105,7 +114,7 @@ test("replaces persisted stale built-in bytes without clearing browser data", as
 
   await page.reload();
   await expect(page.locator("#status")).toBeHidden();
-  expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/service-worker.js"))).toBe(true);
+  expect(await page.evaluate(() => new URL(navigator.serviceWorker.controller!.scriptURL).pathname.endsWith("/service-worker.js"))).toBe(true);
   expect(await page.evaluate(async () => Boolean(await caches.match("/legacy-registry-read")))).toBe(false);
   const restored = page.locator('iframe[title="view-problem"]');
   await expect(restored).toBeVisible();

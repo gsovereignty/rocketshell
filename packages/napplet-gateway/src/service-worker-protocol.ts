@@ -6,8 +6,8 @@ export type WorkerRequest =
   | { readonly protocolVersion: 1; readonly requestId: string; readonly type: "ACTIVATE_UPDATE" };
 
 export type WorkerReply =
-  | { readonly protocolVersion: 1; readonly requestId: string; readonly ok: true }
-  | { readonly protocolVersion: 1; readonly requestId: string; readonly ok: false; readonly error: "unsupported-protocol" | "invalid-request" };
+  | { readonly protocolVersion: 1; readonly requestId: string; readonly buildId: string; readonly ok: true }
+  | { readonly protocolVersion: 1; readonly requestId: string; readonly buildId: string; readonly ok: false; readonly error: "unsupported-protocol" | "invalid-request" };
 
 export function parseWorkerRequest(value: unknown): WorkerRequest | undefined {
   if (!value || typeof value !== "object") return undefined;

@@ -19,6 +19,8 @@ import { installBuiltInNapplets } from "./built-in-napplets.js";
 import { createNappletConsoleStore, parseNappletConsoleMessage, type NappletConsoleStore } from "./napplet-console-store.js";
 import { settleServiceWorkerStartup } from "./service-worker-startup.js";
 
+declare const __SHELL_BUILD_ID__: string;
+
 const DEFAULT_DISCOVERY_RELAYS = ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"] as const;
 const DEFAULT_NETWORK_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://bucket.coracle.social"] as const;
 const DEFAULT_BLOSSOM_SERVERS = ["https://blossom.primal.net"] as const;
@@ -231,14 +233,23 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
   };
   window.addEventListener("message", onMessage);
   if (!("serviceWorker" in navigator)) throw new Error("Service workers unavailable");
-  const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`, {
+  const expectedWorkerBuildId = import.meta.env.DEV
+    ? await fetch(`${import.meta.env.BASE_URL}shell-build-id.json`, { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error(`Service worker identity unavailable: ${response.status}`);
+      const value: unknown = await response.json();
+      if (!value || typeof value !== "object" || !("buildId" in value) || typeof value.buildId !== "string") throw new Error("Service worker identity is invalid");
+      return value.buildId;
+    })
+    : __SHELL_BUILD_ID__;
+  const workerUrl = `${import.meta.env.BASE_URL}service-worker.js?build=${encodeURIComponent(expectedWorkerBuildId)}`;
+  const registration = await navigator.serviceWorker.register(workerUrl, {
     scope: import.meta.env.BASE_URL,
     type: "module",
     updateViaCache: "none"
   });
   const onWorkerMessage = (event: MessageEvent): void => { recordWorkerProtocolFailure(event.data, telemetry); };
   navigator.serviceWorker.addEventListener("message", onWorkerMessage);
-  if (await settleServiceWorkerStartup(registration, navigator.serviceWorker) === "reload") {
+  if (await settleServiceWorkerStartup(registration, navigator.serviceWorker, expectedWorkerBuildId) === "reload") {
     location.reload();
     return new Promise<BrowserPlatform>(() => {});
   }

@@ -1,16 +1,43 @@
 import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { verifyEvent } from "nostr-tools/pure";
 import { builtInNappletBuildId, builtInNapplets } from "./vite.napplets.js";
 
-const devServiceWorker = (): Plugin => ({
+export const sourceBuildId = (repositoryRoot: string, nappletBuildId: string): string => {
+  const hash = createHash("sha256").update(nappletBuildId);
+  const roots = [resolve(repositoryRoot, "apps/shell/src"), resolve(repositoryRoot, "packages/napplet-gateway/src")];
+  const addTree = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) addTree(path);
+      else if (entry.isFile()) hash.update(path.slice(repositoryRoot.length)).update("\0").update(readFileSync(path));
+    }
+  };
+  for (const root of roots) addTree(root);
+  hash.update(readFileSync(resolve(repositoryRoot, "pnpm-lock.yaml")));
+  return hash.digest("hex");
+};
+
+export const currentDevBuildId = (repositoryRoot: string): string =>
+  sourceBuildId(repositoryRoot, builtInNappletBuildId(repositoryRoot));
+
+export const devServiceWorker = (currentBuildId: () => string): Plugin => ({
   name: "platform-dev-service-worker",
   apply: "serve",
   configureServer(server) {
     server.middlewares.use(async (request, response, next) => {
       const pathname = new URL(request.url ?? "/", "http://vite.local").pathname;
       const workerPath = `${server.config.base}service-worker.js`.replace(/\/+/g, "/");
+      const identityPath = `${server.config.base}shell-build-id.json`.replace(/\/+/g, "/");
+      if (pathname === identityPath) {
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        response.setHeader("Cache-Control", "no-store");
+        response.end(JSON.stringify({ buildId: currentBuildId() }));
+        return;
+      }
       if (pathname !== workerPath) {
         next();
         return;
@@ -26,7 +53,7 @@ const devServiceWorker = (): Plugin => ({
         response.setHeader("Content-Type", "application/javascript; charset=utf-8");
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("Service-Worker-Allowed", server.config.base);
-        response.end(transformed.code);
+        response.end(transformed.code.replaceAll("__SHELL_BUILD_ID__", JSON.stringify(currentBuildId())));
       } catch (error) {
         next(error as Error);
       }
@@ -117,11 +144,12 @@ export default defineConfig(({ mode }) => {
   const repositoryRoot = resolve(__dirname, "../..");
   // Built-in Napplet bytes define cache identity. Rebuilding any artifact therefore
   // produces a new worker and retires every cache that could contain old pixels.
-  const buildId = builtInNappletBuildId(repositoryRoot);
+  const currentBuildId = (): string => currentDevBuildId(repositoryRoot);
+  const buildId = currentBuildId();
   return {
     define: { __SHELL_BUILD_ID__: JSON.stringify(buildId) },
     base: mode === "github" ? "/rocketshell/" : process.env.PLATFORM_BASE ?? "/",
-    plugins: [devServiceWorker(), testBlossomServer(), testResourceServer(), testLegacyServiceWorker(), builtInNapplets(repositoryRoot)],
+    plugins: [devServiceWorker(currentBuildId), testBlossomServer(), testResourceServer(), testLegacyServiceWorker(), builtInNapplets(repositoryRoot)],
     build: {
       sourcemap: true,
       rollupOptions: {
