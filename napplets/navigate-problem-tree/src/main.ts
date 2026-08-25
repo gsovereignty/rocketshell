@@ -38,6 +38,7 @@ let problemEvents: RelayEventResult[] = [];
 let problemSubscription: OutboxSubscription | undefined;
 let loadGeneration = 0;
 let connectorTimeline: gsap.core.Timeline | undefined;
+let connectorConstructionTimeline: gsap.core.Timeline | undefined;
 let hoverIntent: gsap.core.Tween | undefined;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -91,7 +92,7 @@ function receiveProblemEvents(rootCoordinate: string, incoming: RelayEventResult
   dag = buildProblemDag(rootCoordinate, problemEvents);
   if (!dag.nodes.has(selected)) selected = rootCoordinate;
   if (!dag.nodes.has(listScope)) listScope = rootCoordinate;
-  renderApp();
+  renderApp(false, false);
 }
 
 function outlineBranch(coordinate: string, trail: Set<string>, depth = 0): string {
@@ -123,7 +124,7 @@ function filterCounts(nodes: ProblemNode[]) {
 function connectorPathData(coordinate: string, y: number): string {
   let seed = 0;
   for (const character of coordinate) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619);
-  const variation = (shift: number) => (((seed >>> shift) & 15) / 15 - 0.5) * 0.8;
+  const variation = (shift: number) => (((seed >>> shift) & 15) / 15 - 0.5) * 1.4;
   const upperArrowY = y - 4 + variation(4);
   const lowerArrowY = y + 4 + variation(8);
   return [
@@ -171,12 +172,30 @@ function layoutTreeConnectors() {
       const pathData = connectorPathData(coordinate, y);
       connector.querySelectorAll<SVGPathElement>(`[data-coordinate="${coordinate}"]`).forEach((path) => {
         path.setAttribute("d", pathData);
-        if (!path.classList.contains("active-connector-path")) return;
         const length = path.getTotalLength();
         path.style.strokeDasharray = `${length} ${length}`;
-        if (!path.classList.contains("is-active")) path.style.strokeDashoffset = String(length);
+        if (path.classList.contains("active-connector-path") && !path.classList.contains("is-active")) {
+          path.style.strokeDashoffset = String(length);
+        }
       });
     });
+  });
+}
+
+function drawTreeConnectors(animate: boolean) {
+  connectorConstructionTimeline?.kill();
+  const paths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path-base"));
+  gsap.killTweensOf(paths);
+  if (!animate || reducedMotion.matches) {
+    gsap.set(paths, { strokeDashoffset: 0 });
+    return;
+  }
+  paths.forEach((path) => gsap.set(path, { strokeDashoffset: path.getTotalLength() }));
+  connectorConstructionTimeline = gsap.timeline().to(paths, {
+    strokeDashoffset: 0,
+    duration: 0.42,
+    stagger: { each: 0.055, from: "start" },
+    ease: "power2.out"
   });
 }
 
@@ -191,8 +210,11 @@ function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
     ? ancestorCoordinates(dag, activeCoordinate).add(activeCoordinate)
     : new Set<string>();
   const paths = connectorAnimationTargets();
+  const basePaths = Array.from(app.querySelectorAll<SVGPathElement>(".connector-path-base"));
   gsap.killTweensOf(paths);
+  gsap.killTweensOf(basePaths);
   if (!animate || reducedMotion.matches) {
+    basePaths.forEach((path) => gsap.set(path, { opacity: activeCoordinates.has(path.dataset.coordinate ?? "") ? 0 : 1 }));
     paths.forEach((path) => {
       const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
       path.classList.toggle("is-active", isActive);
@@ -207,11 +229,15 @@ function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
     path.classList.toggle("is-active", isActive);
     if (isActive && !wasActive) {
       const length = path.getTotalLength();
+      const basePath = path.parentElement?.querySelector<SVGPathElement>(`.connector-path-base[data-coordinate="${path.dataset.coordinate}"]`);
+      if (basePath) gsap.set(basePath, { opacity: 0 });
       gsap.set(path, { opacity: 1, strokeDashoffset: length });
       connectorTimeline!.to(path, { strokeDashoffset: 0, duration: 0.28, ease: "power2.out" }, index * 0.025);
     } else if (isActive) {
       gsap.set(path, { opacity: 1, strokeDashoffset: 0 });
     } else if (wasActive) {
+      const basePath = path.parentElement?.querySelector<SVGPathElement>(`.connector-path-base[data-coordinate="${path.dataset.coordinate}"]`);
+      if (basePath) gsap.set(basePath, { opacity: 1 });
       connectorTimeline!.to(path, {
         opacity: 0,
         duration: 0.1,
@@ -259,7 +285,7 @@ function renderList(animateRows = true) {
   }
 }
 
-function renderApp(animateListRows = true, animateConnectorPath = false) {
+function renderApp(animateListRows = true, animateConnectorConstruction = false) {
   if (!dag) return;
   const currentDag = dag;
   app.innerHTML = `
@@ -284,7 +310,8 @@ function renderApp(animateListRows = true, animateConnectorPath = false) {
   bindWorkspace();
   renderList(animateListRows);
   layoutTreeConnectors();
-  showTreeConnectorPath(selected, animateConnectorPath);
+  showTreeConnectorPath(selected, false);
+  drawTreeConnectors(animateConnectorConstruction);
 }
 
 function updateTreeSelection(animateConnectorPath: boolean) {
@@ -467,7 +494,7 @@ async function loadDag(value: string) {
     listScope = coordinate;
     noteHandlerAvailable = hasProblemViewer(noteAvailability);
     problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
-    renderApp();
+    renderApp(true, true);
   } catch (error) {
     if (generation !== loadGeneration) return;
     stopProblemSubscription();

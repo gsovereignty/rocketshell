@@ -164,10 +164,16 @@ test("each tree edge renders its line and arrow in one SVG path", async ({ page 
   await expect(page.locator(".active-connector-path")).toHaveCount(4);
   await expect(page.locator(".active-connector-path.is-active")).toHaveCount(3);
   await expect(page.locator(".active-connector-path.is-active").first()).toHaveCSS("stroke", "rgb(20, 92, 255)");
+  const drawingOffset = await page.locator(".active-connector-path.is-active").last().evaluate((path) =>
+    Number.parseFloat(getComputedStyle(path).strokeDashoffset)
+  );
+  expect(drawingOffset).toBeGreaterThan(0);
   await expect.poll(async () => {
     const style = await page.locator(".active-connector-path.is-active").last().getAttribute("style");
     return Number.parseFloat(style?.match(/stroke-dashoffset:\s*([\d.]+)/)?.[1] ?? "0");
   }).toBeLessThan(0.1);
+  const drawnCoordinate = await page.locator(".active-connector-path.is-active").last().getAttribute("data-coordinate");
+  await expect(page.locator(`.connector-path-base[data-coordinate="${drawnCoordinate}"]`)).toHaveCSS("opacity", "0");
 
   await page.evaluate(() => {
     (window as typeof window & { connectorMutations: number }).connectorMutations = 0;
