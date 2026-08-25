@@ -261,6 +261,14 @@ test("each tree edge renders one thick straight SVG arrow", async ({ page }) => 
   expect(pathData?.match(/\bV\b/g)).toHaveLength(1);
   expect(pathData?.match(/\bH\b/g)).toHaveLength(1);
   expect(pathData?.endsWith(`H ${connectorTipX}`)).toBe(true);
+  const viewportClearance = await page.locator(".tree-connectors").evaluateAll((connectors) =>
+    connectors.every((connector) => {
+      const svg = connector as SVGSVGElement;
+      const paths = Array.from(svg.querySelectorAll<SVGPathElement>(":scope > .connector-path"));
+      const finalY = Math.max(...paths.map((path) => path.getPointAtLength(path.getTotalLength()).y));
+      return svg.viewBox.baseVal.height - finalY >= 8;
+    }));
+  expect(viewportClearance).toBe(true);
   await expect(paths.first()).toHaveAttribute("marker-end", /url\(#tree-arrow-\d+\)/);
   await expect(paths.first()).toHaveCSS("stroke-width", "4px");
   await expect(page.locator(".tree-connectors marker")).toHaveCount(3);

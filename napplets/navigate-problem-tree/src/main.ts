@@ -136,7 +136,9 @@ function layoutTreeConnectors() {
         y: nodeBox ? nodeBox.top - childrenBox.top + nodeBox.height / 2 : 0
       };
     });
-    const height = Math.max(1, Math.ceil(points.at(-1)?.y ?? 1));
+    // Keep final horizontal shaft and marker inside SVG viewport. Paths ending
+    // exactly at viewport bottom lose their horizontal stroke in some hosts.
+    const height = Math.max(1, Math.ceil((points.at(-1)?.y ?? 1) + 8));
     connector.setAttribute("viewBox", `0 0 ${connectorWidth} ${height}`);
     connector.setAttribute("width", String(connectorWidth));
     connector.setAttribute("height", String(height));
