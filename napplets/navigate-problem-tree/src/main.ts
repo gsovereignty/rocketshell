@@ -120,6 +120,22 @@ function filterCounts(nodes: ProblemNode[]) {
   ] as const;
 }
 
+function connectorPathData(coordinate: string, y: number): string {
+  let seed = 0;
+  for (const character of coordinate) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619);
+  const variation = (shift: number) => (((seed >>> shift) & 15) / 15 - 0.5) * 0.8;
+  const upperArrowY = y - 4 + variation(4);
+  const lowerArrowY = y + 4 + variation(8);
+  return [
+    `M 1 0`,
+    `C ${1 + variation(0)} ${y * 0.28}, ${1 + variation(12)} ${y * 0.72}, 1 ${y}`,
+    `C 5 ${y + variation(16)}, 11 ${y + variation(20)}, 16 ${y}`,
+    `L ${11 + variation(24)} ${upperArrowY}`,
+    `L 16 ${y}`,
+    `L ${11 + variation(28)} ${lowerArrowY}`
+  ].join(" ");
+}
+
 function layoutTreeConnectors() {
   app.querySelectorAll<HTMLElement>(".branch > ul").forEach((children) => {
     const connector = children.querySelector<SVGSVGElement>(":scope > .tree-connectors");
@@ -152,8 +168,14 @@ function layoutTreeConnectors() {
       });
     }
     points.forEach(({ coordinate, y }) => {
-      const pathData = `M 1 0 V ${y} H 16 M 11 ${y - 4} L 16 ${y} L 11 ${y + 4}`;
-      connector.querySelectorAll<SVGPathElement>(`[data-coordinate="${coordinate}"]`).forEach((path) => path.setAttribute("d", pathData));
+      const pathData = connectorPathData(coordinate, y);
+      connector.querySelectorAll<SVGPathElement>(`[data-coordinate="${coordinate}"]`).forEach((path) => {
+        path.setAttribute("d", pathData);
+        if (!path.classList.contains("active-connector-path")) return;
+        const length = path.getTotalLength();
+        path.style.strokeDasharray = `${length} ${length}`;
+        if (!path.classList.contains("is-active")) path.style.strokeDashoffset = String(length);
+      });
     });
   });
 }
@@ -170,15 +192,33 @@ function showTreeConnectorPath(activeCoordinate: string, animate: boolean) {
     : new Set<string>();
   const paths = connectorAnimationTargets();
   gsap.killTweensOf(paths);
-  paths.forEach((path) => path.classList.toggle("is-active", activeCoordinates.has(path.dataset.coordinate ?? "")));
   if (!animate || reducedMotion.matches) {
-    gsap.set(paths, { opacity: (_index, path: SVGPathElement) => path.classList.contains("is-active") ? 1 : 0 });
+    paths.forEach((path) => {
+      const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
+      path.classList.toggle("is-active", isActive);
+      gsap.set(path, { opacity: isActive ? 1 : 0, strokeDashoffset: isActive ? 0 : path.getTotalLength() });
+    });
     return;
   }
-  connectorTimeline = gsap.timeline().to(paths, {
-    opacity: (_index, path: SVGPathElement) => path.classList.contains("is-active") ? 1 : 0,
-    duration: 0.12,
-    ease: "power1.out"
+  connectorTimeline = gsap.timeline();
+  paths.forEach((path, index) => {
+    const wasActive = path.classList.contains("is-active");
+    const isActive = activeCoordinates.has(path.dataset.coordinate ?? "");
+    path.classList.toggle("is-active", isActive);
+    if (isActive && !wasActive) {
+      const length = path.getTotalLength();
+      gsap.set(path, { opacity: 1, strokeDashoffset: length });
+      connectorTimeline!.to(path, { strokeDashoffset: 0, duration: 0.28, ease: "power2.out" }, index * 0.025);
+    } else if (isActive) {
+      gsap.set(path, { opacity: 1, strokeDashoffset: 0 });
+    } else if (wasActive) {
+      connectorTimeline!.to(path, {
+        opacity: 0,
+        duration: 0.1,
+        ease: "power1.in",
+        onComplete: () => gsap.set(path, { strokeDashoffset: path.getTotalLength() })
+      }, 0);
+    }
   });
 }
 
