@@ -209,8 +209,10 @@ test("mobile page owns child-list scrolling without horizontal overflow", async 
   await page.goto("/");
   const list = page.locator(".problem-list");
   const rows = page.locator(".problem-row");
+  const firstRow = rows.first();
   const lastRow = rows.last();
   await expect(rows).toHaveCount(manyLeaves.length);
+  await expect(firstRow).toBeInViewport();
   await expect.poll(() => list.evaluate((element) => element.scrollHeight === element.clientHeight)).toBe(true);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -221,7 +223,9 @@ test("mobile page owns child-list scrolling without horizontal overflow", async 
   for (let tick = 0; tick < 20; tick += 1) await page.mouse.wheel(0, 500);
   await expect.poll(() => page.evaluate(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1)).toBe(true);
   await expect(lastRow).toBeInViewport();
+  await expect(firstRow).not.toBeInViewport();
   expect(await list.evaluate((element) => element.scrollTop)).toBe(0);
+  expect(await page.evaluate(() => window.scrollX)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => document.documentElement.clientWidth)
   );
