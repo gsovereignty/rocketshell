@@ -146,16 +146,17 @@ describe("problem editor", () => {
         ...(previous ? [["e", previous, "", "previous", eventOwner]] : [])
       ]
     });
-    const editableChild = (parents = [parentCoordinate]) => selectEditableProblem(problemId, [
+    const editableChild = (parents = [parentCoordinate], editor = owner, extraTags: string[][] = []) => selectEditableProblem(problemId, [
       result({ ...event(hex("5")), tags: [
         ["d", problemId], ["title", "Child"], ["status", "open"],
         ["a", `31971:${owner}:${problemId}`, "wss://child.example", "origin"],
         ["A", rootCoordinate, "wss://root.example"], ["E", hex("6"), "wss://root.example", rootOwner], ["K", "31971"], ["P", rootOwner, "wss://root.example"],
-        ...parents.map((coordinate) => ["a", coordinate, "wss://parent.example"])
+        ...parents.map((coordinate) => ["a", coordinate, "wss://parent.example"]),
+        ...extraTags
       ] }),
       graphEvent(hex("7"), rootOwner, rootId),
       graphEvent(hex("8"), parentOwner, parentId, [rootCoordinate])
-    ], owner);
+    ], editor);
     const graph = () => [
       graphEvent(hex("7"), rootOwner, rootId),
       graphEvent(hex("8"), parentOwner, parentId, [rootCoordinate])
@@ -231,10 +232,37 @@ describe("problem editor", () => {
       expect(() => resolveParentChange(root, [parentCoordinate], graph())).toThrow("Graph root");
     });
 
-    it("rejects parent changes by non-owner editors", () => {
+    it("lets listed maintainers add, remove, and change parents without changing maintainer tags", () => {
+      const maintainer = hex("d");
+      const secondOwner = hex("9");
+      const secondId = hex("a");
+      const secondCoordinate = `31971:${secondOwner}:${secondId}`;
+      const maintainerTags = [
+        ["p", maintainer, "wss://maintainer.example", "maintainer"],
+        ["p", hex("e"), "", "maintainer"]
+      ];
+      const problem = editableChild([parentCoordinate], maintainer, maintainerTags);
+      const events = [...graph(), graphEvent(hex("b"), secondOwner, secondId, [rootCoordinate])];
+
+      expect(problem.isOwner).toBe(false);
+      expect(problem.mayEdit).toBe(true);
+      for (const parents of [
+        [parentCoordinate, secondCoordinate],
+        [secondCoordinate],
+        [rootCoordinate]
+      ]) {
+        const change = resolveParentChange(problem, parents, events);
+        const template = buildRevisionTemplate(problem, { title: "Moved", description: "Body", status: "open" }, 20, false, change);
+        expect(template.tags.filter((tag) => tag[0] === "a" && tag[3] === undefined).map((tag) => tag[1])).toEqual(parents);
+        expect(template.tags.filter((tag) => tag[0] === "p" && tag[3] === "maintainer")).toEqual(maintainerTags);
+      }
+    });
+
+    it("rejects parent changes by unauthorized identities", () => {
       const problem = editableChild();
       problem.isOwner = false;
-      expect(() => resolveParentChange(problem, [parentCoordinate], graph())).toThrow("Only problem owner");
+      problem.mayEdit = false;
+      expect(() => resolveParentChange(problem, [parentCoordinate], graph())).toThrow("not authorized");
     });
   });
 });

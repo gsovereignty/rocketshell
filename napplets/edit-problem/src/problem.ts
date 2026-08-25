@@ -133,7 +133,7 @@ export function resolveParentChange(
   proposedCoordinates: string[],
   results: RelayEventResult[]
 ): ResolvedParentChange {
-  if (!problem.isOwner) throw new Error("Only problem owner can change direct parents.");
+  if (!problem.mayEdit) throw new Error("Connected identity is not authorized to change direct parents.");
   const ownCoordinate = `31971:${problem.owner}:${problem.problemId}`;
   const graphRoot = rootCoordinate(problem.event);
   const isRoot = ownCoordinate === graphRoot;
