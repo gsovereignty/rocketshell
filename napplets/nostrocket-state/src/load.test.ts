@@ -1,0 +1,9 @@
+import { describe, expect, it, vi } from "vitest";
+import fixture from "./fixtures/nostrocket-state.json";
+import { firstMatchingState } from "./load";
+import type { NostrEvent } from "./state";
+
+describe("first state subscription", () => {
+  it("closes immediately after first valid event", async () => { const callbacks = new Map<string, (value: never) => void>(); const close = vi.fn(); const subscribe = vi.fn(() => ({ on: (type: string, callback: (value: never) => void) => callbacks.set(type, callback), close })); const promise = firstMatchingState(subscribe, ["wss://relay.example/"]); callbacks.get("event")?.({ event: fixture as NostrEvent } as never); await expect(promise).resolves.toMatchObject({ id: fixture.id }); expect(close).toHaveBeenCalledTimes(1); expect(subscribe).toHaveBeenCalledWith([expect.objectContaining({ kinds: [31108], authors: [fixture.pubkey], "#d": ["NOSTROCKET"], limit: 1 })], expect.objectContaining({ relays: ["wss://relay.example/"], limit: 1 })); });
+  it("keeps listening after malformed candidate", async () => { const callbacks = new Map<string, (value: never) => void>(); const close = vi.fn(); const subscribe = () => ({ on: (type: string, callback: (value: never) => void) => callbacks.set(type, callback), close }); const promise = firstMatchingState(subscribe, []); callbacks.get("event")?.({ event: { ...fixture, kind: 1 } } as never); expect(close).not.toHaveBeenCalled(); callbacks.get("event")?.({ event: fixture } as never); await expect(promise).resolves.toMatchObject({ id: fixture.id }); });
+});
