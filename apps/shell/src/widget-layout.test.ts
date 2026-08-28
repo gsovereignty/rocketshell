@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canPlaceRect,
   clampDragRowToPage,
+  compactEmptiedWorkspaces,
   defaultWidgetRects,
   dragScrollDirection,
   nextFullscreenRect,
@@ -305,5 +306,45 @@ describe("widget workspace lookup", () => {
     expect(widgetPage({ column: 0, row: 0, width: 2, height: 2 }, 2)).toBe(0);
     expect(widgetPage({ column: 0, row: 3, width: 2, height: 1 }, 2)).toBe(1);
     expect(widgetPage({ column: 0, row: 3, width: 1, height: 1 }, 1)).toBe(3);
+  });
+
+  it("removes an emptied workspace and shifts later widgets upward", () => {
+    const compaction = compactEmptiedWorkspaces(
+      [
+        { column: 0, row: 0, width: 4, height: 2 },
+        { column: 0, row: 4, width: 4, height: 2 }
+      ],
+      [{ column: 0, row: 2, width: 4, height: 2 }],
+      2
+    );
+
+    expect(compaction.removedPages).toEqual([1]);
+    expect(compaction.targetPage).toBe(0);
+    expect(compaction.rects).toEqual([
+      { column: 0, row: 0, width: 4, height: 2 },
+      { column: 0, row: 2, width: 4, height: 2 }
+    ]);
+  });
+
+  it("keeps a workspace while another widget still occupies it", () => {
+    const remaining = [{ column: 2, row: 2, width: 2, height: 1 }];
+    const compaction = compactEmptiedWorkspaces(
+      remaining,
+      [{ column: 0, row: 2, width: 2, height: 1 }],
+      2
+    );
+
+    expect(compaction).toEqual({ rects: remaining, removedPages: [] });
+  });
+
+  it("promotes the next occupied workspace when no earlier one remains", () => {
+    const compaction = compactEmptiedWorkspaces(
+      [{ column: 0, row: 2, width: 4, height: 2 }],
+      [{ column: 0, row: 0, width: 4, height: 2 }],
+      2
+    );
+
+    expect(compaction.targetPage).toBe(0);
+    expect(compaction.rects[0]).toEqual({ column: 0, row: 0, width: 4, height: 2 });
   });
 });

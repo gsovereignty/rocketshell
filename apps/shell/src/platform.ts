@@ -1,7 +1,7 @@
 import { createShellBridge, originRegistry, type ShellBridge } from "@kehto/shell";
 import { createHostAuditTrail, createIntentPreferenceStore, createShellSettingsStore, createStorageConfigStore, registerCoreHostServices, registerIntentService, registerLinkService, registerResourceService, registerUploadService, type ShellSettings, type ShellSettingsStore } from "@platform/host-services";
 import { createManifestResolver, createPlatformShellAdapter, createRelayConfiguration, registerCoreServices, type PlatformRelayConfiguration } from "@platform/kehto-adapters";
-import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
+import { IndexedDbPackageStore, NappletWindowManager, installRemotePackage, type CreateWindowOptions, type WindowBridge, type WindowIdentity } from "@platform/napplet-gateway";
 import {
   MAILBOX_LIST_KIND, accounts, blossomServers$, createAccountListEditor, fallbackBlossomServers$,
   fallbackLookupRelays$, fallbackRelays$, publisher, relayListPublishTargets, relayPolicy,
@@ -72,7 +72,7 @@ export interface BrowserPlatform {
   signOut(): void;
   dockLaunchers(): Promise<readonly DockLauncher[]>;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
-  openInstalled(dTag: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
+  openInstalled(dTag: string, options?: CreateWindowOptions): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
   destroyWindow(windowId: string): void;
   authenticatedWindowIds(): readonly string[];
   telemetrySnapshot(): readonly PlatformMetricRecord[];
@@ -293,10 +293,10 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
       const managed = await windows.create(installation.dTag);
       return { dTag: installation.dTag, title: installation.manifest.title ?? installation.dTag, windowId: managed.identity.windowId };
     },
-    async openInstalled(dTag) {
+    async openInstalled(dTag, options) {
       const installation = await packageStore.getActive(dTag);
       if (!installation) throw new Error("No active verified installation");
-      const managed = await windows.create(dTag);
+      const managed = await windows.create(dTag, true, options);
       return { dTag, title: installation.manifest.title ?? dTag, windowId: managed.identity.windowId };
     },
     destroyWindow: (windowId) => windows?.destroy(windowId),

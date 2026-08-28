@@ -802,6 +802,64 @@ test("menu actions reuse and reveal widgets across workspaces", async ({ page })
   await expect(page.locator('iframe[title="create-rocket"]')).toHaveCount(1);
 });
 
+test("New Rocket owns a fullscreen workspace that closes cleanly", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+
+  await page.getByRole("button", { name: "Problem Tracker" }).click();
+  const tracker = page.locator('.napplet-window:has(iframe[title="navigate-problem-tree"])');
+  await expect(tracker).toBeVisible();
+  const trackerPlacement = await tracker.evaluate((element) => ({
+    column: (element as HTMLElement).style.gridColumn,
+    row: (element as HTMLElement).style.gridRow
+  }));
+  const previewsBefore = await page.locator("#screen-nav .screen-preview").count();
+
+  await page.getByRole("button", { name: "New Rocket" }).click();
+  const rocket = page.locator('.napplet-window:has(iframe[title="create-rocket"])');
+  await expect(rocket).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect.poll(() => page.locator("#screen-nav .screen-preview").count()).toBe(previewsBefore + 1);
+  const rocketPlacement = await rocket.evaluate((element) => ({
+    column: (element as HTMLElement).style.gridColumn,
+    row: (element as HTMLElement).style.gridRow
+  }));
+  expect(rocketPlacement.column).toMatch(/^1 \/ span [246]$/);
+  expect(rocketPlacement.row).toMatch(/^3 \/ span 2$/);
+
+  await page.reload();
+  const restoredTracker = page.locator('.napplet-window:has(iframe[title="navigate-problem-tree"])');
+  const restoredRocket = page.locator('.napplet-window:has(iframe[title="create-rocket"])');
+  await expect(restoredTracker).toBeVisible();
+  await expect(restoredRocket).toBeVisible();
+  await expect.poll(() => restoredTracker.evaluate((element) => ({
+    column: (element as HTMLElement).style.gridColumn,
+    row: (element as HTMLElement).style.gridRow
+  }))).toEqual(trackerPlacement);
+  await expect.poll(() => restoredRocket.evaluate((element) => ({
+    column: (element as HTMLElement).style.gridColumn,
+    row: (element as HTMLElement).style.gridRow
+  }))).toEqual(rocketPlacement);
+
+  await restoredRocket.getByRole("button", { name: "Close Create Rocket" }).click();
+  await expect(restoredRocket).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect.poll(() => page.locator("#screen-nav .screen-preview").count()).toBe(previewsBefore);
+  await expect(restoredTracker).toBeVisible();
+  await expect.poll(() => restoredTracker.evaluate((element) => ({
+    column: (element as HTMLElement).style.gridColumn,
+    row: (element as HTMLElement).style.gridRow
+  }))).toEqual(trackerPlacement);
+
+  await page.reload();
+  await expect(page.locator('iframe[title="create-rocket"]')).toHaveCount(0);
+  await expect(page.locator('iframe[title="navigate-problem-tree"]').locator("..")).toBeVisible();
+  await expect.poll(() => page.locator('.napplet-window:has(iframe[title="navigate-problem-tree"])').evaluate((element) => ({
+    column: (element as HTMLElement).style.gridColumn,
+    row: (element as HTMLElement).style.gridRow
+  }))).toEqual(trackerPlacement);
+});
+
 test("hard reset lives in Napplet console instead of menu bar", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toBeHidden();

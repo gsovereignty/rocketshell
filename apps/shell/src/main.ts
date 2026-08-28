@@ -449,7 +449,11 @@ void bootstrap().then(async (platform) => {
   const initialSession = windowSessions.get();
 
 
-  const openCoordinate = async (requestedCoordinate?: string, installedDTag?: string): Promise<void> => {
+  const openCoordinate = async (
+    requestedCoordinate?: string,
+    installedDTag?: string,
+    deferLayout = false
+  ): Promise<string | undefined> => {
     if (!input || !button) return;
     const coordinate = (requestedCoordinate ?? input.value).trim();
     if (!coordinate) return;
@@ -460,13 +464,14 @@ void bootstrap().then(async (platform) => {
     animateLoading();
     try {
       const opened = installedDTag
-        ? await platform.openInstalled(installedDTag)
+        ? await platform.openInstalled(installedDTag, { deferLayout })
         : await platform.installAndOpen(coordinate);
       platform.windows.setLaunchDescriptor(opened.windowId, { type: "direct", coordinate });
       if (!requestedCoordinate || input.value.trim() === coordinate) input.value = "";
       setLoaderStatus(`Opened ${opened.title}.`, "success");
       settleLoading("success");
       setTimeout(() => closeMenus(), 500);
+      return opened.windowId;
     } catch (error) {
       input.setAttribute("aria-invalid", "true");
       setLoaderStatus(error instanceof Error ? error.message : "Unable to open Napplet", "error");
@@ -477,14 +482,22 @@ void bootstrap().then(async (platform) => {
     }
   };
 
-  const openMenuLauncher = async (launcher: { readonly coordinate: string; readonly dTag: string; readonly title: string }): Promise<void> => {
+  const openMenuLauncher = async (
+    launcher: { readonly coordinate: string; readonly dTag: string; readonly title: string },
+    fullscreenWhenCreated = false
+  ): Promise<void> => {
     const existing = activateOpenWindow(platform.windows, widgetGrid, launcher.dTag);
     if (existing) {
       const title = existing.element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || launcher.title;
       setLoaderStatus(`Focused ${title}.`, "success");
       return;
     }
-    await openCoordinate(launcher.coordinate, launcher.dTag);
+    const windowId = await openCoordinate(launcher.coordinate, launcher.dTag, fullscreenWhenCreated);
+    if (!fullscreenWhenCreated || !windowId) return;
+    const managed = platform.windows.findByWindowId(windowId);
+    if (!managed) return;
+    widgetGrid?.prepareFullscreen(managed.element);
+    platform.windows.show(windowId);
   };
 
   dagViewerTrigger?.addEventListener("click", () => {
@@ -509,7 +522,7 @@ void bootstrap().then(async (platform) => {
     void platform.dockLaunchers().then(async (launchers) => {
       const launcher = launchers.find(({ dTag }) => dTag === "create-rocket");
       if (!launcher) throw new Error("Rocket creator is not installed");
-      await openMenuLauncher(launcher);
+      await openMenuLauncher(launcher, true);
     }).catch((error: unknown) => {
       console.error("Opening Rocket creator from menu bar failed", { dTag: "create-rocket", error });
       setLoaderStatus(error instanceof Error ? error.message : "Unable to open Rocket creator", "error");

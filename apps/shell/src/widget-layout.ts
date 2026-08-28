@@ -172,6 +172,48 @@ export const snapPageStartRows = (rects: readonly WidgetRect[], rowsPerPage: num
 export const widgetPage = (rect: WidgetRect, rowsPerPage: number): number =>
   rowsPerPage < 1 ? 0 : Math.floor(rect.row / rowsPerPage);
 
+export interface WorkspaceCompaction {
+  readonly rects: readonly WidgetRect[];
+  readonly removedPages: readonly number[];
+  readonly targetPage?: number;
+}
+
+const occupiedWorkspacePages = (rects: readonly WidgetRect[], rowsPerPage: number): Set<number> => {
+  const pages = new Set<number>();
+  if (rowsPerPage < 1) return pages;
+  for (const rect of rects) {
+    const first = widgetPage(rect, rowsPerPage);
+    const last = widgetPage({ ...rect, row: rect.row + rect.height - 1, height: 1 }, rowsPerPage);
+    for (let page = first; page <= last; page += 1) pages.add(page);
+  }
+  return pages;
+};
+
+export const compactEmptiedWorkspaces = (
+  remaining: readonly WidgetRect[],
+  removed: readonly WidgetRect[],
+  rowsPerPage: number
+): WorkspaceCompaction => {
+  if (rowsPerPage < 1 || removed.length === 0) return { rects: remaining, removedPages: [] };
+  const occupied = occupiedWorkspacePages(remaining, rowsPerPage);
+  const touched = occupiedWorkspacePages(removed, rowsPerPage);
+  const removedPages = [...touched].filter((page) => !occupied.has(page)).sort((a, b) => a - b);
+  if (removedPages.length === 0) return { rects: remaining, removedPages };
+
+  const compacted = remaining.map((rect) => {
+    const removedBefore = removedPages.filter((page) => (page + 1) * rowsPerPage <= rect.row).length;
+    return removedBefore === 0 ? rect : { ...rect, row: rect.row - removedBefore * rowsPerPage };
+  });
+  const firstRemoved = removedPages[0]!;
+  const previousPage = [...occupied].filter((page) => page < firstRemoved).sort((a, b) => b - a)[0];
+  const nextPage = [...occupied].filter((page) => page > firstRemoved).sort((a, b) => a - b)[0];
+  const originalTarget = previousPage ?? nextPage;
+  const targetPage = originalTarget === undefined
+    ? undefined
+    : originalTarget - removedPages.filter((page) => page < originalTarget).length;
+  return { rects: compacted, removedPages, ...(targetPage === undefined ? {} : { targetPage }) };
+};
+
 export const nextFullscreenRect = (
   current: WidgetRect,
   occupied: readonly WidgetRect[],
@@ -401,6 +443,7 @@ const makeHandle = (edge: ResizeEdge, title: string): HTMLButtonElement => {
 
 export interface WidgetGridController {
   destroy(): void;
+  prepareFullscreen(element: HTMLElement): void;
   reveal(element: HTMLElement): void;
   reset(): void;
 }
@@ -498,25 +541,22 @@ export const createWidgetGrid = (
     scrollToPage(Number(button.dataset.page));
   };
 
-  const onFullscreenClick = (event: MouseEvent): void => {
-    const button = event.target instanceof Element
-      ? event.target.closest<HTMLButtonElement>(".napplet-window-fullscreen")
-      : null;
-    const element = button?.closest<HTMLElement>(".napplet-window");
-    const current = element ? rects.get(element) : undefined;
-    if (!button || !element || !current) return;
+  const fullscreen = (element: HTMLElement): boolean => {
+    const current = rects.get(element);
+    if (!current) return false;
     const rowsPerPage = profile.name === "mobile" ? 1 : 2;
     const destination = nextFullscreenRect(current, occupiedExcept(element), profile.columns, rowsPerPage);
-    if (!destination) return;
+    if (!destination) return false;
     const before = element.getBoundingClientRect();
-    if (!commitRects(new Map([[element, destination]]))) return;
+    if (!commitRects(new Map([[element, destination]]))) return false;
     layoutCustomized = true;
     persistCurrentLayout();
-    button.setAttribute("aria-label", `Fullscreen ${element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || "Napplet"}`);
+    const button = element.querySelector<HTMLButtonElement>(".napplet-window-fullscreen");
+    button?.setAttribute("aria-label", `Fullscreen ${element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || "Napplet"}`);
     const page = destination.row / rowsPerPage;
     if (reducedMotion.matches) {
       scrollToPage(page);
-      return;
+      return true;
     }
     const after = element.getBoundingClientRect();
     gsap.fromTo(element, {
@@ -536,6 +576,15 @@ export const createWidgetGrid = (
       overwrite: "auto",
       onComplete: () => scrollToPage(page)
     });
+    return true;
+  };
+
+  const onFullscreenClick = (event: MouseEvent): void => {
+    const button = event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>(".napplet-window-fullscreen")
+      : null;
+    const element = button?.closest<HTMLElement>(".napplet-window");
+    if (element) fullscreen(element);
   };
 
   const syncScreenNavigation = (pageRows: readonly number[], rowsPerPage: number): void => {
@@ -882,7 +931,65 @@ export const createWidgetGrid = (
     animateSurfaceReplacement(replacements.map(({ element }) => element));
     const added = elements.filter((element) => !rects.has(element));
     for (const element of elements) decorate(element);
-    for (const element of [...rects.keys()]) if (!elements.includes(element)) rects.delete(element);
+    const removed = [...rects].filter(([element]) => !elements.includes(element));
+    for (const [element] of removed) rects.delete(element);
+    const rowsPerPage = profile.name === "mobile" ? 1 : 2;
+    const compaction = compactEmptiedWorkspaces(
+      [...rects.values()],
+      removed.map(([, rect]) => rect),
+      rowsPerPage
+    );
+    if (layoutCustomized && compaction.removedPages.length > 0) {
+      const entries = [...rects];
+      const updates = new Map<HTMLElement, WidgetRect>();
+      compaction.rects.forEach((rect, index) => {
+        const entry = entries[index];
+        if (entry && entry[1].row !== rect.row) updates.set(entry[0], rect);
+      });
+      const before = new Map([...updates.keys()].map((element) => [element, element.getBoundingClientRect()]));
+      if (updates.size > 0 && commitRects(updates) && !reducedMotion.matches) {
+        for (const element of updates.keys()) {
+          const previous = before.get(element);
+          if (!previous) continue;
+          const next = element.getBoundingClientRect();
+          gsap.fromTo(element, { y: previous.top - next.top }, {
+            y: 0,
+            duration: .32,
+            ease: "power4.out",
+            clearProps: "transform",
+            overwrite: "auto"
+          });
+        }
+      }
+    }
+    if (compaction.removedPages.length > 0) syncSnapTargets();
+    const scrollAfterEmptyWorkspaceRemoval = (): void => {
+      const targetPage = compaction.targetPage;
+      if (targetPage === undefined) return;
+      const occupiedPages = [...occupiedWorkspacePages([...rects.values()], rowsPerPage)].sort((a, b) => a - b);
+      const target = [...occupiedPages].reverse().find((page) => page <= targetPage) ?? occupiedPages[0];
+      if (target !== undefined) scrollToPage(target);
+    };
+    const fullscreenOpening = added.find((element) => element.dataset.openFullscreen === "true");
+    if (fullscreenOpening) {
+      delete fullscreenOpening.dataset.openFullscreen;
+      const visibleRows = currentVisibleRows();
+      const page = Math.floor(visibleRows.startRow / rowsPerPage);
+      const destination = nextFullscreenRect(
+        { column: 0, row: page * rowsPerPage, width: profile.columns, height: rowsPerPage },
+        [...rects.values()],
+        profile.columns,
+        rowsPerPage
+      );
+      if (destination) {
+        commitOpeningPlacement(fullscreenOpening, { kind: "visible", rect: destination, updates: new Map() });
+        layoutCustomized = true;
+        persistCurrentLayout();
+        animateLayout([fullscreenOpening]);
+        scrollToPage(widgetPage(destination, rowsPerPage));
+        return;
+      }
+    }
     if (rects.size === 0) {
       const saved = storedLayouts.profiles[profile.name];
       const keys = widgetKeys(elements);
@@ -910,11 +1017,14 @@ export const createWidgetGrid = (
         layoutCustomized = true;
         persistCurrentLayout();
       }
+      syncSnapTargets();
       animateLayout(elements);
+      scrollAfterEmptyWorkspaceRemoval();
       return;
     }
     if (!layoutCustomized) {
       reset(true);
+      scrollAfterEmptyWorkspaceRemoval();
       return;
     }
     const defaults = defaultWidgetRects(elements.length, profile.columns);
@@ -938,6 +1048,7 @@ export const createWidgetGrid = (
     }
     persistCurrentLayout();
     animateLayout(added);
+    scrollAfterEmptyWorkspaceRemoval();
   };
 
   const resizeBy = (element: HTMLElement, edge: ResizeEdge, widthDelta: number, heightDelta: number): void => {
@@ -1214,6 +1325,7 @@ export const createWidgetGrid = (
 
   return {
     reset: () => reset(true, true),
+    prepareFullscreen: (element) => { element.dataset.openFullscreen = "true"; },
     reveal: (element) => {
       const revealWhenLaidOut = (remainingFrames: number): void => {
         const rect = rects.get(element);
