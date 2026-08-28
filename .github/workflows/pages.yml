@@ -24,9 +24,17 @@ jobs:
           node-version: 22
       - run: corepack enable && corepack prepare pnpm@8.15.5 --activate
       - run: pnpm install --frozen-lockfile
+      - name: Configure custom domain
+        run: |
+          curl --fail-with-body --request PUT \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${{ github.token }}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/pages \
+            --data '{"cname":"hypergolic.space"}'
       - uses: actions/configure-pages@v5
       - run: pnpm --filter '@platform/*-napplet' build
-      - run: pnpm --filter @platform/shell build:github
+      - run: pnpm --filter @platform/shell build:pages
       - uses: actions/upload-pages-artifact@v4
         with:
           path: apps/shell/dist

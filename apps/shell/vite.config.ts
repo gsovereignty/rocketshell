@@ -148,7 +148,7 @@ export default defineConfig(({ mode }) => {
   const buildId = currentBuildId();
   return {
     define: { __SHELL_BUILD_ID__: JSON.stringify(buildId) },
-    base: mode === "github" ? "/rocketshell/" : process.env.PLATFORM_BASE ?? "/",
+    base: mode === "pages" ? "/" : mode === "github" ? "/rocketshell/" : process.env.PLATFORM_BASE ?? "/",
     plugins: [devServiceWorker(currentBuildId), testBlossomServer(), testResourceServer(), testLegacyServiceWorker(), builtInNapplets(repositoryRoot)],
     build: {
       sourcemap: true,
