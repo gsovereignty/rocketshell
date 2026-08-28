@@ -1,3 +1,5 @@
+import { parseRocketCoordinate } from "./coordinates";
+
 export type NostrEvent = { id: string; pubkey: string; created_at: number; kind: number; tags: string[][]; content: string; sig: string };
 
 export type MeritLot = { owner: string; requestId: string; leadTime: bigint; lastLeadTimeUpdate: bigint; merits: bigint };
@@ -27,10 +29,11 @@ export function aggregateMeritHoldings(event: NostrEvent): MeritHolding[] {
   return [...byOwner.values()].sort((a, b) => a.merits === b.merits ? a.owner.localeCompare(b.owner) : a.merits > b.merits ? -1 : 1);
 }
 
-export function validateStateEvent(event: NostrEvent): void {
+export function validateStateEvent(event: NostrEvent, coordinate = "31108:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:NOSTROCKET"): void {
+  const { author, identifier } = parseRocketCoordinate(coordinate);
   if (event.kind !== 31108) throw new Error("Unexpected event kind.");
-  if (event.pubkey !== "d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075") throw new Error("Unexpected state author.");
-  if (!event.tags.some((tag) => tag[0] === "d" && tag[1] === "NOSTROCKET")) throw new Error("Unexpected rocket identifier.");
+  if (event.pubkey !== author) throw new Error("Unexpected state author.");
+  if (!event.tags.some((tag) => tag[0] === "d" && tag[1] === identifier)) throw new Error("Unexpected rocket identifier.");
   if (!HEX_64.test(event.id) || !HEX_64.test(event.sig.slice(0, 64)) || event.sig.length !== 128) throw new Error("Malformed event identity or signature.");
   aggregateMeritHoldings(event);
 }
