@@ -169,6 +169,9 @@ export const snapPageStartRows = (rects: readonly WidgetRect[], rowsPerPage: num
   return Array.from({ length: Math.ceil(occupiedRows / rowsPerPage) }, (_, page) => page * rowsPerPage);
 };
 
+export const widgetPage = (rect: WidgetRect, rowsPerPage: number): number =>
+  rowsPerPage < 1 ? 0 : Math.floor(rect.row / rowsPerPage);
+
 export const nextFullscreenRect = (
   current: WidgetRect,
   occupied: readonly WidgetRect[],
@@ -398,6 +401,7 @@ const makeHandle = (edge: ResizeEdge, title: string): HTMLButtonElement => {
 
 export interface WidgetGridController {
   destroy(): void;
+  reveal(element: HTMLElement): void;
   reset(): void;
 }
 
@@ -889,13 +893,16 @@ export const createWidgetGrid = (
         const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
         const key = keys.get(element);
         const stored = key ? saved?.[key] : undefined;
-        const placement = resolveOpeningPlacement(
-          template,
-          [...rects.values()],
-          profile.columns,
-          currentVisibleRows(),
-          stored
-        );
+        const occupied = [...rects.values()];
+        const placement = stored && canPlaceRect(stored, profile.columns, occupied)
+          ? { kind: "visible" as const, rect: stored, updates: new Map<number, WidgetRect>() }
+          : resolveOpeningPlacement(
+            template,
+            occupied,
+            profile.columns,
+            currentVisibleRows(),
+            stored
+          );
         if (stored && placement.kind === "visible" && placement.rect === stored) usedSavedLayout = true;
         commitOpeningPlacement(element, placement);
       }
@@ -917,13 +924,16 @@ export const createWidgetGrid = (
       const index = elements.indexOf(element);
       const template = defaults[index] ?? { column: 0, row: 0, width: 1, height: 1 };
       const stored = saved?.[keys.get(element) ?? ""];
-      const placement = resolveOpeningPlacement(
-        template,
-        [...rects.values()],
-        profile.columns,
-        currentVisibleRows(),
-        stored
-      );
+      const occupied = [...rects.values()];
+      const placement = stored && canPlaceRect(stored, profile.columns, occupied)
+        ? { kind: "visible" as const, rect: stored, updates: new Map<number, WidgetRect>() }
+        : resolveOpeningPlacement(
+          template,
+          occupied,
+          profile.columns,
+          currentVisibleRows(),
+          stored
+        );
       commitOpeningPlacement(element, placement);
     }
     persistCurrentLayout();
@@ -1204,6 +1214,17 @@ export const createWidgetGrid = (
 
   return {
     reset: () => reset(true, true),
+    reveal: (element) => {
+      const revealWhenLaidOut = (remainingFrames: number): void => {
+        const rect = rects.get(element);
+        if (rect) {
+          scrollToPage(widgetPage(rect, profile.name === "mobile" ? 1 : 2));
+          return;
+        }
+        if (remainingFrames > 0) window.requestAnimationFrame(() => revealWhenLaidOut(remainingFrames - 1));
+      };
+      revealWhenLaidOut(2);
+    },
     destroy: () => {
       mutationObserver.disconnect();
       resizeObserver.disconnect();

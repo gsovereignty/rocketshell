@@ -7,6 +7,7 @@ import { gsap } from "gsap";
 import { DEFAULT_SHELL_SETTINGS } from "./platform.js";
 import { createSettingsView, createThemeController, resolveTheme, type SettingsView } from "./settings-view.js";
 import { createWidgetGrid } from "./widget-layout.js";
+import { activateOpenWindow } from "./menu-window-activation.js";
 import { createWindowSessionStore, type WindowSession } from "./open-napplets-store.js";
 import { createSignedEventsView } from "./signed-events-view.js";
 import { createNappletConsoleView } from "./napplet-console-view.js";
@@ -476,13 +477,23 @@ void bootstrap().then(async (platform) => {
     }
   };
 
+  const openMenuLauncher = async (launcher: { readonly coordinate: string; readonly dTag: string; readonly title: string }): Promise<void> => {
+    const existing = activateOpenWindow(platform.windows, widgetGrid, launcher.dTag);
+    if (existing) {
+      const title = existing.element.querySelector<HTMLElement>(".napplet-window-title")?.textContent?.trim() || launcher.title;
+      setLoaderStatus(`Focused ${title}.`, "success");
+      return;
+    }
+    await openCoordinate(launcher.coordinate, launcher.dTag);
+  };
+
   dagViewerTrigger?.addEventListener("click", () => {
     dagViewerTrigger.disabled = true;
     dagViewerTrigger.setAttribute("aria-busy", "true");
     void platform.dockLaunchers().then(async (launchers) => {
       const launcher = launchers.find(({ dTag }) => dTag === "navigate-problem-tree");
       if (!launcher) throw new Error("DAG viewer is not installed");
-      await openCoordinate(launcher.coordinate, launcher.dTag);
+      await openMenuLauncher(launcher);
     }).catch((error: unknown) => {
       console.error("Opening DAG viewer from menu bar failed", { dTag: "navigate-problem-tree", error });
       setLoaderStatus(error instanceof Error ? error.message : "Unable to open DAG viewer", "error");
@@ -498,7 +509,7 @@ void bootstrap().then(async (platform) => {
     void platform.dockLaunchers().then(async (launchers) => {
       const launcher = launchers.find(({ dTag }) => dTag === "create-rocket");
       if (!launcher) throw new Error("Rocket creator is not installed");
-      await openCoordinate(launcher.coordinate, launcher.dTag);
+      await openMenuLauncher(launcher);
     }).catch((error: unknown) => {
       console.error("Opening Rocket creator from menu bar failed", { dTag: "create-rocket", error });
       setLoaderStatus(error instanceof Error ? error.message : "Unable to open Rocket creator", "error");

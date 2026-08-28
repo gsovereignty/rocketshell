@@ -765,6 +765,43 @@ test("profile leads menu bar and DAG viewer replaces dock", async ({ page }) => 
   await expect(page.locator('iframe[title="navigate-problem-tree"]')).toHaveCount(1);
 });
 
+test("menu actions reuse and reveal widgets across workspaces", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+
+  const newRocket = page.getByRole("button", { name: "New Rocket" });
+  await newRocket.click();
+  await expect(page.locator('iframe[title="create-rocket"]')).toHaveCount(1);
+  await newRocket.click();
+  await expect(page.locator('iframe[title="create-rocket"]')).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("title"))).toBe("create-rocket");
+
+  const problemTracker = page.getByRole("button", { name: "Problem Tracker" });
+  await problemTracker.click();
+  const tracker = page.locator('.napplet-window:has(iframe[title="navigate-problem-tree"])');
+  await expect(tracker).toHaveCount(1);
+  const toolbar = tracker.locator(".napplet-window-toolbar");
+  await toolbar.focus();
+  await toolbar.press("Space");
+  await toolbar.press("ArrowDown");
+  await toolbar.press("ArrowDown");
+  await toolbar.press("Enter");
+  await expect.poll(() => tracker.evaluate((element) => Number.parseInt((element as HTMLElement).style.gridRow, 10))).toBeGreaterThanOrEqual(3);
+  const persistedRow = await tracker.evaluate((element) => (element as HTMLElement).style.gridRow);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await problemTracker.click();
+  await expect(tracker).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("title"))).toBe("navigate-problem-tree");
+
+  await page.reload();
+  const restoredTracker = page.locator('.napplet-window:has(iframe[title="navigate-problem-tree"])');
+  await expect(restoredTracker).toHaveCount(1);
+  await expect.poll(() => restoredTracker.evaluate((element) => (element as HTMLElement).style.gridRow)).toBe(persistedRow);
+  await expect(page.locator('iframe[title="create-rocket"]')).toHaveCount(1);
+});
+
 test("hard reset lives in Napplet console instead of menu bar", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toBeHidden();

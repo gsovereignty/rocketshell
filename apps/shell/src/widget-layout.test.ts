@@ -10,6 +10,7 @@ import {
   resolveOpeningPlacement,
   resolveRelocation,
   snapPageStartRows,
+  widgetPage,
   transferReplacementRect,
   visibleGridRange
 } from "./widget-layout.js";
@@ -296,5 +297,13 @@ describe("viewport-first widget opening", () => {
   it("recalculates visible capacity after viewport resize", () => {
     expect(visibleGridRange(80, 0, 800, 220, 10)).toEqual({ startRow: 0, endRow: 3 });
     expect(visibleGridRange(80, 0, 500, 220, 10)).toEqual({ startRow: 0, endRow: 1 });
+  });
+});
+
+describe("widget workspace lookup", () => {
+  it("maps widget rows to desktop and mobile workspaces", () => {
+    expect(widgetPage({ column: 0, row: 0, width: 2, height: 2 }, 2)).toBe(0);
+    expect(widgetPage({ column: 0, row: 3, width: 2, height: 1 }, 2)).toBe(1);
+    expect(widgetPage({ column: 0, row: 3, width: 1, height: 1 }, 1)).toBe(3);
   });
 });
