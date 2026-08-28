@@ -10,6 +10,8 @@ describe("shell menu bar", () => {
     expect(cluster.indexOf('id="profile-menu-trigger"')).toBeGreaterThan(-1);
     expect(cluster.indexOf('id="profile-menu-trigger"')).toBeLessThan(cluster.indexOf('id="new-rocket-trigger"'));
     expect(cluster.indexOf('id="new-rocket-trigger"')).toBeLessThan(cluster.indexOf('id="dag-viewer-trigger"'));
-    expect(cluster).toContain(">NEW ROCKET</button>");
+    expect(cluster).toContain("<span>New Rocket</span>");
+    expect(cluster).toContain('<svg viewBox="0 0 24 24" aria-hidden="true">');
+    expect(cluster).toContain(">Problem Tracker</button>");
   });
 });

@@ -758,7 +758,7 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
 test("profile leads menu bar and DAG viewer replaces dock", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toBeHidden();
-  const dagViewer = page.getByRole("button", { name: "Open DAG viewer" });
+  const dagViewer = page.getByRole("button", { name: "Problem Tracker" });
   await expect(page.locator("#menu-bar .menu-cluster > button").first()).toHaveAttribute("id", "profile-menu-trigger");
   await expect(page.locator("#dock-shell")).toHaveCount(0);
   await dagViewer.click();
