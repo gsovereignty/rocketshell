@@ -1,0 +1,41 @@
+export interface RocketDraft { identifier: string; mission: string; problemCoordinate: string; problemRelay: string; repoCoordinate: string; repoRelay: string }
+export interface EventTemplate { kind: 31108; created_at: number; content: ""; tags: string[][] }
+
+const COORDINATE = /^(31971|30617):[0-9a-f]{64}:.+$/s;
+
+export function validateDraft(draft: RocketDraft): string[] {
+  const errors: string[] = [];
+  if (!draft.identifier.trim()) errors.push("Identifier is required.");
+  if ([...draft.mission.trim()].length >= 140) errors.push("Mission must contain fewer than 140 characters.");
+  validateOptional("problem", draft.problemCoordinate.trim(), draft.problemRelay.trim(), "31971", errors);
+  validateOptional("repository", draft.repoCoordinate.trim(), draft.repoRelay.trim(), "30617", errors);
+  return errors;
+}
+
+function validateOptional(label: string, coordinate: string, relay: string, kind: string, errors: string[]): void {
+  if (!coordinate && relay) errors.push(`${label} relay requires a ${label} coordinate.`);
+  if (coordinate && (!COORDINATE.test(coordinate) || !coordinate.startsWith(`${kind}:`))) errors.push(`${label} coordinate must be ${kind}:<64-char pubkey>:<d-tag>.`);
+  if (coordinate && !isSecureRelayUrl(relay)) errors.push(`${label} relay must be a wss:// URL.`);
+}
+
+function isSecureRelayUrl(value: string): boolean {
+  try { const url = new URL(value); return url.protocol === "wss:" && Boolean(url.hostname) && !url.username && !url.password; }
+  catch (error) { console.warn("Rocket relay URL validation failed", { value, error }); return false; }
+}
+
+export function buildIgnitionTemplate(draft: RocketDraft, createdAt: number): EventTemplate {
+  const normalized = { ...draft, identifier: draft.identifier.trim(), mission: draft.mission.trim(), problemCoordinate: draft.problemCoordinate.trim(), problemRelay: draft.problemRelay.trim(), repoCoordinate: draft.repoCoordinate.trim(), repoRelay: draft.repoRelay.trim() };
+  const errors = validateDraft(normalized);
+  if (errors.length) throw new Error(errors.join(" "));
+  const tags: string[][] = [["d", normalized.identifier], ["ruleset", "334000"], ["ignition", "this"], ["parent", "this"]];
+  if (normalized.mission) tags.push(["mission", normalized.mission]);
+  if (normalized.problemCoordinate) tags.push(["problem", normalized.problemCoordinate, normalized.problemRelay]);
+  if (normalized.repoCoordinate) tags.push(["repo", normalized.repoCoordinate, normalized.repoRelay]);
+  return { kind: 31108, created_at: createdAt, content: "", tags };
+}
+
+export async function publishIgnition(publish: (template: EventTemplate, options: { toOutbox: true }) => Promise<{ ok: boolean; event?: { id: string }; error?: string }>, template: EventTemplate): Promise<string> {
+  const result = await publish(template, { toOutbox: true });
+  if (!result.ok || !result.event?.id) throw new Error(result.error ?? "Shell did not return a published event.");
+  return result.event.id;
+}

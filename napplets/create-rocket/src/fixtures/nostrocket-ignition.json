@@ -1,0 +1,9 @@
+{
+  "kind": 31108,
+  "id": "acff2d209b97f458ba1539ee1b9fe802ca1f511fe1d912ce8fc9163fd2f140cd",
+  "pubkey": "d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075",
+  "created_at": 1721634906,
+  "tags": [["d", "NOSTROCKET"], ["ruleset", "334000"], ["ignition", "this"], ["parent", "this"]],
+  "content": "",
+  "sig": "a8837515d5065d834549beeb5c848750311ef60832b5b314a32c3e7b312c59a1b6b3828f922e3d7bae9bf827dd5b225b1783c3fab4ca19aa889e4e0c1bfcd3b1"
+}
