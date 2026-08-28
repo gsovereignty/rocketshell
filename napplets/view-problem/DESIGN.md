@@ -183,6 +183,7 @@ Structural content is square and ruled. Rounded geometry belongs to interactive 
 
 - **Shape:** Primary record actions use gently curved corners; setup submission stays square. Link actions are unboxed and underlined.
 - **Primary:** White text on electric action blue, bold weight, 52px minimum height, and generous horizontal padding.
+- **Closed Problem:** Replace unavailable claim control with Request merits. Keep same primary treatment and open composer beside this record without replacing it.
 - **Hover / Focus:** Hover deepens the blue. Keyboard focus uses a high-contrast amber 3px outline with 3px offset.
 - **Disabled:** Muted text on a cool gray fill; cursor communicates unavailability.
 - **Link Action:** Electric-blue text, transparent background, underline offset for legibility.

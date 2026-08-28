@@ -34,6 +34,10 @@ current revision, workflow state, related problem references, and NIP-22 kind
   NAP-INTENT. Edit remains visible but disabled unless current identity is the
   problem owner, a maintainer listed by current revision, or any resolved
   ancestor problem owner.
+- Closed problems expose a merit-request action through documented
+  `napplet:composer/merit-request` convention. Eligibility depends only on
+  current `closed` status; claimant and patch authorship are not checked.
+- Merit request editor labels work value in whole satoshis.
 - Registers the standard `note` archetype and accepts `napplet:note/open` event
   targets so problem navigators can open a selected revision in focused detail.
 - Shows activity authors using profile names and shell-fetched avatars when

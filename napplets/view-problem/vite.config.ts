@@ -12,5 +12,5 @@ export default defineConfig({
     artifactMode: "single-file"
   })],
   build: { modulePreload: false },
-  test: { environment: "node" }
+  test: { environment: "node", include: ["src/**/*.test.ts"] }
 });

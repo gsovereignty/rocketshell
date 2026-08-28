@@ -19,6 +19,7 @@
     "build": "vite build",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
+    "test:browser": "pnpm build && playwright test --config playwright.config.ts",
     "verify": "pnpm type-check && pnpm test && pnpm build",
     "test:conformance": "pnpm build && napplet-conformance ./dist"
   },

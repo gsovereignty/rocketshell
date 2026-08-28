@@ -18,6 +18,7 @@ import { profileFromEvents, type ProfileData } from "./profile";
 import { formatRelativeTime } from "./time";
 import { renderMarkdown } from "./markdown";
 import { ingestUniqueResults } from "./incremental";
+import { canRequestMerits, openAdjacentMeritRequest } from "./merit-request-intent";
 
 const app = (() => {
   const element = document.querySelector<HTMLElement>("#app");
@@ -36,6 +37,7 @@ let loadGeneration = 0;
 let identitySubscription: { close(): void } | undefined;
 let intentSubscription: Subscription | undefined;
 let busy = false;
+let meritRequestBusy = false;
 let liveMessage = "";
 let intentReceived = false;
 let countdownTimer: ReturnType<typeof setInterval> | undefined;
@@ -223,6 +225,7 @@ function render() {
   const claimPending = problem.status === "rfm" && Boolean(pubkey) && hasClaimRequest(problem, comments, pubkey);
   const displayedStatus = effectiveClaim ? "claimed" : problem.status;
   const canClaim = problem.status === "open" && childrenKnown && !hasChildren && Boolean(pubkey) && !effectiveClaim && !claimPending;
+  const meritsAvailable = canRequestMerits(problem.status);
   const canEdit = mayEditProblem(problem, pubkey, ancestorOwners);
   const claimDetails = effectiveClaim ? `<div class="claim-summary">
     ${authorAvatar(effectiveClaim.claimant)}
@@ -242,8 +245,11 @@ function render() {
       </div>
       <div class="description markdown-body">${renderMarkdown(problem.description)}</div>
       <div class="actions">
-        <button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
-        <span>${!childrenKnown ? "Checking child problems before enabling claims…" : hasChildren ? "Problems with children cannot be claimed." : claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>
+        ${meritsAvailable
+          ? `<button class="primary" id="request-merits" type="button" ${meritRequestBusy ? "disabled" : ""}>${meritRequestBusy ? "Opening…" : "Request merits"}</button>
+            <span>Open merit request composer. Enter requested value as whole satoshis.</span>`
+          : `<button class="primary" id="claim" type="button" ${canClaim && !busy ? "" : "disabled"}>${busy ? "Publishing…" : effectiveClaim ? "Claimed" : claimPending ? "Claim requested" : problem.status === "open" ? "Claim problem" : "Claim unavailable"}</button>
+            <span>${!childrenKnown ? "Checking child problems before enabling claims…" : hasChildren ? "Problems with children cannot be claimed." : claimPending ? "This rfm problem requires author or maintainer acknowledgement." : effectiveClaim ? "Work may begin immediately." : problem.status === "open" ? "Claim gives you 24 hours to send a PR." : "This problem is not available to claim."}</span>`}
       </div>
       ${claimDetails}
       <button class="related-action" id="report-related" type="button">+ Log new problem under this one</button>
@@ -381,6 +387,7 @@ function bind() {
   document.querySelector("#change-problem")?.addEventListener("click", () => showSetup());
   document.querySelector("#edit-problem")?.addEventListener("click", () => void editProblem());
   document.querySelector("#claim")?.addEventListener("click", () => void publishAction("I am claiming this problem.", "claim"));
+  document.querySelector("#request-merits")?.addEventListener("click", () => void requestMerits());
   document.querySelector("#report-related")?.addEventListener("click", () => void reportRelated());
   document.querySelector("#post-comment")?.addEventListener("click", () => void postComment());
   document.querySelector("#comment")?.addEventListener("keydown", (event) => {
@@ -419,6 +426,25 @@ async function postComment() {
   const content = input?.value.trim() ?? "";
   if (!content) { setLiveStatus("Write a comment before posting."); input?.focus(); return; }
   await publishAction(content);
+}
+
+async function requestMerits() {
+  if (!problem || !canRequestMerits(problem.status) || meritRequestBusy) return;
+  meritRequestBusy = true;
+  render();
+  setLiveStatus(`Opening merit request for ${problem.title}…`);
+  try {
+    const result = await openAdjacentMeritRequest(intent, problem.title);
+    if (!result.ok || !result.handled) throw new Error(result.error ?? "No compatible merit request composer is available.");
+    setLiveStatus(`Merit request composer opened for ${problem.title}.`);
+  } catch (error) {
+    console.error("Merit request intent failed", { problemId: problem.problemId, error });
+    setLiveStatus(error instanceof Error ? error.message : "Merit request composer could not be opened.");
+  } finally {
+    meritRequestBusy = false;
+    render();
+    if (!reducedMotion) gsap.fromTo("#request-merits", { scale: .97 }, { scale: 1, duration: .2, ease: "expo.out" });
+  }
 }
 
 async function reportRelated() {

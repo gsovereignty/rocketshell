@@ -477,6 +477,56 @@ test("keeps problem-tree geometry stable while reusing the visible viewer", asyn
   await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
 });
 
+test("reuses merit composer beside problem viewer across refresh", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => Boolean(window.__platformTest))).toBe(true);
+  await page.evaluate(async () => {
+    const platform = window.__platformTest as unknown as {
+      openInstalled(dTag: string): Promise<{ windowId: string }>;
+      windows: { setLaunchDescriptor(windowId: string, launch: { type: "direct"; coordinate: string }): void };
+    };
+    const viewer = await platform.openInstalled("view-problem");
+    platform.windows.setLaunchDescriptor(viewer.windowId, { type: "direct", coordinate: "view-problem" });
+    const merits = await platform.openInstalled("request-merits");
+    platform.windows.setLaunchDescriptor(merits.windowId, { type: "direct", coordinate: "request-merits" });
+  });
+  const viewer = page.frameLocator('iframe[title="view-problem"]');
+  const merits = page.frameLocator('iframe[title="request-merits"]');
+  await expect(viewer.locator("#app")).toBeVisible();
+  await expect(merits.getByRole("heading", { name: "Request merits" })).toBeVisible();
+
+  const result = await viewer.locator("html").evaluate(async () => window.napplet.intent.invoke({
+    archetype: "composer", action: "merit-request", convention: "napplet:composer/merit-request",
+    payload: { problem: "Closed problem" }, behavior: { focus: false, reuse: true }
+  }));
+  expect(result, JSON.stringify(result)).toMatchObject({ ok: true, handled: true, handler: "request-merits" });
+  await expect(merits.getByLabel("Problem or work addressed")).toHaveValue("Closed problem");
+  await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+  await expect(page.locator('iframe[title="request-merits"]').locator("..")).toBeVisible();
+
+  const windowSelector = 'iframe[title="view-problem"], iframe[title="request-merits"]';
+  const readPlacements = () => page.locator(windowSelector).evaluateAll((iframes) => Object.fromEntries(iframes.map((iframe) => {
+    const style = getComputedStyle(iframe.parentElement!);
+    return [iframe.getAttribute("title"), { gridColumn: style.gridColumn, gridRow: style.gridRow }];
+  })));
+  const placementBeforeRefresh = await readPlacements();
+  await expect.poll(() => page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.map((window: { dTag: string }) => window.dTag);
+  })).toEqual(["view-problem", "request-merits"]);
+
+  await page.reload();
+
+  await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
+  await expect(page.locator('iframe[title="request-merits"]').locator("..")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null");
+    return session?.windows?.map((window: { dTag: string }) => window.dTag);
+  })).toEqual(["view-problem", "request-merits"]);
+  expect(await readPlacements()).toEqual(placementBeforeRefresh);
+});
+
 test("never exposes an empty white Napplet frame during startup", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toHaveText("Platform ready");

@@ -6,7 +6,13 @@
   "napplet": {
     "dTag": "request-merits",
     "title": "Request Merits",
-    "requires": ["outbox", "inc"]
+    "requires": ["outbox", "inc"],
+    "archetypes": [
+      {
+        "slug": "composer",
+        "convention": "napplet:composer/merit-request"
+      }
+    ]
   },
   "scripts": {
     "dev": "vite build --watch",
