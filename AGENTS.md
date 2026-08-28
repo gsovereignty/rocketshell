@@ -22,6 +22,13 @@
 
 - Do not use environment variables.
 
+## Crush Bugs opt-in only
+
+- Do not activate, invoke, inspect, or follow the installed `crush-bugs` skill
+  unless the user explicitly requests `crush-bugs` in the current message.
+- A general request to find, diagnose, review, or fix problems is not permission
+  to use `crush-bugs`. Prior use does not carry forward to later messages.
+
 ## Deployment requirements
 
 - No backend is permitted in this project. Do not add or depend on servers,
