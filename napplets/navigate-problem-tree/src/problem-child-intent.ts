@@ -3,8 +3,6 @@ export const PROBLEM_CHILD_ACTION = "problem-child";
 export const PROBLEM_CHILD_CONVENTION = "napplet:composer/problem-child";
 export const PROBLEM_VIEWER_ARCHETYPE = "note";
 export const PROBLEM_VIEWER_CONVENTION = "napplet:note/open";
-export const MERIT_REQUEST_ACTION = "merit-request";
-export const MERIT_REQUEST_CONVENTION = "napplet:composer/merit-request";
 const PROBLEM_VIEWER_BEHAVIOR = { focus: false, reuse: true } as const;
 const PROBLEM_CHILD_ADJACENT_BEHAVIOR = { focus: false, reuse: true } as const;
 
@@ -61,29 +59,4 @@ interface IntentAvailabilityLike {
 export function hasProblemChildComposer(availability: IntentAvailabilityLike | undefined): boolean {
   return availability?.available === true && availability.candidates.some((candidate) =>
     candidate.actions.includes(PROBLEM_CHILD_ACTION) && candidate.conventions.includes(PROBLEM_CHILD_CONVENTION));
-}
-
-interface MeritRequestIntent {
-  invoke(request: {
-    archetype: typeof PROBLEM_CHILD_ARCHETYPE;
-    action: typeof MERIT_REQUEST_ACTION;
-    convention: typeof MERIT_REQUEST_CONVENTION;
-    payload: { problem: string };
-    behavior: typeof PROBLEM_CHILD_ADJACENT_BEHAVIOR;
-  }): Promise<{ ok: boolean; handled: boolean; error?: string }>;
-}
-
-export function openAdjacentMeritRequest(intentApi: MeritRequestIntent, problem: string) {
-  return intentApi.invoke({
-    archetype: PROBLEM_CHILD_ARCHETYPE,
-    action: MERIT_REQUEST_ACTION,
-    convention: MERIT_REQUEST_CONVENTION,
-    payload: { problem },
-    behavior: PROBLEM_CHILD_ADJACENT_BEHAVIOR
-  });
-}
-
-export function hasMeritRequestComposer(availability: IntentAvailabilityLike | undefined): boolean {
-  return availability?.available === true && availability.candidates.some((candidate) =>
-    candidate.actions.includes(MERIT_REQUEST_ACTION) && candidate.conventions.includes(MERIT_REQUEST_CONVENTION));
 }

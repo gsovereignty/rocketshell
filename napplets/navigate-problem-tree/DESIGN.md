@@ -135,8 +135,6 @@ Tree nodes show title, unique descendant count, and fork state. Current node use
 solid blue. Activating any tree node or child row opens that problem in the
 visible default problem viewer without replacing the DAG. A full-width action
 above the tree opens a composer for a new problem directly under the hidden root.
-Selected problem can also open adjacent merit-request composer without replacing
-tracker; problem title becomes initial work description.
 
 ## Do's and Don'ts
 
