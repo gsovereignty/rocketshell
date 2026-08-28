@@ -64,6 +64,7 @@ const settingsClose = document.querySelector<HTMLButtonElement>("#settings-close
 const windowsContainer = document.querySelector<HTMLElement>("#windows");
 const screenNavigation = document.querySelector<HTMLElement>("#screen-nav");
 const dagViewerTrigger = document.querySelector<HTMLButtonElement>("#dag-viewer-trigger");
+const newRocketTrigger = document.querySelector<HTMLButtonElement>("#new-rocket-trigger");
 const consoleTrigger = document.querySelector<HTMLButtonElement>("#napplet-console-trigger");
 const consolePanel = document.querySelector<HTMLElement>("#napplet-console-panel");
 const consoleHeader = document.querySelector<HTMLElement>("#napplet-console-header");
@@ -488,6 +489,22 @@ void bootstrap().then(async (platform) => {
     }).finally(() => {
       dagViewerTrigger.disabled = false;
       dagViewerTrigger.removeAttribute("aria-busy");
+    });
+  });
+
+  newRocketTrigger?.addEventListener("click", () => {
+    newRocketTrigger.disabled = true;
+    newRocketTrigger.setAttribute("aria-busy", "true");
+    void platform.dockLaunchers().then(async (launchers) => {
+      const launcher = launchers.find(({ dTag }) => dTag === "create-rocket");
+      if (!launcher) throw new Error("Rocket creator is not installed");
+      await openCoordinate(launcher.coordinate, launcher.dTag);
+    }).catch((error: unknown) => {
+      console.error("Opening Rocket creator from menu bar failed", { dTag: "create-rocket", error });
+      setLoaderStatus(error instanceof Error ? error.message : "Unable to open Rocket creator", "error");
+    }).finally(() => {
+      newRocketTrigger.disabled = false;
+      newRocketTrigger.removeAttribute("aria-busy");
     });
   });
 

@@ -236,6 +236,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   transition: background-color 140ms ease-out;
 }
 .menu-button:hover, .menu-button[aria-expanded="true"] { background: var(--hover); }
+.text-menu-button { margin-left: .25rem; letter-spacing: .045em; white-space: nowrap; }
 .profile-trigger { padding-left: .35rem; }
 .profile-avatar {
   position: relative;
