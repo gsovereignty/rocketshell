@@ -1,5 +1,6 @@
 export interface RocketDraft { identifier: string; mission: string; problemCoordinate: string; problemRelay: string; repoCoordinate: string; repoRelay: string }
 export interface EventTemplate { kind: 31108; created_at: number; content: ""; tags: string[][] }
+export interface RocketIdentifierEvent { kind: number; tags: string[][] }
 
 const COORDINATE = /^(31971|30617):[0-9a-f]{64}:.+$/s;
 
@@ -10,6 +11,17 @@ export function validateDraft(draft: RocketDraft): string[] {
   validateOptional("problem", draft.problemCoordinate.trim(), draft.problemRelay.trim(), "31971", errors);
   validateOptional("repository", draft.repoCoordinate.trim(), draft.repoRelay.trim(), "30617", errors);
   return errors;
+}
+
+export function rocketIdentifier(event: RocketIdentifierEvent): string | undefined {
+  if (event.kind !== 31108) return undefined;
+  const identifier = event.tags.find((tag) => tag[0] === "d")?.[1]?.trim();
+  return identifier || undefined;
+}
+
+export function hasObservedRocketIdentifier(identifier: string, observed: ReadonlySet<string>): boolean {
+  const normalized = identifier.trim();
+  return normalized.length > 0 && observed.has(normalized);
 }
 
 function validateOptional(label: string, coordinate: string, relay: string, kind: string, errors: string[]): void {

@@ -10,6 +10,8 @@ label { display:block; margin:0 0 7px; font-size:.76rem; font-weight:760; letter
 input,textarea { width:100%; margin-top:8px; border:1px solid var(--line); border-radius:0; padding:12px 13px; outline:none; color:var(--text); background:var(--background); text-transform:none; }
 textarea { resize:vertical; line-height:1.5; } input:focus,textarea:focus { border-color:var(--text); box-shadow:0 0 0 3px color-mix(in srgb,var(--text) 13%,transparent); }
 small { display:block; margin:-1px 0 24px; color:var(--muted); font-size:.74rem; text-align:right; }
+#identifier-hint[data-state="error"] { color:var(--error); }
+input[aria-invalid="true"] { border-color:var(--error); }
 details { margin-top:12px; border-block:1px solid var(--line); } summary { display:flex; justify-content:space-between; padding:17px 0; cursor:pointer; font-weight:720; } summary span { color:var(--muted); font-size:.72rem; font-weight:560; }
 .optional-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px 20px; padding:10px 0 24px; }
 .action { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-top:34px; padding-top:18px; border-top:1px solid var(--line); }
