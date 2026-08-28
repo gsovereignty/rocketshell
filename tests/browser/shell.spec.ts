@@ -836,12 +836,15 @@ test("refresh migrates legacy dock state without relay discovery", async ({ page
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("shell.window-session.v2") ?? "null")?.windows?.[0]?.dTag)).toBe("log-new-problem");
 });
 
-test("profile leads menu bar and DAG viewer replaces dock", async ({ page }) => {
+test("profile leads menu bar and built-in viewers open", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#status")).toBeHidden();
+  const rocketViewer = page.getByRole("button", { name: "View Rockets" });
   const dagViewer = page.getByRole("button", { name: "Problem Tracker" });
   await expect(page.locator("#menu-bar .menu-cluster > button").first()).toHaveAttribute("id", "profile-menu-trigger");
   await expect(page.locator("#dock-shell")).toHaveCount(0);
+  await rocketViewer.click();
+  await expect(page.locator('iframe[title="nostrocket-state"]')).toHaveCount(1);
   await dagViewer.click();
   await expect(page.locator('iframe[title="navigate-problem-tree"]')).toHaveCount(1);
 });

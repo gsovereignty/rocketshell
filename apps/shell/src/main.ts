@@ -65,6 +65,7 @@ const settingsClose = document.querySelector<HTMLButtonElement>("#settings-close
 const windowsContainer = document.querySelector<HTMLElement>("#windows");
 const screenNavigation = document.querySelector<HTMLElement>("#screen-nav");
 const dagViewerTrigger = document.querySelector<HTMLButtonElement>("#dag-viewer-trigger");
+const rocketsViewerTrigger = document.querySelector<HTMLButtonElement>("#rockets-viewer-trigger");
 const newRocketTrigger = document.querySelector<HTMLButtonElement>("#new-rocket-trigger");
 const consoleTrigger = document.querySelector<HTMLButtonElement>("#napplet-console-trigger");
 const consolePanel = document.querySelector<HTMLElement>("#napplet-console-panel");
@@ -513,6 +514,22 @@ void bootstrap().then(async (platform) => {
     }).finally(() => {
       dagViewerTrigger.disabled = false;
       dagViewerTrigger.removeAttribute("aria-busy");
+    });
+  });
+
+  rocketsViewerTrigger?.addEventListener("click", () => {
+    rocketsViewerTrigger.disabled = true;
+    rocketsViewerTrigger.setAttribute("aria-busy", "true");
+    void platform.dockLaunchers().then(async (launchers) => {
+      const launcher = launchers.find(({ dTag }) => dTag === "nostrocket-state");
+      if (!launcher) throw new Error("Rocket viewer is not installed");
+      await openMenuLauncher(launcher);
+    }).catch((error: unknown) => {
+      console.error("Opening Rocket viewer from menu bar failed", { dTag: "nostrocket-state", error });
+      setLoaderStatus(error instanceof Error ? error.message : "Unable to open Rocket viewer", "error");
+    }).finally(() => {
+      rocketsViewerTrigger.disabled = false;
+      rocketsViewerTrigger.removeAttribute("aria-busy");
     });
   });
 
