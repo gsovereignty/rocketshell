@@ -109,3 +109,38 @@ test("title search filters leaf nodes and combines with status", async ({ page }
   await expect(page.locator('[data-filter="closed"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".row-title")).toHaveText("Second closed leaf");
 });
+
+test("merit action dispatches selected problem beside tracker", async ({ page }) => {
+  await page.addInitScript((queryEvents) => {
+    const invocations: unknown[] = [];
+    Object.defineProperty(window, "__intentInvocations", { value: invocations });
+    Object.defineProperty(window, "napplet", {
+      configurable: true,
+      value: {
+        outbox: {
+          query: async () => ({ events: queryEvents }),
+          subscribe: () => ({ on: () => undefined, close: () => undefined })
+        },
+        intent: {
+          available: async (archetype: string) => archetype === "composer"
+            ? { available: true, candidates: [{ actions: ["merit-request"], conventions: ["napplet:composer/merit-request"] }] }
+            : { available: false, candidates: [] },
+          invoke: async (request: unknown) => { invocations.push(request); return { ok: true, handled: true }; }
+        }
+      }
+    });
+  }, events);
+
+  await page.goto("/");
+  await page.locator(`.tree-node[data-select="${firstParent}"]`).click();
+  await page.getByRole("button", { name: "SUBMIT MERIT REQUEST" }).click();
+
+  await expect.poll(() => page.evaluate(() => (window as Window & { __intentInvocations: unknown[] }).__intentInvocations)).toContainEqual({
+    archetype: "composer",
+    action: "merit-request",
+    convention: "napplet:composer/merit-request",
+    payload: { problem: "First parent" },
+    behavior: { focus: false, reuse: true }
+  });
+  await expect(page.getByText("Merit request opened for First parent.")).toBeVisible();
+});

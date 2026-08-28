@@ -75,10 +75,11 @@ button { color: inherit; }
 .list-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; }
 .list-pane h2 { max-width: 70ch; }
 .list-actions { display: flex; flex: none; gap: 8px; }
-#log-child { flex: none; min-height: 38px; border: 0; border-radius: 9px; padding: 0 14px; color: white; background: var(--blue); font-size: .78rem; font-weight: 700; cursor: pointer; }
-#log-child:hover:not(:disabled) { background: var(--blue-dark); }
-#log-child:active:not(:disabled) { transform: translateY(1px); }
-#log-child:disabled { border-color: transparent; color: var(--muted); background: var(--line); cursor: not-allowed; }
+#log-child, #submit-merit-request { flex: none; min-height: 38px; border: 0; border-radius: 9px; padding: 0 14px; color: white; background: var(--blue); font-size: .78rem; font-weight: 700; cursor: pointer; }
+#submit-merit-request { color: var(--blue-dark); background: #dce7ff; }
+#log-child:hover:not(:disabled), #submit-merit-request:hover:not(:disabled) { background: var(--blue-dark); color: white; }
+#log-child:active:not(:disabled), #submit-merit-request:active:not(:disabled) { transform: translateY(1px); }
+#log-child:disabled, #submit-merit-request:disabled { border-color: transparent; color: var(--muted); background: var(--line); cursor: not-allowed; }
 .filter-stack { display: grid; gap: 7px; width: 100%; }
 #problem-search { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 9px; padding: 0 12px; color: var(--ink); background: var(--white); caret-color: var(--blue); }
 #problem-search::placeholder { color: var(--muted); }
@@ -130,7 +131,7 @@ button { color: inherit; }
   .list-header { padding: 20px 16px 12px; }
   .list-heading { flex-direction: column; gap: 12px; }
   .list-actions { width: 100%; flex-direction: column; }
-  #log-child { width: 100%; min-height: 44px; }
+  #log-child, #submit-merit-request { width: 100%; min-height: 44px; }
   .filters button { display: grid; place-content: center; gap: 2px; min-height: 40px; padding: 5px 2px; font-size: .66rem; }
   .filters span { display: block; font-size: .58rem; }
   .problem-list { padding: 8px 10px 60px; }

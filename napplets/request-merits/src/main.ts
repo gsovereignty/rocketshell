@@ -1,7 +1,8 @@
-import { outbox, themeGet, themeOnChanged } from "@napplet/sdk";
+import { inc, outbox, themeGet, themeOnChanged, type Subscription } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import { buildMeritRequest, publishMeritRequest, validateDraft, type MeritRequestDraft, type MeritRequestTemplate, type SolutionType } from "./request";
+import { MERIT_REQUEST_CONVENTION, parseMeritRequestPayload } from "./intent";
 
 declare global { interface Window { napplet?: { theme?: { get?: unknown } } } }
 const app = (() => {
@@ -34,6 +35,7 @@ const review = document.querySelector<HTMLElement>("#review")!;
 const status = document.querySelector<HTMLOutputElement>("#status")!;
 const publishButton = document.querySelector<HTMLButtonElement>("#publish")!;
 let solutionType: SolutionType = "url";
+let intentSubscription: Subscription | undefined;
 
 function readDraft(): MeritRequestDraft {
   return { rocket: input("rocket").value, problem: textarea("problem").value, solution: textarea("solution").value, solutionType, merits: input("merits").value, sats: input("sats").value };
@@ -76,6 +78,25 @@ document.querySelector<HTMLButtonElement>("#review-button")!.addEventListener("c
 document.querySelector<HTMLButtonElement>("#back")!.addEventListener("click", showEditor);
 publishButton.addEventListener("click", () => void publish());
 editor.addEventListener("keydown", (event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); showReview(); } });
+
+try {
+  intentSubscription = inc.on(MERIT_REQUEST_CONVENTION, (event) => {
+    const payload = parseMeritRequestPayload(event.payload);
+    if (!payload) {
+      console.warn("Merit request intent payload rejected", { convention: event.topic });
+      showStatus("Problem tracker sent invalid merit request context.", true);
+      return;
+    }
+    textarea("problem").value = payload.problem;
+    showEditor();
+    showStatus("Problem copied from tracker. Add Rocket and work value.");
+    textarea("problem").focus();
+  });
+} catch (error) {
+  console.warn("Merit request intent listener could not start", { convention: MERIT_REQUEST_CONVENTION, error });
+  showStatus("Problem-tracker handoff unavailable. Manual request entry still works.");
+}
+window.addEventListener("pagehide", () => intentSubscription?.close(), { once: true });
 
 function applyTheme(theme?: { colors: { background: string; text: string; primary: string } }): void {
   if (!theme) return;

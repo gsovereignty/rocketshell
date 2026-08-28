@@ -6,6 +6,8 @@ Required event tags: `problem`, `a`, and `merits`. `solution` and `sats` are opt
 
 Exact persisted HumbleHorse request `023ecb4582e73fccec1ab6d8c415f0a4eae97180ff4fc06153866900273e5894` is preserved in `src/fixtures/humblehorse-merit-request.json` and used by tests.
 
+Advertises composer convention `napplet:composer/merit-request`. Problem tracker invokes it with `{ problem: string }`; request editor validates payload and prefills work description while leaving Rocket and value fields to user.
+
 Sources: [Nostrocket Merits](https://github.com/nostrocket/NIPS/blob/main/Merits.md), [living NAP specifications](https://github.com/napplet/naps), and legacy reference `/Users/gareth/git/nostrocket/hypergolic/src/components/CreateMeritRequest.svelte`.
 
 ```sh

@@ -6,7 +6,7 @@
   "napplet": {
     "dTag": "request-merits",
     "title": "Request Merits",
-    "requires": ["outbox"]
+    "requires": ["outbox", "inc"]
   },
   "scripts": {
     "dev": "vite build --watch",

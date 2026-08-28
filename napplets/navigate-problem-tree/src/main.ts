@@ -15,7 +15,8 @@ import {
 } from "./problem-dag";
 import {
   PROBLEM_CHILD_ACTION, PROBLEM_CHILD_ARCHETYPE, PROBLEM_CHILD_CONVENTION,
-  hasProblemChildComposer, hasProblemViewer, openAdjacentProblemChildComposer, openProblemViewer
+  hasMeritRequestComposer, hasProblemChildComposer, hasProblemViewer, openAdjacentMeritRequest,
+  openAdjacentProblemChildComposer, openProblemViewer
 } from "./problem-child-intent";
 import { mergeProblemEvents } from "./problem-events";
 
@@ -32,7 +33,9 @@ let activeFilter = "all";
 let textFilter = "";
 let noteHandlerAvailable = false;
 let problemChildHandlerAvailable = false;
+let meritRequestHandlerAvailable = false;
 let childComposerBusy = false;
+let meritRequestBusy = false;
 let problemViewerBusy = false;
 let problemEvents: RelayEventResult[] = [];
 let problemSubscription: OutboxSubscription | undefined;
@@ -132,12 +135,17 @@ function renderList(animateRows = true) {
   const filters = document.querySelector<HTMLElement>("#filters");
   const sectionTitle = document.querySelector<HTMLElement>("#section-title");
   const logChildButton = document.querySelector<HTMLButtonElement>("#log-child");
-  if (!list || !filters || !sectionTitle || !logChildButton) return;
+  const meritRequestButton = document.querySelector<HTMLButtonElement>("#submit-merit-request");
+  if (!list || !filters || !sectionTitle || !logChildButton || !meritRequestButton) return;
   sectionTitle.textContent = "Actionable problems";
   logChildButton.disabled = !problemChildHandlerAvailable || childComposerBusy;
   logChildButton.title = problemChildHandlerAvailable
     ? `Log a child problem under ${parent.title}`
     : "No compatible problem composer available";
+  meritRequestButton.disabled = !meritRequestHandlerAvailable || meritRequestBusy;
+  meritRequestButton.title = meritRequestHandlerAvailable
+    ? `Request merits for ${dag.nodes.get(selected)?.title ?? parent.title}`
+    : "No compatible merit request composer available";
   filters.innerHTML = filterCounts(actionable).map(([value, label, count]) => `
     <button data-filter="${value}" aria-pressed="${activeFilter === value}">${label} <span>${count}</span></button>`).join("");
   const emptyMessage = !actionable.length
@@ -174,7 +182,7 @@ function renderApp(animateListRows = true) {
       </aside>
       <section class="list-pane" aria-labelledby="section-title">
         <header class="list-header">
-          <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="log-child" type="button">Log child problem</button></div></div>
+          <div class="list-heading"><h2 id="section-title"></h2><div class="list-actions"><button id="submit-merit-request" type="button">SUBMIT MERIT REQUEST</button><button id="log-child" type="button">Log child problem</button></div></div>
           <div class="filter-stack">
             <input id="problem-search" type="search" value="${escapeHtml(textFilter)}" placeholder="Search leaf problems" aria-label="Filter by title" autocomplete="off" spellcheck="false">
             <div id="filters" class="filters" aria-label="Filter children by status"></div>
@@ -227,8 +235,34 @@ function bindWorkspace() {
       void logChildProblem();
     } else if (target.closest("#log-root-child")) {
       void logRootChildProblem();
+    } else if (target.closest("#submit-merit-request")) {
+      void submitMeritRequest();
     }
   };
+}
+
+async function submitMeritRequest() {
+  const node = dag?.nodes.get(selected);
+  const status = document.querySelector<HTMLOutputElement>("#app-status");
+  const button = document.querySelector<HTMLButtonElement>("#submit-merit-request");
+  if (!node || !status || !button || meritRequestBusy) return;
+  meritRequestBusy = true;
+  button.disabled = true;
+  button.textContent = "OPENING…";
+  status.textContent = `Opening merit request for ${node.title}…`;
+  try {
+    const result = await openAdjacentMeritRequest(intent, node.title);
+    if (!result.ok || !result.handled) throw new Error(result.error ?? "No merit request composer accepted this request.");
+    status.textContent = `Merit request opened for ${node.title}.`;
+    gsap.fromTo(button, { scale: .97 }, { scale: 1, duration: .2, ease: "expo.out" });
+  } catch (error) {
+    console.error("Merit request intent failed", { problemId: node.problemId, error });
+    status.textContent = error instanceof Error ? error.message : "Merit request could not be opened.";
+  } finally {
+    meritRequestBusy = false;
+    button.textContent = "SUBMIT MERIT REQUEST";
+    button.disabled = !meritRequestHandlerAvailable;
+  }
 }
 
 async function logRootChildProblem() {
@@ -333,7 +367,7 @@ async function loadDag(value: string) {
       const liveStatus = document.querySelector<HTMLOutputElement>("#app-status");
       if (liveStatus) liveStatus.textContent = "Live updates stopped. Reload tree to reconnect.";
     });
-    const [{ events }, noteAvailability, childAvailability] = await Promise.all([
+    const [{ events }, noteAvailability, composerAvailability] = await Promise.all([
       outbox.query(filters, { timeoutMs: 8000 }),
       intent.available("note").catch((error) => {
         console.warn("Problem viewer availability check failed", { archetype: "note", error });
@@ -351,7 +385,8 @@ async function loadDag(value: string) {
     listScope = coordinate;
     textFilter = "";
     noteHandlerAvailable = hasProblemViewer(noteAvailability);
-    problemChildHandlerAvailable = hasProblemChildComposer(childAvailability);
+    problemChildHandlerAvailable = hasProblemChildComposer(composerAvailability);
+    meritRequestHandlerAvailable = hasMeritRequestComposer(composerAvailability);
     renderApp(true);
   } catch (error) {
     if (generation !== loadGeneration) return;

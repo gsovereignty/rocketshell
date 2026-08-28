@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_CONVENTION,
-  hasProblemChildComposer, hasProblemViewer, openAdjacentProblemChildComposer, openProblemViewer
+  MERIT_REQUEST_ACTION, MERIT_REQUEST_CONVENTION, PROBLEM_CHILD_ACTION, PROBLEM_CHILD_CONVENTION, PROBLEM_VIEWER_CONVENTION,
+  hasMeritRequestComposer, hasProblemChildComposer, hasProblemViewer, openAdjacentMeritRequest, openAdjacentProblemChildComposer, openProblemViewer
 } from "./problem-child-intent";
 
 describe("problem child intent", () => {
@@ -32,6 +32,29 @@ describe("problem child intent", () => {
       available: true,
       candidates: [{ actions: ["open"], conventions: [PROBLEM_CHILD_CONVENTION] }]
     })).toBe(false);
+  });
+});
+
+describe("merit request intent", () => {
+  it("opens merit composer beside problem tracker", async () => {
+    const invoke = vi.fn().mockResolvedValue({ ok: true, handled: true });
+    await openAdjacentMeritRequest({ invoke }, "Sidebar cannot show item names");
+    expect(invoke).toHaveBeenCalledWith({
+      archetype: "composer",
+      action: MERIT_REQUEST_ACTION,
+      convention: MERIT_REQUEST_CONVENTION,
+      payload: { problem: "Sidebar cannot show item names" },
+      behavior: { focus: false, reuse: true }
+    });
+  });
+
+  it("requires matching merit action and convention", () => {
+    expect(hasMeritRequestComposer({ available: true, candidates: [
+      { actions: [MERIT_REQUEST_ACTION], conventions: [MERIT_REQUEST_CONVENTION] }
+    ] })).toBe(true);
+    expect(hasMeritRequestComposer({ available: true, candidates: [
+      { actions: ["open"], conventions: [MERIT_REQUEST_CONVENTION] }
+    ] })).toBe(false);
   });
 });
 
