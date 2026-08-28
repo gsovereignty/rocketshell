@@ -3,7 +3,7 @@ import { renderNappletNamespacePrelude } from "@kehto/shell";
 import { parseManifest, type EventVerifier } from "./manifest-verifier.js";
 import type { ArtifactInput, InstallationRecord, PackageStore, SignedManifest, StoredArtifact } from "./types.js";
 
-export interface InstallOptions { readonly activate?: boolean; readonly now?: () => number; readonly randomId?: () => string }
+export interface InstallOptions { readonly activate?: boolean; readonly now?: () => number; readonly randomId?: () => string; readonly replaceExisting?: boolean }
 
 export class PackageInstaller {
   constructor(private readonly store: PackageStore, private readonly verifyEvent?: EventVerifier) {}
@@ -22,7 +22,7 @@ export class PackageInstaller {
     if (inputs.size !== artifacts.length) throw new Error("Package contains undeclared artifacts");
     if (await aggregateHash(artifacts) !== manifest.aggregateHash) throw new Error("Aggregate hash mismatch");
     const record: InstallationRecord = { installationId, dTag: manifest.dTag, aggregateHash: manifest.aggregateHash, manifestEvent: event, manifest, namespacePrelude: renderNappletNamespacePrelude({ domains: manifest.requires }), artifacts, committedAt: options.now?.() ?? Date.now() };
-    await this.store.stage(record);
+    await this.store.stage(record, options.replaceExisting === undefined ? {} : { replaceExisting: options.replaceExisting });
     try {
       await this.store.commit(installationId);
       if (options.activate !== false) await this.store.activate(record.dTag, record.aggregateHash);

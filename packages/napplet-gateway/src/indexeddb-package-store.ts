@@ -1,4 +1,4 @@
-import type { InstallationRecord, PackageStore, StoredArtifact } from "./types.js";
+import type { InstallationRecord, PackageStore, StageOptions, StoredArtifact } from "./types.js";
 import { PLATFORM_DATABASE_NAMES } from "@project/platform-nap-contract";
 
 const DATABASE_VERSION = 1;
@@ -42,10 +42,10 @@ export class IndexedDbPackageStore implements PackageStore {
 
   close(): void { this.database.close(); }
 
-  async stage(record: InstallationRecord): Promise<void> {
+  async stage(record: InstallationRecord, options: StageOptions = {}): Promise<void> {
     const transaction = this.database.transaction([STAGED, PACKAGES], "readwrite");
     const existing = await requestResult(transaction.objectStore(PACKAGES).get(packageKey(record.dTag, record.aggregateHash)) as IDBRequest<StoredPackage | undefined>);
-    if (existing) { transaction.abort(); throw new Error("Package version already committed"); }
+    if (existing && !options.replaceExisting) { transaction.abort(); throw new Error("Package version already committed"); }
     transaction.objectStore(STAGED).add(structuredClone(record));
     await transactionDone(transaction);
   }
@@ -55,7 +55,7 @@ export class IndexedDbPackageStore implements PackageStore {
     const staged = await requestResult(transaction.objectStore(STAGED).get(installationId) as IDBRequest<InstallationRecord | undefined>);
     if (!staged) { transaction.abort(); throw new Error("Unknown staged installation"); }
     const stored: StoredPackage = { ...staged, packageKey: packageKey(staged.dTag, staged.aggregateHash) };
-    transaction.objectStore(PACKAGES).add(stored);
+    transaction.objectStore(PACKAGES).put(stored);
     transaction.objectStore(STAGED).delete(installationId);
     await transactionDone(transaction);
   }

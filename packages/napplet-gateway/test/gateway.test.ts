@@ -16,6 +16,22 @@ describe("package gateway", () => {
     const installed = await new PackageInstaller(store, () => true).install(event, inputs, { randomId: () => "install-1", now: () => 10 });
     expect((await store.getActive("hello/world"))?.aggregateHash).toBe(installed.aggregateHash);
   });
+  it("replaces same-artifact metadata only when explicitly requested", async () => {
+    const store = new MemoryPackageStore();
+    const { event, inputs } = await fixture();
+    const installer = new PackageInstaller(store, () => true);
+    await installer.install(event, inputs, { randomId: () => "install-1" });
+    const manifest = JSON.parse(event.content) as Record<string, unknown>;
+    const updated = {
+      ...event,
+      tags: [...event.tags, ["title", "Updated title"]],
+      content: JSON.stringify({ ...manifest, title: "Updated title" })
+    };
+
+    await expect(installer.install(updated, inputs, { randomId: () => "install-2" })).rejects.toThrow("already committed");
+    await expect(installer.install(updated, inputs, { randomId: () => "install-3", replaceExisting: true })).resolves.toBeDefined();
+    expect((await store.getActive("hello/world"))?.manifest.title).toBe("Updated title");
+  });
   it("passes official NIP-5D manifest conformance", async () => {
     const { event } = await fixture();
     expect(validateManifestEvent(event)).toMatchObject({ ok: true, kind: 35129, dTag: "hello/world", requires: ["identity"] });

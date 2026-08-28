@@ -39,18 +39,29 @@ const artifactUrl = (napplet: RegistryNapplet, path: string): string => path ===
   ? napplet.url
   : `${napplet.url.slice(0, napplet.url.lastIndexOf("/") + 1)}${path.split("/").map(encodeURIComponent).join("/")}`;
 
+const sameList = <T>(left: readonly T[] | undefined, right: readonly T[] | undefined): boolean =>
+  JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
+
+const matchesRegistry = (record: Awaited<ReturnType<PackageStore["getActive"]>>, napplet: RegistryNapplet, aggregate: string): boolean =>
+  record?.aggregateHash === aggregate
+  && record.manifest.title === napplet.title
+  && record.manifest.entrypoint === "index.html"
+  && sameList(record.manifest.requires, napplet.requires)
+  && sameList(record.manifest.archetypes, napplet.archetypes)
+  && sameList(record.manifest.artifacts, napplet.files);
+
 export async function installBuiltInNapplets(store: PackageStore, applicationBase: string, registryName: BuiltInRegistryName = "napplets.json"): Promise<readonly string[]> {
   const registry = await readRegistry(applicationBase, registryName);
   const installed: string[] = [];
   for (const napplet of registry.napplets) {
     const aggregate = await aggregateHash(napplet.files);
     const existing = await store.getActive(napplet.dTag);
-    if (existing?.aggregateHash === aggregate) { installed.push(napplet.dTag); continue; }
+    if (matchesRegistry(existing, napplet, aggregate)) { installed.push(napplet.dTag); continue; }
     const committed = await store.get(napplet.dTag, aggregate);
-    if (committed) {
+    if (matchesRegistry(committed, napplet, aggregate)) {
       await store.activate(napplet.dTag, aggregate);
       const active = await store.getActive(napplet.dTag);
-      if (active?.aggregateHash !== aggregate) throw new Error(`Built-in Napplet activation failed: ${napplet.dTag}`);
+      if (!matchesRegistry(active, napplet, aggregate)) throw new Error(`Built-in Napplet activation failed: ${napplet.dTag}`);
       installed.push(napplet.dTag);
       continue;
     }
@@ -73,9 +84,12 @@ export async function installBuiltInNapplets(store: PackageStore, applicationBas
       ...napplet.files.map((artifact) => ["path", `/${artifact.path}`, artifact.sha256])
     ];
     const event = { id: "0".repeat(64), pubkey: "0".repeat(64), created_at: 0, kind: 35129, tags, content: JSON.stringify(manifest), sig: "0".repeat(128) } as SignedManifest;
-    await new PackageInstaller(store, () => true).install(event, inputs, { randomId: () => `built-in-${napplet.dTag}-${aggregate}` });
+    await new PackageInstaller(store, () => true).install(event, inputs, {
+      randomId: () => `built-in-${napplet.dTag}-${aggregate}`,
+      replaceExisting: committed !== undefined
+    });
     const active = await store.getActive(napplet.dTag);
-    if (active?.aggregateHash !== aggregate) throw new Error(`Built-in Napplet activation failed: ${napplet.dTag}`);
+    if (!matchesRegistry(active, napplet, aggregate)) throw new Error(`Built-in Napplet activation failed: ${napplet.dTag}`);
     installed.push(napplet.dTag);
   }
   return installed;

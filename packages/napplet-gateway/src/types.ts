@@ -43,8 +43,10 @@ export interface InstallationRecord {
 
 export interface ActiveVersion { readonly dTag: string; readonly aggregateHash: string }
 
+export interface StageOptions { readonly replaceExisting?: boolean }
+
 export interface PackageStore {
-  stage(record: InstallationRecord): Promise<void>;
+  stage(record: InstallationRecord, options?: StageOptions): Promise<void>;
   commit(installationId: string): Promise<void>;
   activate(dTag: string, aggregateHash: string): Promise<void>;
   get(dTag: string, aggregateHash: string): Promise<InstallationRecord | undefined>;

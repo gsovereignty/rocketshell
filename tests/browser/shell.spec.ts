@@ -482,25 +482,56 @@ test("reuses merit composer beside problem viewer across refresh", async ({ page
   await expect(page.locator("#status")).toBeHidden();
   await expect.poll(() => page.evaluate(() => Boolean(window.__platformTest))).toBe(true);
   await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("napplet-packages");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const active = await new Promise<{ aggregateHash: string }>((resolve, reject) => {
+      const request = database.transaction("active", "readonly").objectStore("active").get("request-merits");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const packageKey = `request-merits\0${active.aggregateHash}`;
+    const installed = await new Promise<Record<string, any>>((resolve, reject) => {
+      const request = database.transaction("packages", "readonly").objectStore("packages").get(packageKey);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    delete installed.manifest.archetypes;
+    installed.manifestEvent.tags = installed.manifestEvent.tags.filter((tag: string[]) => tag[0] !== "archetype");
+    const content = JSON.parse(installed.manifestEvent.content);
+    delete content.archetypes;
+    installed.manifestEvent.content = JSON.stringify(content);
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction("packages", "readwrite");
+      transaction.objectStore("packages").put(installed);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    database.close();
+  });
+  await page.reload();
+  await expect(page.locator("#status")).toBeHidden();
+  await page.evaluate(async () => {
     const platform = window.__platformTest as unknown as {
       openInstalled(dTag: string): Promise<{ windowId: string }>;
       windows: { setLaunchDescriptor(windowId: string, launch: { type: "direct"; coordinate: string }): void };
     };
     const viewer = await platform.openInstalled("view-problem");
     platform.windows.setLaunchDescriptor(viewer.windowId, { type: "direct", coordinate: "view-problem" });
-    const merits = await platform.openInstalled("request-merits");
-    platform.windows.setLaunchDescriptor(merits.windowId, { type: "direct", coordinate: "request-merits" });
   });
   const viewer = page.frameLocator('iframe[title="view-problem"]');
-  const merits = page.frameLocator('iframe[title="request-merits"]');
   await expect(viewer.locator("#app")).toBeVisible();
-  await expect(merits.getByRole("heading", { name: "Request merits" })).toBeVisible();
 
   const result = await viewer.locator("html").evaluate(async () => window.napplet.intent.invoke({
     archetype: "composer", action: "merit-request", convention: "napplet:composer/merit-request",
     payload: { problem: "Closed problem" }, behavior: { focus: false, reuse: true }
   }));
   expect(result, JSON.stringify(result)).toMatchObject({ ok: true, handled: true, handler: "request-merits" });
+  const merits = page.frameLocator('iframe[title="request-merits"]');
+  await expect(merits.getByRole("heading", { name: "Request merits" })).toBeVisible();
   await expect(merits.getByLabel("Problem or work addressed")).toHaveValue("Closed problem");
   await expect(page.locator('iframe[title="view-problem"]').locator("..")).toBeVisible();
   await expect(page.locator('iframe[title="request-merits"]').locator("..")).toBeVisible();

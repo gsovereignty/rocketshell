@@ -115,6 +115,31 @@ describe("built-in Napplet installation", () => {
     expect(artifactFetches).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshes manifest metadata when artifact bytes are unchanged", async () => {
+    const bytes = new TextEncoder().encode("<!doctype html><title>Composer</title>");
+    const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };
+    let archetypes: { slug: string; convention: string }[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (/napplets(?:\.dev)?\.json$/.test(url)) return new Response(JSON.stringify({
+        version: 1,
+        napplets: [{ name: "request-merits", dTag: "request-merits", url: "/napplets/request-merits/index.html", requires: ["inc"], archetypes, files: [artifact] }]
+      }));
+      if (url === "/napplets/request-merits/index.html") return new Response(bytes);
+      return new Response("missing", { status: 404 });
+    }) as typeof fetch;
+    const store = new MemoryPackageStore();
+
+    await installBuiltInNapplets(store, "/");
+    const aggregate = (await store.getActive("request-merits"))?.aggregateHash;
+    archetypes = [{ slug: "composer", convention: "napplet:composer/merit-request" }];
+    await installBuiltInNapplets(store, "/");
+
+    const refreshed = await store.getActive("request-merits");
+    expect(refreshed?.aggregateHash).toBe(aggregate);
+    expect(refreshed?.manifest.archetypes).toEqual(archetypes);
+  });
+
   it("rejects a successful activation call that leaves the old version active", async () => {
     const bytes = new TextEncoder().encode("<!doctype html><title>Expected</title>");
     const artifact = { path: "index.html", sha256: await sha256(bytes), mediaType: "text/html" };

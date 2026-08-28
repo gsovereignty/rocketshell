@@ -1,4 +1,4 @@
-import type { InstallationRecord, PackageStore, StoredArtifact } from "./types.js";
+import type { InstallationRecord, PackageStore, StageOptions, StoredArtifact } from "./types.js";
 
 const key = (dTag: string, hash: string): string => `${dTag}\0${hash}`;
 
@@ -7,8 +7,8 @@ export class MemoryPackageStore implements PackageStore {
   readonly #committed = new Map<string, InstallationRecord>();
   readonly #active = new Map<string, string>();
 
-  async stage(record: InstallationRecord): Promise<void> {
-    if (this.#committed.has(key(record.dTag, record.aggregateHash))) throw new Error("Package version already committed");
+  async stage(record: InstallationRecord, options: StageOptions = {}): Promise<void> {
+    if (this.#committed.has(key(record.dTag, record.aggregateHash)) && !options.replaceExisting) throw new Error("Package version already committed");
     this.#staged.set(record.installationId, structuredClone(record));
   }
   async commit(installationId: string): Promise<void> {
