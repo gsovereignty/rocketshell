@@ -1,0 +1,15 @@
+{
+  "id": "023ecb4582e73fccec1ab6d8c415f0a4eae97180ff4fc06153866900273e5894",
+  "pubkey": "887f827161338ef4d3e83482498664ad7454caf9bda7d080c3b32821f1394708",
+  "created_at": 1725946289,
+  "kind": 1409,
+  "content": "",
+  "tags": [
+    ["problem", "text", "Problem: sidebar can't be expanded to show item names\n\nhttps://github.com/nostrocket/humble.horse/issues/17"],
+    ["solution", "url", "https://github.com/nostrocket/humble.horse/pull/23"],
+    ["a", "31108:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:HumbleHorse"],
+    ["merits", "33075"],
+    ["sats", "33075"]
+  ],
+  "sig": "76189d7364fb4133b29ba8604636c427fc94ce06ef6d5bf38d675c8feaba53b914e747cb35a83758d619600c8f651dddaa9d94007a53914496f10f498122d9c8"
+}
