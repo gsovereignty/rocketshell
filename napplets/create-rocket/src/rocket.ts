@@ -19,8 +19,12 @@ export function rocketIdentifier(event: RocketIdentifierEvent): string | undefin
   return identifier || undefined;
 }
 
+export function normalizeRocketIdentifier(identifier: string): string {
+  return identifier.trim().toLocaleLowerCase("en-US");
+}
+
 export function hasObservedRocketIdentifier(identifier: string, observed: ReadonlySet<string>): boolean {
-  const normalized = identifier.trim();
+  const normalized = normalizeRocketIdentifier(identifier);
   return normalized.length > 0 && observed.has(normalized);
 }
 

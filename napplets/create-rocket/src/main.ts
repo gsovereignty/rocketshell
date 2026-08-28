@@ -1,7 +1,7 @@
 import { outbox, themeGet, themeOnChanged } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
-import { buildIgnitionTemplate, hasObservedRocketIdentifier, publishIgnition, rocketIdentifier, validateDraft, type EventTemplate, type RocketDraft } from "./rocket";
+import { buildIgnitionTemplate, hasObservedRocketIdentifier, normalizeRocketIdentifier, publishIgnition, rocketIdentifier, validateDraft, type EventTemplate, type RocketDraft } from "./rocket";
 
 declare global { interface Window { napplet?: { theme?: { get?: unknown } } } }
 const app = document.querySelector<HTMLElement>("#app");
@@ -93,7 +93,7 @@ try {
   rocketSubscription.on("event", (result) => {
     const identifier = rocketIdentifier(result.event);
     if (!identifier) return;
-    observedIdentifiers.add(identifier);
+    observedIdentifiers.add(normalizeRocketIdentifier(identifier));
     syncIdentifierValidation();
   });
   rocketSubscription.on("closed", (reason) => {

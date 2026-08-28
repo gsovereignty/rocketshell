@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import fixture from "./fixtures/nostrocket-ignition.json";
-import { buildIgnitionTemplate, hasObservedRocketIdentifier, publishIgnition, rocketIdentifier, validateDraft, type RocketDraft } from "./rocket";
+import { buildIgnitionTemplate, hasObservedRocketIdentifier, normalizeRocketIdentifier, publishIgnition, rocketIdentifier, validateDraft, type RocketDraft } from "./rocket";
 
 const draft = (changes: Partial<RocketDraft> = {}): RocketDraft => ({ identifier: "MY_ROCKET", mission: "Coordinate independent builders.", problemCoordinate: "", problemRelay: "", repoCoordinate: "", repoRelay: "", ...changes });
 
@@ -26,10 +26,12 @@ describe("rocket ignition", () => {
     expect(rocketIdentifier({ kind: 31108, tags: [["mission", "No identifier"]] })).toBeUndefined();
     expect(rocketIdentifier({ kind: 1, tags: [["d", "EXISTING_ROCKET"]] })).toBeUndefined();
   });
-  it("detects exact identifiers already observed without waiting for discovery", () => {
-    const observed = new Set(["EXISTING_ROCKET"]);
+  it("detects identifiers case-insensitively without waiting for discovery", () => {
+    const observed = new Set([normalizeRocketIdentifier("EXISTING_ROCKET")]);
     expect(hasObservedRocketIdentifier(" EXISTING_ROCKET ", observed)).toBe(true);
-    expect(hasObservedRocketIdentifier("existing_rocket", observed)).toBe(false);
+    expect(hasObservedRocketIdentifier("existing_rocket", observed)).toBe(true);
+    expect(hasObservedRocketIdentifier("Existing_Rocket", observed)).toBe(true);
+    expect(hasObservedRocketIdentifier("OTHER_ROCKET", observed)).toBe(false);
     expect(hasObservedRocketIdentifier("", observed)).toBe(false);
   });
   it("publishes to author outbox and returns event id", async () => {
