@@ -22,6 +22,8 @@ fieldset { min-width:0; margin:0; padding:0; border:0; }
 legend { margin-bottom:10px; padding:0; font-size:.72rem; font-weight:780; letter-spacing:.08em; text-transform:uppercase; }
 .choice-list { display:grid; align-content:start; gap:8px; max-height:330px; overflow:auto; padding:2px; scrollbar-color:var(--line) transparent; scrollbar-width:thin; }
 .choice { position:relative; display:grid; grid-template-columns:18px minmax(0,1fr); align-items:start; gap:11px; min-width:0; margin:0; padding:13px; border:1px solid var(--line); background:var(--background); cursor:pointer; letter-spacing:normal; text-transform:none; }
+.problem-choice { margin-left:min(calc(var(--choice-depth) * 18px),35%); }
+.problem-choice[data-depth="0"] { border-left:3px solid var(--primary); }
 .choice:hover { border-color:var(--text); }
 .choice:has(input:checked) { border-color:var(--text); background:color-mix(in srgb,var(--primary) 9%,var(--background)); }
 .choice input { width:16px; height:16px; margin:2px 0 0; padding:0; accent-color:var(--primary); }

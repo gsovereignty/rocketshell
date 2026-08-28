@@ -2,7 +2,7 @@ import { identity, outbox, themeGet, themeOnChanged } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import { buildIgnitionTemplate, hasObservedRocketIdentifier, normalizeRocketIdentifier, publishIgnition, rocketIdentifier, validateDraft, type EventTemplate, type RocketDraft } from "./rocket";
-import { problemChoices, repositoryChoices, type ChoiceResult, type RocketReferenceChoice } from "./selections";
+import { problemChoices, repositoryChoices, ROOT_PROBLEM_COORDINATE, type ChoiceResult, type RocketReferenceChoice } from "./selections";
 
 declare global { interface Window { napplet?: { theme?: { get?: unknown }; identity?: { getPublicKey?: unknown; onChanged?: unknown } } } }
 const app = document.querySelector<HTMLElement>("#app") ?? (() => { throw new Error("Application root is missing."); })();
@@ -14,9 +14,9 @@ app.innerHTML = `<article class="sheet">
   <section id="editor" aria-labelledby="details-title"><h2 id="details-title">Rocket details</h2>
     <label>Rocket Name <input id="identifier" autocomplete="off" placeholder="MY_ROCKET" aria-describedby="identifier-hint"></label><small id="identifier-hint" aria-live="polite">Checking observed rockets in background. You can continue.</small>
     <label>Mission <textarea id="mission" maxlength="139" rows="4" placeholder="Why should this rocket exist? (optional)"></textarea></label><small><output id="mission-count">0</output>/139 characters</small>
-    <section class="references" aria-labelledby="references-title"><div class="section-heading"><div><h2 id="references-title">Problem and repository</h2><p>Choose from events published by your connected account.</p></div><button id="retry-references" class="text-button" type="button" hidden>Try again</button></div>
+    <section class="references" aria-labelledby="references-title"><div class="section-heading"><div><h2 id="references-title">Problem and repository</h2><p>Choose a problem from the NOSTROCKET tree and a repository from your connected account.</p></div><button id="retry-references" class="text-button" type="button" hidden>Try again</button></div>
       <div class="reference-grid">
-        <fieldset><legend>Problem</legend><div id="problem-options" class="choice-list" aria-live="polite" aria-busy="true"><p class="choice-state">Loading your problems…</p></div></fieldset>
+        <fieldset><legend>Problem</legend><div id="problem-options" class="choice-list" aria-live="polite" aria-busy="true"><p class="choice-state">Loading problem tree…</p></div></fieldset>
         <fieldset><legend>Git repository</legend><div id="repository-options" class="choice-list" aria-live="polite" aria-busy="true"><p class="choice-state">Loading your git repositories…</p></div></fieldset>
       </div>
       <output id="reference-status" class="reference-status" aria-live="polite"></output>
@@ -114,6 +114,11 @@ function renderChoices(container: HTMLElement, name: "problem" | "repository", c
   for (const [index, choice] of choices.entries()) {
     const label = document.createElement("label");
     label.className = "choice";
+    if (name === "problem") {
+      label.classList.add("problem-choice");
+      label.dataset.depth = String(choice.depth ?? 0);
+      label.style.setProperty("--choice-depth", String(choice.depth ?? 0));
+    }
     const radio = document.createElement("input");
     radio.type = "radio";
     radio.name = name;
@@ -145,7 +150,7 @@ async function loadReferences(pubkey?: string): Promise<void> {
   retryReferences.hidden = true;
   problemOptions.setAttribute("aria-busy", "true");
   repositoryOptions.setAttribute("aria-busy", "true");
-  renderState(problemOptions, "Loading your problems…");
+  renderState(problemOptions, "Loading problem tree…");
   renderState(repositoryOptions, "Loading your git repositories…");
   problemOptions.setAttribute("aria-busy", "true");
   repositoryOptions.setAttribute("aria-busy", "true");
@@ -170,23 +175,25 @@ async function loadReferences(pubkey?: string): Promise<void> {
       return;
     }
 
-    const [response, relayPlan] = await Promise.all([
-      outbox.query({ kinds: [31971, 30617], authors: [currentPubkey] }, { authors: [currentPubkey], timeoutMs: 8000 }),
+    const [problemResponse, repositoryResponse, relayPlan] = await Promise.all([
+      outbox.query({ kinds: [31971], "#A": [ROOT_PROBLEM_COORDINATE] }, { timeoutMs: 8000 }),
+      outbox.query({ kinds: [30617], authors: [currentPubkey] }, { authors: [currentPubkey], timeoutMs: 8000 }),
       outbox.resolveRelays({ pubkey: currentPubkey, direction: "read" }).catch((error: unknown) => {
         console.warn("Rocket reference relay fallback could not be resolved", { pubkey: currentPubkey, error });
         return { relays: [] as string[], source: "fallback" as const };
       })
     ]);
     if (load !== referenceLoad) return;
-    if (response.error && !response.events.length) throw new Error(response.error);
+    if (problemResponse.error && !problemResponse.events.length) throw new Error(problemResponse.error);
+    if (repositoryResponse.error && !repositoryResponse.events.length) throw new Error(repositoryResponse.error);
 
-    const results = response.events as ChoiceResult[];
-    const problems = problemChoices(results, currentPubkey, relayPlan.relays);
-    const repositories = repositoryChoices(results, currentPubkey, relayPlan.relays);
-    problems.length ? renderChoices(problemOptions, "problem", problems) : renderState(problemOptions, "have you logged any problems?", "empty");
+    const problems = problemChoices(problemResponse.events as ChoiceResult[]);
+    const repositories = repositoryChoices(repositoryResponse.events as ChoiceResult[], currentPubkey, relayPlan.relays);
+    problems.length ? renderChoices(problemOptions, "problem", problems) : renderState(problemOptions, "No problems found in the NOSTROCKET tree.", "empty");
     repositories.length ? renderChoices(repositoryOptions, "repository", repositories) : renderState(repositoryOptions, "have you logged any git repositories?", "empty");
-    referenceStatus.dataset.state = response.incomplete || response.error ? "warning" : "idle";
-    referenceStatus.value = response.incomplete || response.error ? "Some relays did not respond. Available choices may be incomplete." : `${problems.length} problem${problems.length === 1 ? "" : "s"} and ${repositories.length} git repositor${repositories.length === 1 ? "y" : "ies"} available.`;
+    const incomplete = problemResponse.incomplete || problemResponse.error || repositoryResponse.incomplete || repositoryResponse.error;
+    referenceStatus.dataset.state = incomplete ? "warning" : "idle";
+    referenceStatus.value = incomplete ? "Some relays did not respond. Available choices may be incomplete." : `${problems.length} problem${problems.length === 1 ? "" : "s"} and ${repositories.length} git repositor${repositories.length === 1 ? "y" : "ies"} available.`;
     previewButton.disabled = false;
   } catch (error) {
     if (load !== referenceLoad) return;

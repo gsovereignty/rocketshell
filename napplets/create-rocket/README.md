@@ -2,7 +2,7 @@
 
 Creates a Sovereign Economic Community ignition event under Nostrocket MSB ruleset `334000`. User reviews exact unsigned template before shell-mediated signing and OUTBOX-first publication.
 
-Problem and repository references are selected from current signer's own kind `31971` problems and kind `30617` NIP-34 repository announcements. Coordinates and relay hints are derived from validated events and shell-owned OUTBOX routing; users never enter protocol coordinates.
+Problem references are selected from kind `31971` events reachable beneath same hardcoded NOSTROCKET root used by problem DAG viewer. Choices render in root-to-leaf order with visible nesting; disconnected events sharing query results are excluded. Repository references remain limited to current signer's kind `30617` NIP-34 repository announcements. Coordinates and relay hints come from validated events and shell-owned OUTBOX routing; users never enter protocol coordinates.
 
 NOSTROCKET ignition event is preserved verbatim in `src/fixtures/nostrocket-ignition.json` as test fixture and structural reference. It adds no protocol link to newly created rockets because governing specs define no cross-rocket reference tag.
 

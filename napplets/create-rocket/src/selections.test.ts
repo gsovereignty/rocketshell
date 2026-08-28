@@ -1,31 +1,56 @@
 import { describe, expect, it, vi } from "vitest";
-import { problemChoices, repositoryChoices, type ChoiceResult } from "./selections";
+import { problemChoices, repositoryChoices, ROOT_PROBLEM_COORDINATE, type ChoiceResult } from "./selections";
 
 const owner = "a".repeat(64);
 const problemId = "b".repeat(64);
+const rootOwner = ROOT_PROBLEM_COORDINATE.split(":")[1]!;
+const rootId = ROOT_PROBLEM_COORDINATE.split(":")[2]!;
 const result = (changes: Partial<ChoiceResult["event"]> = {}, relayHints?: string[]): ChoiceResult => ({
   event: { id: "1".repeat(64), pubkey: owner, kind: 31971, created_at: 1, content: "Problem body", tags: [
-    ["d", problemId], ["title", "Problem title"], ["a", `31971:${owner}:${problemId}`, "wss://origin.example", "origin"]
+    ["d", problemId], ["title", "Problem title"], ["a", `31971:${owner}:${problemId}`, "wss://origin.example", "origin"], ["A", ROOT_PROBLEM_COORDINATE]
   ], ...changes },
   ...(relayHints ? { sidecar: { relayHints } } : {})
 });
 
 describe("rocket reference choices", () => {
-  it("shows one current choice for each problem created by current user", () => {
-    const previous = result();
-    const current = result({ id: "2".repeat(64), created_at: 2, content: "Current body", tags: [
-      ["d", problemId], ["title", "Current title"], ["a", `31971:${owner}:${problemId}`, "wss://origin.example", "origin"],
-      ["e", previous.event.id, "", "previous"]
-    ] }, ["wss://seen.example"]);
-    expect(problemChoices([previous, current, result({ pubkey: "c".repeat(64) })], owner)).toEqual([{
-      coordinate: `31971:${owner}:${problemId}`, relay: "wss://seen.example", title: "Current title", summary: "Current body", createdAt: 2
-    }]);
+  const root = () => result({ id: "9".repeat(64), pubkey: rootOwner, tags: [
+    ["d", rootId], ["title", "Root"], ["a", ROOT_PROBLEM_COORDINATE, "wss://root.example", "origin"], ["A", ROOT_PROBLEM_COORDINATE]
+  ] });
+
+  it("uses same configured root as problem DAG viewer", () => {
+    expect(ROOT_PROBLEM_COORDINATE).toBe("31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170");
   });
 
-  it("rejects malformed problems and uses resolved author relay fallback", () => {
+  it("shows current problem heads in root-to-leaf order", () => {
+    const previous = result({ tags: [...result().event.tags, ["a", ROOT_PROBLEM_COORDINATE]] });
+    const current = result({ id: "2".repeat(64), created_at: 2, content: "Current body", tags: [
+      ["d", problemId], ["title", "Current title"], ["a", `31971:${owner}:${problemId}`, "wss://origin.example", "origin"], ["A", ROOT_PROBLEM_COORDINATE], ["a", ROOT_PROBLEM_COORDINATE],
+      ["e", previous.event.id, "", "previous"]
+    ] }, ["wss://seen.example"]);
+    const grandchildOwner = "c".repeat(64);
+    const grandchildId = "d".repeat(64);
+    const grandchild = result({ id: "3".repeat(64), pubkey: grandchildOwner, tags: [
+      ["d", grandchildId], ["title", "Grandchild"], ["a", `31971:${grandchildOwner}:${grandchildId}`, "", "origin"],
+      ["A", ROOT_PROBLEM_COORDINATE], ["a", `31971:${owner}:${problemId}`]
+    ] });
+    expect(problemChoices([grandchild, current, root(), previous])).toEqual([
+      expect.objectContaining({ coordinate: ROOT_PROBLEM_COORDINATE, title: "Root", depth: 0 }),
+      { coordinate: `31971:${owner}:${problemId}`, relay: "wss://seen.example", title: "Current title", summary: "Current body", createdAt: 2, depth: 1 },
+      { coordinate: `31971:${grandchildOwner}:${grandchildId}`, relay: "", title: "Grandchild", summary: "Problem body", createdAt: 1, depth: 2 }
+    ]);
+  });
+
+  it("excludes malformed, wrong-root, and disconnected problems", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    expect(problemChoices([result({ tags: [["d", "short"]] })], owner)).toEqual([]);
-    expect(problemChoices([result({ tags: [["d", problemId], ["a", `31971:${owner}:${problemId}`, "", "origin"]] })], owner, ["not-a-relay", "wss://fallback.example"])[0]?.relay).toBe("wss://fallback.example");
+    const child = result({ tags: [...result().event.tags, ["a", ROOT_PROBLEM_COORDINATE]] });
+    const disconnected = result({ id: "4".repeat(64), pubkey: "c".repeat(64), tags: [
+      ["d", "d".repeat(64)], ["a", `31971:${"c".repeat(64)}:${"d".repeat(64)}`, "", "origin"], ["A", ROOT_PROBLEM_COORDINATE]
+    ] });
+    const wrongRoot = result({ id: "5".repeat(64), tags: [...result().event.tags.filter((item) => item[0] !== "A"), ["A", `31971:${owner}:${problemId}`]] });
+    expect(problemChoices([root(), child, disconnected, wrongRoot], ["not-a-relay", "wss://fallback.example"]).map((choice) => choice.coordinate)).toEqual([
+      ROOT_PROBLEM_COORDINATE, `31971:${owner}:${problemId}`
+    ]);
+    expect(problemChoices([root(), child], ["not-a-relay", "wss://fallback.example"])[1]?.relay).toBe("wss://origin.example");
     expect(warn).toHaveBeenCalledWith("Rocket reference relay hint validation failed", expect.objectContaining({ value: "not-a-relay" }));
     warn.mockRestore();
   });

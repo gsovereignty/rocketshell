@@ -18,9 +18,12 @@ export interface RocketReferenceChoice {
   title: string;
   summary: string;
   createdAt: number;
+  depth?: number;
 }
 
 const HEX_64 = /^[0-9a-f]{64}$/;
+const PROBLEM_COORDINATE = /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/;
+export const ROOT_PROBLEM_COORDINATE = "31971:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:7cff61a9f7565ed63c1213040fe0f39c7f2ee1dd4fb96a41e95de049a8dcc170";
 
 function tag(event: ChoiceEvent, name: string, marker?: string): string[] | undefined {
   return event.tags.find((item) => item[0] === name && (marker === undefined || item[3] === marker));
@@ -49,13 +52,27 @@ function newest(results: ChoiceResult[]): ChoiceResult {
     right.event.created_at - left.event.created_at || right.event.id.localeCompare(left.event.id))[0]!;
 }
 
-function problemHead(results: ChoiceResult[]): ChoiceResult {
+function problemCoordinate(result: ChoiceResult): string {
+  return tag(result.event, "a", "origin")?.[1] ?? "";
+}
+
+function eligibleProblemHead(result: ChoiceResult): boolean {
+  const owner = problemCoordinate(result).split(":")[1] ?? "";
+  return result.event.pubkey === owner || result.event.tags.some((item) =>
+    item[0] === "p" && item[1] === result.event.pubkey && (item[3] === "maintainer" || item[3] === undefined));
+}
+
+function problemHead(results: ChoiceResult[], coordinate: string): ChoiceResult {
   const referenced = new Set(results.flatMap(({ event }) => event.tags
     .filter((item) => item[0] === "e" && item[3] === "previous")
     .map((item) => item[1])
     .filter((id): id is string => Boolean(id))));
   const heads = results.filter(({ event }) => !referenced.has(event.id));
-  return newest(heads.length ? heads : results);
+  const eligible = heads.filter(eligibleProblemHead);
+  const newestTimestamp = eligible.length ? Math.max(...eligible.map(({ event }) => event.created_at)) : undefined;
+  const current = eligible.filter(({ event }) => event.created_at === newestTimestamp);
+  if (current.length !== 1) throw new Error(`Problem ${coordinate} has unresolved current heads.`);
+  return current[0]!;
 }
 
 function excerpt(value: string, fallback: string): string {
@@ -64,31 +81,56 @@ function excerpt(value: string, fallback: string): string {
   return [...normalized].slice(0, 180).join("");
 }
 
-export function problemChoices(results: readonly ChoiceResult[], pubkey: string, fallbackRelays: readonly string[] = []): RocketReferenceChoice[] {
+export function problemChoices(results: readonly ChoiceResult[], fallbackRelays: readonly string[] = []): RocketReferenceChoice[] {
   const groups = new Map<string, ChoiceResult[]>();
-  for (const result of results) {
+  const uniqueResults = new Map(results.map((result) => [result.event.id, result]));
+  for (const result of uniqueResults.values()) {
     const { event } = result;
+    const coordinate = problemCoordinate(result);
+    if (event.kind !== 31971 || tag(event, "A")?.[1] !== ROOT_PROBLEM_COORDINATE || !PROBLEM_COORDINATE.test(coordinate)) continue;
     const problemId = tag(event, "d")?.[1]?.trim();
-    if (event.kind !== 31971 || event.pubkey !== pubkey || !problemId || !HEX_64.test(problemId)) continue;
-    const coordinate = `31971:${pubkey}:${problemId}`;
-    if (tag(event, "a", "origin")?.[1] !== coordinate) continue;
-    const group = groups.get(problemId) ?? [];
+    if (!problemId || !HEX_64.test(problemId) || coordinate.split(":")[2] !== problemId) continue;
+    const group = groups.get(coordinate) ?? [];
     group.push(result);
-    groups.set(problemId, group);
+    groups.set(coordinate, group);
   }
+  if (!groups.has(ROOT_PROBLEM_COORDINATE)) throw new Error("Root problem was not found in returned problem tree events.");
 
-  return [...groups.entries()].map(([problemId, group]) => {
-    const current = problemHead(group);
-    const coordinate = `31971:${pubkey}:${problemId}`;
+  const choices = new Map<string, RocketReferenceChoice>();
+  const children = new Map<string, string[]>();
+  for (const [coordinate, group] of groups) {
+    const current = problemHead(group, coordinate);
     const title = tag(current.event, "title")?.[1]?.trim() || excerpt(current.event.content, "Untitled problem");
-    return {
+    choices.set(coordinate, {
       coordinate,
       relay: relayHint(current, tag(current.event, "a", "origin")?.[2], fallbackRelays),
       title,
       summary: excerpt(current.event.content, "No problem description."),
       createdAt: current.event.created_at
-    };
-  }).sort((left, right) => right.createdAt - left.createdAt || left.title.localeCompare(right.title));
+    });
+    for (const item of current.event.tags) {
+      const parent = item[0] === "a" && item[3] !== "origin" ? item[1] : undefined;
+      if (!parent || !PROBLEM_COORDINATE.test(parent) || parent === coordinate || !groups.has(parent)) continue;
+      const siblings = children.get(parent) ?? [];
+      if (!siblings.includes(coordinate)) siblings.push(coordinate);
+      children.set(parent, siblings);
+    }
+  }
+  for (const siblings of children.values()) siblings.sort((left, right) =>
+    choices.get(left)!.title.localeCompare(choices.get(right)!.title) || left.localeCompare(right));
+
+  const ordered: RocketReferenceChoice[] = [];
+  const seen = new Set<string>();
+  const visit = (coordinate: string, depth: number): void => {
+    if (seen.has(coordinate)) return;
+    seen.add(coordinate);
+    const choice = choices.get(coordinate);
+    if (!choice) return;
+    ordered.push({ ...choice, depth });
+    for (const child of children.get(coordinate) ?? []) visit(child, depth + 1);
+  };
+  visit(ROOT_PROBLEM_COORDINATE, 0);
+  return ordered;
 }
 
 export function repositoryChoices(results: readonly ChoiceResult[], pubkey: string, fallbackRelays: readonly string[] = []): RocketReferenceChoice[] {
