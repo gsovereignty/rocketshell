@@ -4,7 +4,7 @@ import { buildMeritRequest, publishMeritRequest, validateDraft, type MeritReques
 
 const draft = (changes: Partial<MeritRequestDraft> = {}): MeritRequestDraft => ({
   rocket: "31108:d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075:HumbleHorse",
-  problem: "Fix sidebar labels", solution: "https://example.com/pull/1", solutionType: "url", merits: "33075", sats: "33075", ...changes
+  problem: "Fix sidebar labels", solution: "https://example.com/pull/1", solutionType: "url", sats: "33075", ...changes
 });
 
 describe("merit request", () => {
@@ -18,12 +18,15 @@ describe("merit request", () => {
   it("builds text proof request", () => {
     expect(buildMeritRequest(draft({ solutionType: "text", solution: "Shipped fix and regression coverage." }), 1).tags).toContainEqual(["solution", "text", "Shipped fix and regression coverage."]);
   });
-  it("omits optional solution and sats", () => {
-    const tags = buildMeritRequest(draft({ solution: "", sats: "" }), 1).tags;
-    expect(tags.some(([name]) => name === "solution" || name === "sats")).toBe(false);
+  it("derives merits one-to-one from mandatory sats", () => {
+    const tags = buildMeritRequest(draft({ solution: "", sats: "42" }), 1).tags;
+    expect(tags).toContainEqual(["merits", "42"]);
+    expect(tags).toContainEqual(["sats", "42"]);
+    expect(tags.some(([name]) => name === "solution")).toBe(false);
   });
   it("rejects malformed required values and URL", () => {
-    expect(validateDraft(draft({ rocket: "bad", problem: "", merits: "-1", sats: "1.5", solution: "not a URL" }))).toHaveLength(5);
+    expect(validateDraft(draft({ rocket: "bad", problem: "", sats: "1.5", solution: "not a URL" }))).toHaveLength(4);
+    expect(validateDraft(draft({ sats: "" }))).toContain("Work value must be a positive integer number of sats.");
   });
   it("publishes through author outbox", async () => {
     const publish = vi.fn().mockResolvedValue({ ok: true, event: { id: "event-id", pubkey: "author" } });

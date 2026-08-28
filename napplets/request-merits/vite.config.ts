@@ -7,7 +7,7 @@ export default defineConfig({
     nappletType: "request-merits",
     title: "Request Merits",
     description: "Request merits for completed work in a Rocket.",
-    requires: ["outbox", "inc"],
+    requires: ["outbox", "inc", "resource"],
     archetypes: [{ slug: "composer", convention: "napplet:composer/merit-request" }],
     artifactMode: "single-file"
   })],

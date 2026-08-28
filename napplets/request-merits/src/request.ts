@@ -4,7 +4,6 @@ export interface MeritRequestDraft {
   problem: string;
   solution: string;
   solutionType: SolutionType;
-  merits: string;
   sats: string;
 }
 export interface MeritRequestTemplate { kind: 1409; created_at: number; content: ""; tags: string[][] }
@@ -19,8 +18,7 @@ export function validateDraft(draft: MeritRequestDraft): string[] {
   const solution = draft.solution.trim();
   if (!ROCKET.test(rocket)) errors.push("Rocket must be 31108:<64-character pubkey>:<rocket d-tag>.");
   if (!problem) errors.push("Describe problem or work addressed.");
-  if (!INTEGER.test(draft.merits.trim()) || BigInt(draft.merits.trim() || "0") <= 0n) errors.push("Requested merits must be a positive integer.");
-  if (draft.sats.trim() && !INTEGER.test(draft.sats.trim())) errors.push("Work value must be a non-negative integer number of sats.");
+  if (!INTEGER.test(draft.sats.trim()) || BigInt(draft.sats.trim() || "0") <= 0n) errors.push("Work value must be a positive integer number of sats.");
   if (solution && draft.solutionType === "url" && !isProofUrl(solution)) errors.push("Proof URL must use http:// or https://.");
   return errors;
 }
@@ -39,14 +37,13 @@ export function buildMeritRequest(draft: MeritRequestDraft, createdAt: number): 
   const normalized = {
     ...draft,
     rocket: draft.rocket.trim(), problem: draft.problem.trim(), solution: draft.solution.trim(),
-    merits: draft.merits.trim(), sats: draft.sats.trim()
+    sats: draft.sats.trim()
   };
   const errors = validateDraft(normalized);
   if (errors.length) throw new Error(errors.join(" "));
   const tags: string[][] = [["problem", "text", normalized.problem]];
   if (normalized.solution) tags.push(["solution", normalized.solutionType, normalized.solution]);
-  tags.push(["a", normalized.rocket], ["merits", normalized.merits]);
-  if (normalized.sats) tags.push(["sats", normalized.sats]);
+  tags.push(["a", normalized.rocket], ["merits", normalized.sats], ["sats", normalized.sats]);
   return { kind: 1409, created_at: createdAt, content: "", tags };
 }
 
