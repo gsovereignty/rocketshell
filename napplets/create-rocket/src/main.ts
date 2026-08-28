@@ -1,23 +1,26 @@
-import { outbox, themeGet, themeOnChanged } from "@napplet/sdk";
+import { identity, outbox, themeGet, themeOnChanged } from "@napplet/sdk";
 import { gsap } from "gsap";
 import "./styles.css";
 import { buildIgnitionTemplate, hasObservedRocketIdentifier, normalizeRocketIdentifier, publishIgnition, rocketIdentifier, validateDraft, type EventTemplate, type RocketDraft } from "./rocket";
+import { problemChoices, repositoryChoices, type ChoiceResult, type RocketReferenceChoice } from "./selections";
 
-declare global { interface Window { napplet?: { theme?: { get?: unknown } } } }
-const app = document.querySelector<HTMLElement>("#app");
-if (!app) throw new Error("Application root is missing.");
+declare global { interface Window { napplet?: { theme?: { get?: unknown }; identity?: { getPublicKey?: unknown; onChanged?: unknown } } } }
+const app = document.querySelector<HTMLElement>("#app") ?? (() => { throw new Error("Application root is missing."); })();
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let pending: EventTemplate | undefined;
 
 app.innerHTML = `<article class="sheet">
   <header class="masthead"><div><span class="eyebrow">Sovereign Economic Community</span><h1>Ignite a rocket</h1><p>Define its identity and mission. Shell signs and routes the ignition event.</p></div><span class="badge">31108</span></header>
   <section id="editor" aria-labelledby="details-title"><h2 id="details-title">Rocket details</h2>
-    <label>Unique identifier <input id="identifier" autocomplete="off" placeholder="MY_ROCKET" aria-describedby="identifier-hint"></label><small id="identifier-hint" aria-live="polite">Checking observed rockets in background. You can continue.</small>
+    <label>Rocket Name <input id="identifier" autocomplete="off" placeholder="MY_ROCKET" aria-describedby="identifier-hint"></label><small id="identifier-hint" aria-live="polite">Checking observed rockets in background. You can continue.</small>
     <label>Mission <textarea id="mission" maxlength="139" rows="4" placeholder="Why should this rocket exist? (optional)"></textarea></label><small><output id="mission-count">0</output>/139 characters</small>
-    <details><summary>Problem and repository <span>recommended</span></summary><div class="optional-grid">
-      <label>Problem coordinate <input id="problem-coordinate" placeholder="31971:pubkey:d-tag"></label><label>Problem relay <input id="problem-relay" placeholder="wss://relay.example"></label>
-      <label>Repository coordinate <input id="repo-coordinate" placeholder="30617:pubkey:d-tag"></label><label>Repository relay <input id="repo-relay" placeholder="wss://relay.example"></label>
-    </div></details>
+    <section class="references" aria-labelledby="references-title"><div class="section-heading"><div><h2 id="references-title">Problem and repository</h2><p>Choose from events published by your connected account.</p></div><button id="retry-references" class="text-button" type="button" hidden>Try again</button></div>
+      <div class="reference-grid">
+        <fieldset><legend>Problem</legend><div id="problem-options" class="choice-list" aria-live="polite" aria-busy="true"><p class="choice-state">Loading your problems…</p></div></fieldset>
+        <fieldset><legend>Git repository</legend><div id="repository-options" class="choice-list" aria-live="polite" aria-busy="true"><p class="choice-state">Loading your git repositories…</p></div></fieldset>
+      </div>
+      <output id="reference-status" class="reference-status" aria-live="polite"></output>
+    </section>
     <div class="action"><output id="status" aria-live="polite">Draft stays local until preview and confirmation.</output><button id="preview" type="button">Review ignition <span>↗</span></button></div>
   </section>
   <section id="review" hidden aria-labelledby="review-title"><span class="eyebrow">Final check</span><h2 id="review-title">Publish this ignition?</h2><p>Publishing creates a public, signed kind 31108 event. NOSTROCKET is a structural reference only; no link to it is added.</p><pre id="event-preview"></pre><div class="review-actions"><button id="back" type="button">Back to edit</button><button id="publish" type="button">Publish rocket</button></div></section>
@@ -32,8 +35,15 @@ const editor = document.querySelector<HTMLElement>("#editor")!;
 const review = document.querySelector<HTMLElement>("#review")!;
 const identifierInput = input("identifier");
 const identifierHint = document.querySelector<HTMLElement>("#identifier-hint")!;
+const problemOptions = document.querySelector<HTMLElement>("#problem-options")!;
+const repositoryOptions = document.querySelector<HTMLElement>("#repository-options")!;
+const referenceStatus = document.querySelector<HTMLOutputElement>("#reference-status")!;
+const retryReferences = document.querySelector<HTMLButtonElement>("#retry-references")!;
 const observedIdentifiers = new Set<string>();
 let identifierStreamActive = true;
+let selectedProblem: RocketReferenceChoice | undefined;
+let selectedRepository: RocketReferenceChoice | undefined;
+let referenceLoad = 0;
 
 function syncIdentifierValidation(): boolean {
   const identifier = identifierInput.value.trim();
@@ -46,7 +56,7 @@ function syncIdentifierValidation(): boolean {
   return !duplicate;
 }
 
-function readDraft(): RocketDraft { return { identifier: input("identifier").value.trim(), mission: mission.value, problemCoordinate: input("problem-coordinate").value, problemRelay: input("problem-relay").value, repoCoordinate: input("repo-coordinate").value, repoRelay: input("repo-relay").value }; }
+function readDraft(): RocketDraft { return { identifier: input("identifier").value.trim(), mission: mission.value, problemCoordinate: selectedProblem?.coordinate ?? "", problemRelay: selectedProblem?.relay ?? "", repoCoordinate: selectedRepository?.coordinate ?? "", repoRelay: selectedRepository?.relay ?? "" }; }
 function setStatus(message: string, state = "idle"): void { status.textContent = message; status.dataset.state = state; }
 function showEditor(): void { review.hidden = true; editor.hidden = false; pending = undefined; if (!reducedMotion) gsap.fromTo(editor, { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: .28, ease: "power2.out" }); }
 
@@ -86,7 +96,116 @@ identifierInput.addEventListener("input", syncIdentifierValidation);
 previewButton.addEventListener("click", showPreview);
 document.querySelector<HTMLButtonElement>("#back")!.addEventListener("click", showEditor);
 publishButton.addEventListener("click", () => void publish());
-editor.addEventListener("keydown", (event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); showPreview(); } });
+editor.addEventListener("keydown", (event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type === "text") { event.preventDefault(); showPreview(); } });
+
+function renderState(container: HTMLElement, message: string, state = "idle"): void {
+  container.replaceChildren();
+  container.setAttribute("aria-busy", "false");
+  const line = document.createElement("p");
+  line.className = "choice-state";
+  line.dataset.state = state;
+  line.textContent = message;
+  container.append(line);
+}
+
+function renderChoices(container: HTMLElement, name: "problem" | "repository", choices: RocketReferenceChoice[]): void {
+  container.replaceChildren();
+  container.setAttribute("aria-busy", "false");
+  for (const [index, choice] of choices.entries()) {
+    const label = document.createElement("label");
+    label.className = "choice";
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = name;
+    radio.value = choice.coordinate;
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      if (name === "problem") selectedProblem = choice;
+      else selectedRepository = choice;
+      referenceStatus.value = `${choice.title} selected as ${name === "problem" ? "problem" : "git repository"}.`;
+    });
+    const copy = document.createElement("span");
+    copy.className = "choice-copy";
+    const title = document.createElement("strong");
+    title.textContent = choice.title;
+    const summary = document.createElement("span");
+    summary.textContent = choice.summary;
+    copy.append(title, summary);
+    label.append(radio, copy);
+    container.append(label);
+    if (!reducedMotion) gsap.fromTo(label, { opacity: 0, y: 7 }, { opacity: 1, y: 0, duration: .28, delay: Math.min(index, 8) * .035, ease: "expo.out" });
+  }
+}
+
+async function loadReferences(pubkey?: string): Promise<void> {
+  const load = ++referenceLoad;
+  selectedProblem = undefined;
+  selectedRepository = undefined;
+  referenceStatus.value = "";
+  retryReferences.hidden = true;
+  problemOptions.setAttribute("aria-busy", "true");
+  repositoryOptions.setAttribute("aria-busy", "true");
+  renderState(problemOptions, "Loading your problems…");
+  renderState(repositoryOptions, "Loading your git repositories…");
+  problemOptions.setAttribute("aria-busy", "true");
+  repositoryOptions.setAttribute("aria-busy", "true");
+
+  try {
+    if (pubkey === undefined && typeof window.napplet?.identity?.getPublicKey !== "function") {
+      renderState(problemOptions, "Current account problems are unavailable in this shell.", "error");
+      renderState(repositoryOptions, "Current account git repositories are unavailable in this shell.", "error");
+      referenceStatus.value = "This shell does not provide required identity access.";
+      referenceStatus.dataset.state = "error";
+      previewButton.disabled = true;
+      return;
+    }
+    const currentPubkey = pubkey ?? await identity.getPublicKey();
+    if (load !== referenceLoad) return;
+    if (!currentPubkey) {
+      renderState(problemOptions, "Connect a Nostr account to load your problems.", "error");
+      renderState(repositoryOptions, "Connect a Nostr account to load your git repositories.", "error");
+      referenceStatus.value = "A connected account is required before publishing a rocket.";
+      referenceStatus.dataset.state = "error";
+      previewButton.disabled = true;
+      return;
+    }
+
+    const [response, relayPlan] = await Promise.all([
+      outbox.query({ kinds: [31971, 30617], authors: [currentPubkey] }, { authors: [currentPubkey], timeoutMs: 8000 }),
+      outbox.resolveRelays({ pubkey: currentPubkey, direction: "read" }).catch((error: unknown) => {
+        console.warn("Rocket reference relay fallback could not be resolved", { pubkey: currentPubkey, error });
+        return { relays: [] as string[], source: "fallback" as const };
+      })
+    ]);
+    if (load !== referenceLoad) return;
+    if (response.error && !response.events.length) throw new Error(response.error);
+
+    const results = response.events as ChoiceResult[];
+    const problems = problemChoices(results, currentPubkey, relayPlan.relays);
+    const repositories = repositoryChoices(results, currentPubkey, relayPlan.relays);
+    problems.length ? renderChoices(problemOptions, "problem", problems) : renderState(problemOptions, "have you logged any problems?", "empty");
+    repositories.length ? renderChoices(repositoryOptions, "repository", repositories) : renderState(repositoryOptions, "have you logged any git repositories?", "empty");
+    referenceStatus.dataset.state = response.incomplete || response.error ? "warning" : "idle";
+    referenceStatus.value = response.incomplete || response.error ? "Some relays did not respond. Available choices may be incomplete." : `${problems.length} problem${problems.length === 1 ? "" : "s"} and ${repositories.length} git repositor${repositories.length === 1 ? "y" : "ies"} available.`;
+    previewButton.disabled = false;
+  } catch (error) {
+    if (load !== referenceLoad) return;
+    console.error("Rocket problem and repository choices could not be loaded", { error });
+    renderState(problemOptions, "Problems could not be loaded.", "error");
+    renderState(repositoryOptions, "Git repositories could not be loaded.", "error");
+    referenceStatus.dataset.state = "error";
+    referenceStatus.value = "Check your relay connection, then try again.";
+    retryReferences.hidden = false;
+    previewButton.disabled = true;
+  }
+}
+
+retryReferences.addEventListener("click", () => void loadReferences());
+const identitySubscription = typeof window.napplet?.identity?.onChanged === "function"
+  ? identity.onChanged((pubkey) => void loadReferences(pubkey))
+  : undefined;
+if (identitySubscription) addEventListener("pagehide", () => identitySubscription.close(), { once: true });
+void loadReferences();
 
 try {
   const rocketSubscription = outbox.subscribe({ kinds: [31108] }, { timeoutMs: 8000 });
@@ -116,6 +235,7 @@ function applyTheme(theme?: { colors: { background: string; text: string; primar
   const root = document.documentElement;
   root.style.setProperty("--background", background); root.style.setProperty("--text", text); root.style.setProperty("--primary", primary);
   root.style.setProperty("--surface", `color-mix(in srgb, ${text} 4%, ${background})`); root.style.setProperty("--line", `color-mix(in srgb, ${text} 20%, ${background})`); root.style.setProperty("--muted", `color-mix(in srgb, ${text} 62%, ${background})`);
+  root.style.backgroundColor = background; document.body.style.backgroundColor = background; document.body.style.color = text; app.style.backgroundColor = background;
 }
 if (typeof window.napplet?.theme?.get === "function") { themeGet().then(applyTheme).catch((error: unknown) => console.warn("Initial shell theme could not be read", { error })); themeOnChanged(applyTheme); }
 if (!reducedMotion) gsap.fromTo(".masthead, #editor", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .42, stagger: .08, ease: "power3.out" });

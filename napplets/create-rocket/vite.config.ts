@@ -7,7 +7,7 @@ export default defineConfig({
     nappletType: "create-rocket",
     title: "Create Rocket",
     description: "Create and publish a Sovereign Economic Community ignition event.",
-    requires: ["outbox"],
+    requires: ["outbox", "identity"],
     artifactMode: "single-file"
   })],
   build: { modulePreload: false },

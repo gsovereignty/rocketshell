@@ -2,14 +2,15 @@ export interface RocketDraft { identifier: string; mission: string; problemCoord
 export interface EventTemplate { kind: 31108; created_at: number; content: ""; tags: string[][] }
 export interface RocketIdentifierEvent { kind: number; tags: string[][] }
 
-const COORDINATE = /^(31971|30617):[0-9a-f]{64}:.+$/s;
+const PROBLEM_COORDINATE = /^31971:[0-9a-f]{64}:[0-9a-f]{64}$/;
+const REPOSITORY_COORDINATE = /^30617:[0-9a-f]{64}:.+$/s;
 
 export function validateDraft(draft: RocketDraft): string[] {
   const errors: string[] = [];
   if (!draft.identifier.trim()) errors.push("Identifier is required.");
   if ([...draft.mission.trim()].length >= 140) errors.push("Mission must contain fewer than 140 characters.");
-  validateOptional("problem", draft.problemCoordinate.trim(), draft.problemRelay.trim(), "31971", errors);
-  validateOptional("repository", draft.repoCoordinate.trim(), draft.repoRelay.trim(), "30617", errors);
+  validateOptional("problem", draft.problemCoordinate.trim(), draft.problemRelay.trim(), PROBLEM_COORDINATE, "31971:<64-char pubkey>:<64-char problem id>", errors);
+  validateOptional("repository", draft.repoCoordinate.trim(), draft.repoRelay.trim(), REPOSITORY_COORDINATE, "30617:<64-char pubkey>:<d-tag>", errors);
   return errors;
 }
 
@@ -28,10 +29,10 @@ export function hasObservedRocketIdentifier(identifier: string, observed: Readon
   return normalized.length > 0 && observed.has(normalized);
 }
 
-function validateOptional(label: string, coordinate: string, relay: string, kind: string, errors: string[]): void {
+function validateOptional(label: string, coordinate: string, relay: string, coordinatePattern: RegExp, shape: string, errors: string[]): void {
   if (!coordinate && relay) errors.push(`${label} relay requires a ${label} coordinate.`);
-  if (coordinate && (!COORDINATE.test(coordinate) || !coordinate.startsWith(`${kind}:`))) errors.push(`${label} coordinate must be ${kind}:<64-char pubkey>:<d-tag>.`);
-  if (coordinate && !isSecureRelayUrl(relay)) errors.push(`${label} relay must be a wss:// URL.`);
+  if (coordinate && !coordinatePattern.test(coordinate)) errors.push(`${label} coordinate must be ${shape}.`);
+  if (relay && !isSecureRelayUrl(relay)) errors.push(`${label} relay must be a wss:// URL.`);
 }
 
 function isSecureRelayUrl(value: string): boolean {

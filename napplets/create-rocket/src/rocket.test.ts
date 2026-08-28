@@ -16,7 +16,13 @@ describe("rocket ignition", () => {
   });
   it("adds specified problem and repo shapes", () => {
     const pubkey = "a".repeat(64);
-    expect(buildIgnitionTemplate(draft({ problemCoordinate: `31971:${pubkey}:problem`, problemRelay: "wss://relay.example", repoCoordinate: `30617:${pubkey}:repo`, repoRelay: "wss://git.example" }), 1).tags.slice(-2)).toEqual([["problem", `31971:${pubkey}:problem`, "wss://relay.example"], ["repo", `30617:${pubkey}:repo`, "wss://git.example"]]);
+    const problemId = "b".repeat(64);
+    expect(buildIgnitionTemplate(draft({ problemCoordinate: `31971:${pubkey}:${problemId}`, problemRelay: "wss://relay.example", repoCoordinate: `30617:${pubkey}:repo`, repoRelay: "wss://git.example" }), 1).tags.slice(-2)).toEqual([["problem", `31971:${pubkey}:${problemId}`, "wss://relay.example"], ["repo", `30617:${pubkey}:repo`, "wss://git.example"]]);
+  });
+  it("allows shell-derived references without an observed relay hint", () => {
+    const pubkey = "a".repeat(64);
+    const problemId = "b".repeat(64);
+    expect(validateDraft(draft({ problemCoordinate: `31971:${pubkey}:${problemId}`, problemRelay: "" }))).toEqual([]);
   });
   it("rejects missing identifiers, long missions, coordinates, and relays", () => {
     expect(validateDraft(draft({ identifier: "", mission: "x".repeat(140), problemCoordinate: "31971:nope:x", problemRelay: "https://relay.example" })).length).toBeGreaterThanOrEqual(4);
