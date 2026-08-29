@@ -408,7 +408,7 @@ void bootstrap().then(async (platform) => {
       if (profileImage) { profileImage.hidden = true; profileImage.removeAttribute("src"); }
       return;
     }
-    const name = profile?.displayName || profile?.name;
+    const name = platform.isEphemeralIdentity() ? "ephemeral" : profile?.displayName || profile?.name;
     if (profileLabel) profileLabel.textContent = name || `${pubkey.slice(0, 8)}…`;
     if (profileFallback) profileFallback.textContent = (name || pubkey).slice(0, 2).toUpperCase();
     if (profileImage) {

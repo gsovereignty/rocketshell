@@ -960,7 +960,7 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   const profile = page.locator("#profile-menu-trigger");
   await expect(profile.locator("#profile-avatar-fallback")).toHaveText("R");
   await profile.click();
-  await expect(page.locator("#profile-menu-label")).toHaveText(/^[0-9a-f]{8}…$/);
+  await expect(page.locator("#profile-menu-label")).toHaveText("ephemeral");
   await profile.click();
   await expect(page.locator("#account-popover")).toBeVisible();
   await expect(page.getByRole("button", { name: "Profile (coming soon)" })).toBeVisible();
@@ -1011,7 +1011,7 @@ test("preferences panel themes the shell and edits the local relay list", async 
   await page.goto("./");
   await expect(page.locator("#status")).toBeHidden();
   await page.locator("#profile-menu-trigger").click();
-  await expect(page.locator("#profile-menu-label")).toHaveText(/^[0-9a-f]{8}…$/);
+  await expect(page.locator("#profile-menu-label")).toHaveText("ephemeral");
   await page.locator("#profile-menu-trigger").click();
   await page.getByRole("button", { name: "Preferences" }).click();
   await expect(page.locator("#settings-panel")).toBeVisible();
@@ -1040,7 +1040,7 @@ test("preferences panel themes the shell and edits the local relay list", async 
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.locator("#profile-menu-trigger").click();
-  await expect(page.locator("#profile-menu-label")).toHaveText(/^[0-9a-f]{8}…$/);
+  await expect(page.locator("#profile-menu-label")).toHaveText("ephemeral");
   await page.locator("#profile-menu-trigger").click();
   await page.getByRole("button", { name: "Preferences" }).click();
   await page.getByRole("tab", { name: "Relays" }).click();

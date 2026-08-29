@@ -13,6 +13,7 @@ describe("account controller", () => {
     const controller = createAccountController(new AccountManager());
     await expect(controller.connectExtension()).resolves.toBe(pubkey);
     expect(controller.publicKey).toBe(pubkey);
+    expect(controller.ephemeral).toBe(false);
     controller.signOut();
     expect(controller.publicKey).toBe("");
     controller.close();
@@ -23,10 +24,12 @@ describe("account controller", () => {
     const controller = createAccountController(manager);
     const pubkey = await controller.connectEphemeral();
     expect(pubkey).toMatch(/^[0-9a-f]{64}$/);
+    expect(controller.ephemeral).toBe(true);
     await expect(controller.sign({ kind: 1, created_at: 1, content: "ephemeral", tags: [] }))
       .resolves.toMatchObject({ pubkey, content: "ephemeral" });
     expect(manager.accounts).toHaveLength(1);
     controller.signOut();
+    expect(controller.ephemeral).toBe(false);
     expect(manager.accounts).toHaveLength(0);
     controller.close();
   });

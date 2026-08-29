@@ -9,6 +9,7 @@ export interface AccountController {
   readonly manager: AccountManager;
   readonly generation: number;
   readonly publicKey: string;
+  readonly ephemeral: boolean;
   sign(template: EventTemplate): Promise<NostrEvent>;
   nip04Encrypt(pubkey: string, plaintext: string): Promise<string>;
   nip04Decrypt(pubkey: string, ciphertext: string): Promise<string>;
@@ -42,6 +43,7 @@ export function createAccountController(manager: AccountManager, onSigned?: (eve
     manager,
     get generation() { return generation; },
     get publicKey() { return manager.active?.pubkey ?? ""; },
+    get ephemeral() { return Boolean(manager.active && ephemeralAccounts.has(manager.active)); },
     sign: async (template) => {
       validateEventTemplate(template);
       const event = await withCurrent((account) => account.signEvent(template));

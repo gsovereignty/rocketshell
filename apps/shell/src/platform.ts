@@ -69,6 +69,7 @@ export interface BrowserPlatform {
   readonly nappletConsole: NappletConsoleStore;
   connectExtension(): Promise<string>;
   connectEphemeral(): Promise<string>;
+  isEphemeralIdentity(): boolean;
   signOut(): void;
   dockLaunchers(): Promise<readonly DockLauncher[]>;
   installAndOpen(coordinate: string): Promise<{ readonly dTag: string; readonly title: string; readonly windowId: string }>;
@@ -278,6 +279,7 @@ export async function createBrowserPlatform(container: HTMLElement): Promise<Bro
     nappletConsole,
     connectExtension: () => accounts.connectExtension(),
     connectEphemeral: () => accounts.connectEphemeral(),
+    isEphemeralIdentity: () => accounts.ephemeral,
     signOut: () => accounts.signOut(),
     async dockLaunchers() {
       return (await packageStore.listActive())
