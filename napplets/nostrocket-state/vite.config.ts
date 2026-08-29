@@ -7,7 +7,7 @@ export default defineConfig({
     nappletType: "nostrocket-state",
     title: "NOSTROCKET State",
     description: "Current NOSTROCKET merit holdings and Microsubjective Blockchain state.",
-    requires: ["outbox"],
+    requires: ["outbox", "resource"],
     artifactMode: "single-file"
   })],
   build: { modulePreload: false },

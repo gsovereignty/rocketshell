@@ -6,7 +6,7 @@
   "napplet": {
     "dTag": "nostrocket-state",
     "title": "NOSTROCKET State",
-    "requires": ["outbox"]
+    "requires": ["outbox", "resource"]
   },
   "scripts": {
     "dev": "vite build --watch",
