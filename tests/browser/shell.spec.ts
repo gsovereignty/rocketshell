@@ -956,14 +956,14 @@ test("hard reset lives in Napplet console instead of menu bar", async ({ page })
 
 test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await page.goto("./");
-  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await expect(page.locator("#status")).toBeHidden();
   const profile = page.locator("#profile-menu-trigger");
   await expect(profile.locator("#profile-avatar-fallback")).toHaveText("R");
   await profile.click();
+  await expect(page.locator("#profile-menu-label")).toHaveText(/^[0-9a-f]{8}…$/);
+  await profile.click();
   await expect(page.locator("#account-popover")).toBeVisible();
   await expect(page.getByRole("button", { name: "Profile (coming soon)" })).toBeVisible();
-  await page.locator("#connect-account").evaluate((element) => { (element as HTMLButtonElement).hidden = true; });
-  await page.locator("#sign-out").evaluate((element) => { (element as HTMLButtonElement).hidden = false; });
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.locator("#account-popover")).toBeHidden();
@@ -973,6 +973,17 @@ test("menu bar exposes account and Spotlight controls", async ({ page }) => {
   await expect(page.locator("#coordinate")).toBeVisible();
   await spotlight.click();
   await expect(page.locator("#spotlight-panel")).toBeHidden();
+});
+
+test("profile icon prefers NIP-07 when extension is available", async ({ page }) => {
+  const pubkey = "1".repeat(64);
+  await page.addInitScript((value) => {
+    Object.defineProperty(window, "nostr", { configurable: true, value: { getPublicKey: async () => value } });
+  }, pubkey);
+  await page.goto("./");
+  await expect(page.locator("#status")).toBeHidden();
+  await page.locator("#profile-menu-trigger").click();
+  await expect(page.locator("#profile-menu-label")).toHaveText("11111111…");
 });
 
 test("relay status opens an accessible connected-relays popover", async ({ page }) => {
@@ -998,7 +1009,9 @@ test("relay status opens an accessible connected-relays popover", async ({ page 
 
 test("preferences panel themes the shell and edits the local relay list", async ({ page }) => {
   await page.goto("./");
-  await expect(page.locator("#status")).toHaveText("Platform ready");
+  await expect(page.locator("#status")).toBeHidden();
+  await page.locator("#profile-menu-trigger").click();
+  await expect(page.locator("#profile-menu-label")).toHaveText(/^[0-9a-f]{8}…$/);
   await page.locator("#profile-menu-trigger").click();
   await page.getByRole("button", { name: "Preferences" }).click();
   await expect(page.locator("#settings-panel")).toBeVisible();
@@ -1026,6 +1039,8 @@ test("preferences panel themes the shell and edits the local relay list", async 
   // Both the theme and the relay edit are persisted, not just held in memory.
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.locator("#profile-menu-trigger").click();
+  await expect(page.locator("#profile-menu-label")).toHaveText(/^[0-9a-f]{8}…$/);
   await page.locator("#profile-menu-trigger").click();
   await page.getByRole("button", { name: "Preferences" }).click();
   await page.getByRole("tab", { name: "Relays" }).click();

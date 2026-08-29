@@ -12,6 +12,7 @@ import { createWindowSessionStore, type WindowSession } from "./open-napplets-st
 import { createSignedEventsView } from "./signed-events-view.js";
 import { createNappletConsoleView } from "./napplet-console-view.js";
 import { cacheBustedShellUrl, resetShellRuntime } from "./hard-reset.js";
+import { connectPreferredAccount } from "./preferred-account.js";
 import "./style.css";
 
 // Paint the stored theme before the asynchronous platform boot, otherwise a light-theme user gets a
@@ -295,11 +296,6 @@ const closeMenus = (): void => {
 
 window.addEventListener("pagehide", () => signedEventsView?.destroy(), { once: true });
 
-profileTrigger?.addEventListener("click", () => {
-  if (!accountOpen) openAccountMenu();
-  else closeAccountMenu();
-});
-
 relayStatus?.addEventListener("click", () => relayPopoverOpen ? closeRelayPopover() : openRelayPopover());
 
 profileActions.filter((action) => action.dataset.stub).forEach((action) => action.addEventListener("click", () => {
@@ -398,7 +394,10 @@ void bootstrap().then(async (platform) => {
   }
   if (button) button.disabled = false;
 
+  let activeIdentityPubkey: string | undefined;
+  let automaticConnectionPending = false;
   const renderIdentity = (pubkey: string | undefined, profile: { name?: string | undefined; displayName?: string | undefined; picture?: string | undefined } | undefined): void => {
+    activeIdentityPubkey = pubkey;
     if (accountStatus) accountStatus.textContent = pubkey ? `Active: ${pubkey.slice(0, 12)}…${pubkey.slice(-8)}` : "No active identity";
     if (connectAccount) connectAccount.hidden = Boolean(pubkey);
     if (connectEphemeral) connectEphemeral.hidden = Boolean(pubkey);
@@ -426,6 +425,37 @@ void bootstrap().then(async (platform) => {
   window.addEventListener("pagehide", () => identitySubscription.unsubscribe(), { once: true });
   if (connectAccount) connectAccount.disabled = false;
   if (connectEphemeral) connectEphemeral.disabled = false;
+  profileTrigger?.addEventListener("click", () => {
+    if (accountOpen) {
+      closeAccountMenu();
+      return;
+    }
+    if (activeIdentityPubkey) {
+      openAccountMenu();
+      return;
+    }
+    if (automaticConnectionPending) return;
+    automaticConnectionPending = true;
+    profileTrigger.disabled = true;
+    profileTrigger.setAttribute("aria-busy", "true");
+    if (profileLabel) profileLabel.textContent = "Connecting…";
+    if (accountStatus) accountStatus.textContent = "Trying NIP-07, with ephemeral fallback…";
+    const nip07 = (window as Window & { nostr?: unknown }).nostr;
+    void connectPreferredAccount({
+      nip07Available: Boolean(nip07),
+      connectExtension: () => platform.connectExtension(),
+      connectEphemeral: () => platform.connectEphemeral()
+    }).catch((error: unknown) => {
+      console.error("Automatic account connection failed", { error });
+      if (profileLabel) profileLabel.textContent = "Not connected";
+      if (accountStatus) accountStatus.textContent = error instanceof Error ? error.message : "Unable to create identity";
+      openAccountMenu();
+    }).finally(() => {
+      automaticConnectionPending = false;
+      profileTrigger.disabled = false;
+      profileTrigger.removeAttribute("aria-busy");
+    });
+  });
   connectAccount?.addEventListener("click", () => {
     connectAccount.disabled = true;
     if (accountStatus) accountStatus.textContent = "Waiting for Nostr extension…";
